@@ -1,0 +1,37 @@
+build/
+build-*/
+dist/
+# Lo que arma scripts/package-release.sh (se sube como descarga, no al repo)
+/publicar/
+
+# Archivos extraídos de tu copia de Diablo II: Resurrected. Nunca se suben.
+data/
+*.mpq
+*.dcc
+*.dc6
+*.dt1
+*.ds1
+*.sprite
+# Los dibujos editados que carga el port en lugar del DCC (tools/sprites_import.py)
+*.d2rw
+
+*.bmp
+*.png
+
+# Los dibujos exportados para editar (tools/sprites_export.py, herramientas-sprites/)
+editar/
+# Los .sprite editados para probar en D2R (herramientas-sprites/d2rsprite.py)
+mod/
+
+# Partidas guardadas en la PC
+save/
+# Lo que deja el importador en la carpeta del código (el idioma elegido y lo que faltó)
+/idioma.txt
+/importar.log
+prof/
+
+# Registros de las pruebas y la configuración local de Claude Code
+*.log
+.claude/
+gmon.out
+*.wav
