@@ -1,4 +1,4 @@
-# Diablo II for Raspberry Pi (Batocera)
+# Diablo II for Raspberry Pi (Batocera) fan-made
 
 A Diablo II–style engine **written from scratch** in C99 + SDL2, to play on
 **Batocera on a Raspberry Pi 3B** with a gamepad, alone or two players on
