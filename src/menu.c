@@ -43,6 +43,7 @@ static int      s_note_ticks;
 static int      s_movie_sel;    /* en el panel de cinemáticas (la última fila es "Cancelar") */
 static int      s_diff_sel;     /* la dificultad elegida (0 Normal, 1 Pesadilla, 2 Infierno) */
 static int      s_diff_max;     /* la más alta que tienen abierta todos los elegidos */
+static int      s_terror = 1;   /* las zonas de terror (como la casilla de crear partida del Resurrected) */
 static const char *const k_diffs[3] = { "NORMAL", "PESADILLA", "INFIERNO" };
 
 static void read_slots(void)
@@ -116,6 +117,11 @@ const int *menu_classes(void)
 int menu_difficulty(void)
 {
     return s_diff_sel;
+}
+
+int menu_terror_zones(void)
+{
+    return s_terror;
 }
 
 static void note(const char *text)
@@ -287,6 +293,10 @@ MenuResult menu_tick(const InputState *in)
             s_diff_sel = (s_diff_sel + s_diff_max) % (s_diff_max + 1);
         if (in->menu_down)
             s_diff_sel = (s_diff_sel + 1) % (s_diff_max + 1);
+        if (in->menu_left || in->menu_right) {
+            click();
+            s_terror = !s_terror;
+        }
         if (back) {
             click();
             s_state = MS_SLOTS;
@@ -533,8 +543,11 @@ static void draw_difficulty(void)
             draw_pentagrams(317, y + font_height(FONT_EXOCET) / 2, font_width(k_diffs[i], FONT_EXOCET), 22);
     }
     if (s_diff_max < 2)
-        font_draw_centered(317, 340, "Se abre al vencer a Baal en la anterior", 1, COL(R_STONE, 12));
-    font_draw_centered(317, 356, "A: jugar     B: volver", 1, COL(R_GRAY, 14));
+        font_draw_centered(317, 334, "Se abre al vencer a Baal en la anterior", 1, COL(R_STONE, 12));
+    /* (en violeta, el color del terror) */
+    font_draw_centered(317, 348, s_terror ? "Izq. / der.: zonas de terror SÍ" : "Izq. / der.: zonas de terror NO", 1,
+                       s_terror ? g_text_shift[11][COL(R_GRAY, 15)] : COL(R_STONE, 12));
+    font_draw_centered(317, 362, "A: jugar     B: volver", 1, COL(R_GRAY, 14));
 }
 
 void menu_render(void)

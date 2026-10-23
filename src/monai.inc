@@ -221,6 +221,7 @@ static int summoner_cast(Unit *u, int t, int what)
 #include "monai3.inc"
 #include "monai4.inc"
 #include "monai5.inc"
+#include "monaiu.inc"
 
 /* Lo que decide cada IA cuando terminó lo anterior. t: el jugador que ve
    (-1 = ninguno) a d subtiles. 0 = que siga la del motor. */
@@ -231,6 +232,10 @@ static int ai_think(Unit *u, const Map *m, UnitTarget *pl, int t, float d)
     float md;
     if (tp)
         u->sector = sector_from_world(tp->x - u->x, tp->y - u->y);
+    if (u->uber && uber_think(u, m, pl, t)) /* lo de los Uber, antes de la IA de su jefe */
+        return 1;
+    if (u->colossal && colossal_think(u, pl, t)) /* y lo de los Ancianos colosales, antes de la de los Antiguos */
+        return 1;
     switch (u->ai) {
     case AI_SANDLEAPER: /* aip: salto, ataque, acercarse, rodear */
         if (!tp)

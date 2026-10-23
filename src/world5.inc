@@ -576,6 +576,38 @@ static void build_siege(Map *m, int z)
 
 /* ---- La disposición del acto ---- */
 
+/* ---- El evento Pandemonium (ACT1Q4_CreateUberRunPortal y ...FinalePortal) ----
+   Solo en Infierno, como el original: Matron's Den (una cripta), las Forgotten
+   Sands (un desierto), el Furnace of Pain (un infierno de lava) y Uber
+   Tristram (Tri_Town4.ds1), en las filas de abajo. Se llega solo por los
+   portales rojos del cubo en Harrogath (uber.inc). */
+static void uber_add_zones(void)
+{
+    int x, y, w = MAZE_MAX * 8 + 1, z;
+    pack(w, w, &x, &y);
+    z = add_zone(ZK_UBERDEN, 133, x, y, x + w, y + w);
+    add_level("#133", z, x, y, x + w, y + w, 20, 1);
+    pack(DESERT_W, DESERT_W, &x, &y);
+    z = add_zone(ZK_DESERT, DZ_SANDS, x, y, x + DESERT_W, y + DESERT_W);
+    for (int k = 0; k < 4; k++)
+        s_zones[z].open[k][0] = s_zones[z].open[k][1] = -1;
+    add_level("#134", z, x, y, x + DESERT_W, y + DESERT_W, 24, 0);
+    for (int k = 0; k < (int)COUNT(k_act3_mazes); k++)
+        if (k_act3_mazes[k].id == 135) {
+            w = k_act3_mazes[k].grid * k_act3_mazes[k].room + 1;
+            pack(w, w, &x, &y);
+            z = add_zone(ZK_A3MAZE, 135, x, y, x + w, y + w);
+            add_level(k_act3_mazes[k].name, z, x, y, x + w, y + w, k_act3_mazes[k].groups, 1);
+        }
+    for (int k = 0; k < (int)COUNT(k_act3_presets); k++)
+        if (k_act3_presets[k].id == 136 || k_act3_presets[k].id == 137) {
+            int pw = k_act3_presets[k].w, ph = k_act3_presets[k].h;
+            pack(pw, ph, &x, &y);
+            z = add_zone(ZK_A3PRESET, k_act3_presets[k].id, x, y, x + pw, y + ph);
+            add_level(k_act3_presets[k].name, z, x, y, x + pw, y + ph, 0, 0);
+        }
+}
+
 static int layout_act5(Map *m)
 {
     prest_tables_load();
@@ -628,6 +660,8 @@ static int layout_act5(Map *m)
     z_barr[BARR_TUNDRA] = add_zone(ZK_BARRICADE, BARR_TUNDRA, t->x, t->y, t->x + t->w, t->y + t->h);
     add_level(k_barr_names[BARR_TUNDRA], z_barr[BARR_TUNDRA], t->x, t->y, t->x + t->w, t->y + t->h, 25, 0);
     a3_add_dungeons(5);
+    if (s_world_diff == 2)
+        uber_add_zones();
     for (int i = 0; i < s_num_levels; i++) /* los saltos de las Vis de levels.txt (para buscar caminos) */
         for (int k = 0; k < 8; k++)
             add_jump(s_levels[i].zone, zone_of_level_id(s_levels[i].vis[k]));

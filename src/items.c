@@ -77,6 +77,7 @@ typedef struct {
     char    key[48];  /* el nombre (la clave en item-names) */
     char    code[5];  /* el objeto base */
     int     lvl, lvl_req, rarity;
+    int     tc_only;  /* spawnable vacío (Resurrected: las Joyas colosales, los Sunder): solo si un TC lo nombra */
     char    invfile[16];
     int     nprop;
     PropRow prop[12];
@@ -588,11 +589,13 @@ static void load_uniques(void)
         return;
     for (int r = 1; r < t.rows && s_num_uniques < MAX_UNIQUES; r++) {
         const char *code = txt_get(&t, r, txt_col(&t, "code"));
-        if (!code[0] || txt_get_int(&t, r, "spawnable", 0) != 1 || txt_get_int(&t, r, "disabled", 0) || ladder_only(&t, r) ||
-            !items_find(code))
+        int tc_only = txt_get(&t, r, txt_col(&t, "spawnable"))[0] == '\0';
+        if (!code[0] || (!tc_only && txt_get_int(&t, r, "spawnable", 0) != 1) || txt_get_int(&t, r, "disabled", 0) ||
+            ladder_only(&t, r) || !items_find(code))
             continue;
         UniqueDef *u = &s_uniques[s_num_uniques++];
         memset(u, 0, sizeof *u);
+        u->tc_only = tc_only;
         snprintf(u->key, sizeof u->key, "%s", txt_get(&t, r, txt_col(&t, "index")));
         snprintf(u->code, sizeof u->code, "%s", code);
         u->lvl = txt_get_int(&t, r, "lvl", 1);
@@ -1159,19 +1162,35 @@ int items_make_crafted(Item *it, int ilvl)
     return 1;
 }
 
+int items_make_unique_named(Item *it, const char *key)
+{
+    for (int u = 0; u < s_num_uniques && it->type; u++)
+        if (strcmp(s_uniques[u].key, key) == 0 && strcmp(s_uniques[u].code, it->type->code) == 0) {
+            it->quality = QUALITY_UNIQUE;
+            it->unique = (int16_t)u;
+            it->num_stats = 0;
+            it->ilvl = (uint8_t)(s_uniques[u].lvl > 0 && s_uniques[u].lvl < 256 ? s_uniques[u].lvl : 1);
+            for (int k = 0; k < s_uniques[u].nprop; k++)
+                apply_row(it, &s_uniques[u].prop[k]);
+            snprintf(it->name, sizeof it->name, "%s", str_get(s_uniques[u].key));
+            return 1;
+        }
+    return 0;
+}
+
 int items_make_unique(Item *it, int ilvl)
 {
     if (!it->type)
         return 0;
     int total = 0;
     for (int i = 0; i < s_num_uniques; i++)
-        if (strcmp(s_uniques[i].code, it->type->code) == 0 && s_uniques[i].lvl <= ilvl)
+        if (!s_uniques[i].tc_only && strcmp(s_uniques[i].code, it->type->code) == 0 && s_uniques[i].lvl <= ilvl)
             total += s_uniques[i].rarity > 0 ? s_uniques[i].rarity : 1;
     if (total == 0)
         return 0;
     int pick = (int)(rnd() % (uint32_t)total), u = -1;
     for (int i = 0; i < s_num_uniques && u < 0; i++)
-        if (strcmp(s_uniques[i].code, it->type->code) == 0 && s_uniques[i].lvl <= ilvl &&
+        if (!s_uniques[i].tc_only && strcmp(s_uniques[i].code, it->type->code) == 0 && s_uniques[i].lvl <= ilvl &&
             (pick -= s_uniques[i].rarity > 0 ? s_uniques[i].rarity : 1) < 0)
             u = i;
     if (u < 0)
@@ -1887,6 +1906,14 @@ static int supported(const ItemType *t)
        tomo no: pedido del usuario, los pergaminos se apilan de a TP_STACK) */
     if (strcmp(t->code, "key") == 0 || strcmp(t->code, "tsc") == 0)
         return 1;
+    /* el endgame: las llaves y los órganos del evento Pandemonium, el Estandarte de los
+       héroes, las esencias y el Token of Absolution, las estatuas de los Ancianos colosales y
+       las astillas de la Piedra del Mundo (endgame.inc) */
+    static const char *const k_endgame[] = { "pk1", "pk2", "pk3", "dhn", "bey", "mbr", "std", "tes", "ceh", "bet", "fed",
+                                             "toa", "ua1", "ua2", "ua3", "ua4", "ua5", "xa1", "xa2", "xa3", "xa4", "xa5" };
+    for (unsigned k = 0; k < sizeof k_endgame / sizeof k_endgame[0]; k++)
+        if (strcmp(t->code, k_endgame[k]) == 0)
+            return 1;
     return strcmp(t->type, "hpot") == 0 || strcmp(t->type, "mpot") == 0 || strcmp(t->type, "rpot") == 0 ||
            strcmp(t->type, "spot") == 0 || t->ammo || strcmp(t->code, "box") == 0;
 }
@@ -1985,6 +2012,17 @@ static void add_drop(const char *code, int mlvl, const TcMods *m, Item *out, int
         }
         return;
     }
+    /* Resurrected nombra a veces un único directamente (las Joyas colosales: "Defender's Bile") */
+    for (int u = 0; u < s_num_uniques; u++)
+        if (strcmp(s_uniques[u].key, code) == 0) {
+            const ItemType *ut = items_find(s_uniques[u].code);
+            if (ut) {
+                Item it = items_make(ut);
+                if (items_make_unique_named(&it, code))
+                    out[(*n)++] = it;
+            }
+            return;
+        }
     if (strncmp(code, "weap", 4) == 0 && isdigit((unsigned char)code[4]))
         t = pick_by_level(ITEM_WEAPON, atoi(code + 4));
     else if (strncmp(code, "armo", 4) == 0 && isdigit((unsigned char)code[4]))
@@ -2086,6 +2124,19 @@ static void roll(const char *name, int mlvl, TcMods m, Item *out, int *n, int ma
             r -= probs[i];
         }
     }
+}
+
+/* La de su grupo (la columna "group") de nivel más alto que no pase `lvl`: las filas de un grupo van
+   seguidas, de menor a mayor (DATATBLS_GetTreasureClassExRecordFromIdAndLevel) */
+const char *items_tc_for_level(const char *name, int lvl)
+{
+    int row = name && name[0] && lvl > 0 ? txt_find_row(&s_tc, 0, name) : -1;
+    int g = row >= 0 ? txt_get_int(&s_tc, row, "group", 0) : 0;
+    if (!g)
+        return name;
+    while (row + 1 < s_tc.rows && txt_get_int(&s_tc, row + 1, "group", 0) == g && txt_get_int(&s_tc, row + 1, "level", 0) <= lvl)
+        row++;
+    return txt_get(&s_tc, row, 0);
 }
 
 int items_roll_drop(const char *treasure_class, int monster_level, int mf, Item *out, int max)

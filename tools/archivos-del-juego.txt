@@ -21718,6 +21718,7 @@ data/global/monsters/pw/tr/pwtrmeddthth.dcc
 data/global/monsters/pw/tr/pwtrmedghhth.dcc
 data/global/monsters/pw/tr/pwtrmednuhth.dcc
 data/global/monsters/pw/tr/pwtrmedwlhth.dcc
+data/global/monsters/randtransforms.dat
 data/global/monsters/rc/cof/rcnuhth.cof
 data/global/monsters/rc/cof/rcwlhth.cof
 data/global/monsters/rc/tr/rctrlitnuhth.dcc
@@ -32339,6 +32340,10 @@ data/global/tiles/expansion/wildtemple/tempsw01.ds1
 data/global/tiles/expansion/wildtemple/tempsw02.ds1
 data/global/tiles/expansion/wildtemple/tempswdown.ds1
 data/global/tiles/expansion/wildtemple/tempswway.ds1
+data/global/tiles/garden/colossalsummit/colossalsummit.ds1
+data/global/tiles/garden/colossalsummit/columns.dt1
+data/global/tiles/garden/colossalsummit/entrance.dt1
+data/global/tiles/garden/colossalsummit/floor.dt1
 data/global/ui/charselect/cancelbutton.dc6
 data/global/ui/charselect/characterselectscreenexp.dc6
 data/global/ui/charselect/charselectbckg.dc6
@@ -32506,6 +32511,7 @@ data/global/ui/spells/skltree_s_back.dc6
 data/global/ui/spells/skltree_w_back.dc6
 data/global/ui/spells/soskillicon.dc6
 data/global/ui/spells/waskillicon.dc6
+data/hd/global/excel/desecratedzones.json
 data/local/font/latin/default.map
 data/local/font/latin/default.tbl
 data/local/font/latin/font16.dc6

@@ -1903,6 +1903,13 @@ Variables de depuración:
 | `D2_A4QTEST=1` | Lo mismo con las del Acto 4 (con `D2_ACT=4`): Izual, la Forja, los sellos, Diablo y el portal del final; además rearma el Santuario con los jefes vivos (tiene que haber uno de cada uno) y va al Acto 3 y vuelve (el portal no pasa al Acto 3 y sigue al lado de Tyrael) |
 | `D2_DIFF=1` o `2` | La partida en Pesadilla o Infierno (sin pasar por el menú): los monstruos, los tesoros, las tiendas, los mercenarios y las misiones de esa dificultad (`docs/plan-dificultades.md`). Con la demostración (`D2_AUTOTEST_DEMO`), los personajes tienen 25 o 50 niveles más, las habilidades 8 o 16 más y el equipo de esa dificultad (`demo_diff_gear`: bases excepcionales o de élite raras, con resistencias que compensan la penalidad, vida, defensa y daño aumentado en las armas) |
 | `D2_DIFFTEST=1` | En el Acto 1, muestra en cada dificultad el nivel de los monstruos de algunos niveles, cuáles salen y cuántos jefes, y los números (nivel, vida, daño, experiencia, defensa, puntería, resistencias, habilidad y tesoro) de algunos monstruos, un jefe de misión, uno de nombre, uno al azar con su escolta |
+| `D2_UBERTEST=1` | Con `D2_DIFF=2` y `D2_ACT=5`, el evento Pandemonium (`src/endgame.inc`): que caigan las llaves, los órganos y las esencias, la receta donde no va, los tres portales en Harrogath (y que no haya un cuarto), cada mapa con su jefe y su órgano, Uber Tristram con los tres y sus esbirros (mide un tick al lado) y la Antorcha y los Estandartes. Dice `UBER: BIEN` o `UBER: MAL` en cada cosa |
+| `D2_TZTEST=1` | Las zonas de terror (`src/endgame.inc`, `src/tztest.inc`), con `D2_DIFF=2 D2_ACT=1 D2_TZ=1 D2_TZ_ZONE=2 D2_TZ_HERALD=1`: lo que se leyó de `desecratedzones.json`, la rotación, las clases de tesoro por nivel, los monstruos de las Cold Plains aterrorizadas (y los del Blood Moor, que no), un Heraldo que sale, muere y sube el grado, una astilla y un amuleto Sunder. Dice `TERROR: BIEN` o `TERROR: MAL` en cada cosa |
+| `D2_TZ=1` o `0` | Zonas de terror sí o no, sin mirar si el jugador 1 mató a Baal en esa dificultad (sin la variable, en la demostración y las pruebas automáticas no hay) |
+| `D2_TZ_ZONE=n` | La zona aterrorizada es la número n de `desecratedzones.json` (0 = Burial Grounds, 2 = Cold Plains...), en vez de la del turno |
+| `D2_TZ_TIME=segundos` | La hora (desde 1970) con la que se calcula el turno de la rotación |
+| `D2_TZ_HERALD=1` | La primera muerte en la zona aterrorizada ya despierta al Heraldo (en Infierno) |
+| `D2_TZ_DEBUG=1` | Lo que se leyó del json, cada zona que se aterroriza y cada Heraldo |
 | `D2_COWTEST=1` | El nivel de las vacas (`src/cows.inc`) en el Acto 1: el cuerpo de Wirt (la pierna y de 10 a 19 pilas de oro), la receta del cubo donde no va (sin Baal, fuera del campamento, otra vez en la misma partida, con el Rey Vaca muerto), el portal de ida y de vuelta, las vacas, el Rey Vaca (sus 8 pociones de aguante) y que se guarde; mide un tick entre las vacas (con `D2_GOD=1` no se muere). Dice `COW: BIEN` o `COW: MAL` en cada cosa |
 | `D2_WARPS=1` | Con `D2_ZONETEST`, lista cada salto (de qué zona a cuál) y los jefes y objetos de misión que encontró en cada zona |
 | `D2_AI_DEBUG=1` | Lo que decide la IA de cada monstruo (con sus hechizos y su daño) |
@@ -1918,6 +1925,7 @@ Variables de depuración:
 | `D2_INVSHOW=0..8` | El J1 con anillos, amuleto, conjunto, palabra rúnica, talismanes y el cubo (0 cartel del conjunto, 1 cubo abierto, 2 talismán, 3 palabra rúnica, 4 atributos, 5 a 7 el árbol de habilidades en esa solapa, 8 el registro de misiones) |
 | `D2_QLOG=N` | Con `D2_INVSHOW=8`, el registro abierto en la misión N del Acto 2 (0 a 5) |
 | `D2_GUIDE=cat,receta` | Arranca con la Guía del cubo abierta en esa categoría y receta (3 = las palabras rúnicas) |
+| `D2_SHOW_TARGET=nombre` | Muestra arriba la barra de ese monstruo (su Id o el nombre del jefe), con lo que dice debajo (no muerto o demonio, modificadores, inmunidades) |
 | `D2_CONTROLS=0` | Arranca con la pantalla de controles abierta (0 el joystick, 1 el teclado; `src/controls.c`, que repite lo de `input.c`: si cambia un control, cambiarlo ahí también) |
 | `D2_CUBE_DEBUG=1` | Muestra qué receta se usó al transmutar |
 | `D2_LEVEL=N` | Sube a los personajes a ese nivel |

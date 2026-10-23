@@ -5,6 +5,7 @@
 #include "fmt/fs.h"
 #include "game.h"
 #include "iso.h"
+#include "items.h"
 #include "jobs.h"
 #include "missiles.h"
 #include "overlays.h"
@@ -101,13 +102,17 @@ typedef struct {
     uint32_t     idle_since;        /* cuándo dejó de usarlo la última unidad */
 } UnitGfx;
 
-/* Una de las tablas de colores de palshift.dat de un tipo de monstruo
-   (mon_palshift), leída en el hilo de trabajos */
+/* Una tabla de colores (mon_palshift), leída en el hilo de trabajos: la
+   2..7 es de palshift.dat del tipo de monstruo y la 8..29 de
+   randtransforms.dat, la de los jefes (Utrans de monstats2.txt y de
+   superuniques.txt) */
 #define PALSHIFT_MAX 512
+#define UTRANS_RAND0 8  /* desde acá, randtransforms.dat */
+#define UTRANS_COUNT 30
 enum { PS_LOADING, PS_SAME, PS_READY }; /* PS_SAME: no está o no cambia nada */
 typedef struct {
     char    token[8];
-    int     idx;      /* cuál de las 8 */
+    int     idx;      /* cuál: 2..29 */
     int     state;    /* PS_* (job_flag_get/set) */
     uint8_t tab[256];
 } PalShift;
@@ -117,11 +122,15 @@ static void palshift_job(void *ptr, int arg)
     (void)arg;
     PalShift *p = ptr;
     char path[96];
-    snprintf(path, sizeof path, "data/global/monsters/%s/cof/palshift.dat", p->token);
+    int rand = p->idx >= UTRANS_RAND0;
+    if (rand)
+        snprintf(path, sizeof path, "data/global/monsters/randtransforms.dat");
+    else
+        snprintf(path, sizeof path, "data/global/monsters/%s/cof/palshift.dat", p->token);
     size_t n;
     uint8_t *d = fs_read(path, &n);
     int state = PS_SAME;
-    if (d && n >= 8 * 256) {
+    if (d && n >= (size_t)(rand ? UTRANS_COUNT : UTRANS_RAND0) * 256) {
         memcpy(p->tab, d + p->idx * 256, 256);
         for (int c = 0; c < 256 && state == PS_SAME; c++)
             if (p->tab[c] != c)
@@ -185,6 +194,10 @@ typedef struct {
     int ac, ar;   /* defensa y puntería (monlvl.txt x porcentajes de monstats.txt) */
     int res[6];   /* resistencias por elemento (ELEM_NONE es la física): ResDm, ResFi... de monstats.txt */
     char tc[32];  /* clase de tesoro */
+    int8_t terror;   /* salió en una zona aterrorizada (endgame.inc) */
+    int8_t tc_fixed; /* jefe o noRatio: su clase de tesoro no sube con el nivel (sub_6FC52110) */
+    int8_t herald;   /* un Heraldo de las zonas de terror: su grado (1..5) */
+    int8_t tc_boost; /* niveles de más al elegir su clase de tesoro (los Heraldos) */
     int unique;   /* jefe con nombre propio (superuniques.txt) */
     int attack_delay; /* ticks entre ataques (aidel de monstats.txt) */
     int cooldown;
@@ -194,7 +207,7 @@ typedef struct {
     int jab;           /* este ataque es la secuencia */
     int merc_spell;    /* el Lobo de Hierro: qué hechizo lanza ahora (0 o 1) */
     const struct MonSeq *seqs[MON_SKILLS]; /* las de sus habilidades (Sk1mode..Sk8mode de monstats.txt) */
-    char skill[MON_SKILLS][24];            /* Skill1..Skill8 (Diablo tiene 7) */
+    char skill[MON_SKILLS][32];            /* Skill1..Skill8 (Diablo tiene 7; "Madawc's Lightning Pierce") */
     int8_t  sk_anim[MON_SKILLS];           /* el modo de cada una (ANIM_*, -1 = una secuencia o ninguno) */
     int16_t sk_lvl[MON_SKILLS];            /* y su nivel (Sk1lvl..Sk8lvl) */
     int  seq_skill;               /* cuál está usando */
@@ -227,6 +240,13 @@ typedef struct {
     int     inferno_len;    /* y lo que dura cada llama (cuadros) */
     int     bone_armor;     /* lo que le queda a la Armadura de hueso (MonBoneArmor) */
     int8_t  a4_curse;       /* A4C_*: la maldición que tira en el cuadro de golpe */
+    int8_t  uber;           /* UB_*: un Uber del evento Pandemonium (monaiu.inc) */
+    int8_t  colossal;       /* 1..3: un Anciano colosal (Talic, Madawc, Korlic: monaiu.inc) */
+    int8_t  col_phase;      /* su fase (0, 1 al 66 % de la vida o al morir otro, 2 al 33 % o al morir los dos) */
+    int     col_storm;      /* la Tormenta colosal de Madawc: lo que le queda */
+    int8_t  col_enchant;    /* se encantó: 1 fuego, 2 frío, 3 rayo (el índice de UnitTarget.res + 1) */
+    int     geddon_ticks;   /* Diablogeddon: lo que le queda (Uber Diablo) */
+    int     chill_armor;    /* la Armadura escalofriante: lo que le queda (Uber Baal e Izual) */
     uint8_t soft;           /* su cadáver se come (monstats2.txt soft: el Corpulento) */
 
     /* Efectos de las habilidades de los jugadores */
@@ -371,7 +391,7 @@ int units_difficulty_int(const char *col, int def)
    la tabla la tiene; si no, la de siempre */
 static const char *dcol(const TxtTable *t, const char *col)
 {
-    static char ring[8][40];
+    static char ring[8][56];
     static unsigned next;
     if (s_diff == 0)
         return col;
@@ -514,8 +534,32 @@ enum {
     AI_BAALTENTACLE, AI_BAALMINION, AI_BAALSTAIRS, AI_BAALTAUNT, AI_SIEGETOWER, AI_NPCBARB, AI_WUSSIE, /* el Acto 5 (monai5.inc) */
 };
 
+/* Los Uber del evento Pandemonium (monaiu.inc): usan la IA del jefe de su acto */
+enum { UB_NONE, UB_MEPH, UB_DIABLO, UB_BAAL, UB_IZUAL };
+
+static const char *ai_alias(const char *name)
+{
+    if (!strcmp(name, "ColossalWhirlwind") || !strcmp(name, "ColossalThrow") || !strcmp(name, "ColossalLeap"))
+        return "Ancient"; /* (los Ancianos colosales: la de los Antiguos, con lo suyo) */
+    return !strcmp(name, "UberMephisto") ? "Mephisto"
+           : !strcmp(name, "UberDiablo") ? "Diablo"
+           : !strcmp(name, "UberBaal")   ? "BaalCrab"
+           : !strcmp(name, "UberIzual")  ? "Izual"
+                                         : name;
+}
+
+static int ai_uber(const char *name)
+{
+    return !strcmp(name, "UberMephisto") ? UB_MEPH
+           : !strcmp(name, "UberDiablo") ? UB_DIABLO
+           : !strcmp(name, "UberBaal")   ? UB_BAAL
+           : !strcmp(name, "UberIzual")  ? UB_IZUAL
+                                         : UB_NONE;
+}
+
 static int ai_kind(const char *name)
 {
+    name = ai_alias(name);
     static const struct { const char *name; int kind; } k_ai[] = {
         { "SandLeaper", AI_SANDLEAPER },   { "PantherWoman", AI_PANTHER },  { "PantherJavelin", AI_PANTHERJAV },
         { "Scarab", AI_SCARAB },           { "Vulture", AI_VULTURE },       { "SandMaggot", AI_MAGGOT },
@@ -903,6 +947,12 @@ static void unit_gfx_refs(Unit *u, int add)
    memoria) eran ~50 us por búsqueda en la Pi. Solo desde el hilo del juego. */
 static int mon_row(const TxtTable *t, const char *id)
 {
+    if (t == &s_monstats2) { /* monstats2.txt va por el MonStatsEx de monstats.txt (Uber Diablo usa la de Diablo) */
+        int ms = mon_row(&s_monstats, id);
+        const char *ex = ms >= 0 ? txt_get(&s_monstats, ms, txt_col(&s_monstats, "MonStatsEx")) : "";
+        if (ex[0])
+            id = ex;
+    }
     static struct {
         const TxtTable *t;
         char *const    *cells; /* (si se cargó de nuevo, cambia) */
@@ -1055,6 +1105,58 @@ static Unit *new_unit(float x, float y)
     return u;
 }
 
+/* ---- Las zonas de terror (las arma endgame.inc) ---- */
+static int (*s_terror_at)(float x, float y); /* el nivel del terror en ese lugar (0 = no está aterrorizado) */
+static int s_terror_xp;                      /* % de experiencia de más (boost_experience_percent) */
+static int s_terror_pool[16][2], s_terror_npool; /* el modificador de más de los únicos (mod, peso) */
+static unsigned s_sunder;                    /* los elementos (1 << ELEM_*) con la inmunidad rota (amuletos Sunder) */
+
+void units_set_terror(int (*at)(float x, float y), int xp_pct)
+{
+    s_terror_at = at;
+    s_terror_xp = xp_pct;
+}
+
+void units_terror_pool(const int *mods, const int *weights, int n)
+{
+    s_terror_npool = 0;
+    for (int k = 0; k < n && k < 16; k++)
+        if (mods[k] > 0 && mods[k] < 32 && weights[k] > 0) {
+            s_terror_pool[s_terror_npool][0] = mods[k];
+            s_terror_pool[s_terror_npool++][1] = weights[k];
+        }
+}
+
+void units_set_sunder(unsigned mask)
+{
+    s_sunder = mask;
+}
+
+int units_is_terror(int i)
+{
+    return i >= 0 && i < s_num_units && s_units[i].terror;
+}
+
+int units_herald_tier(int i)
+{
+    return i >= 0 && i < s_num_units ? s_units[i].herald : 0;
+}
+
+/* Su clase de tesoro de monstats.txt (col: "TreasureClass", "TreasureClassChamp", "TreasureClassUnique"), la
+   de la dificultad; aterrorizado, la "Desecrated" si la tiene */
+static const char *mon_tc(int ms, const char *col, int terror)
+{
+    const TxtTable *t = &s_monstats;
+    if (terror) {
+        char dc[48];
+        snprintf(dc, sizeof dc, "TreasureClassDesecrated%s", col + 13);
+        const char *v = txt_get(t, ms, txt_col(t, dcol(t, dc)));
+        if (v[0])
+            return v;
+    }
+    return txt_get(t, ms, txt_col(t, dcol(t, col)));
+}
+
 /* Vida, daño y experiencia: porcentajes de monstats.txt sobre monlvl.txt
    (DATATBLS_CalculateMonsterStatsByLevel), los de la dificultad. En
    Pesadilla e Infierno los jefes de misión (boss) y los noRatio tienen el
@@ -1062,9 +1164,16 @@ static Unit *new_unit(float x, float y)
 static void monster_stats(Unit *u, int ms, int level)
 {
     const TxtTable *t = &s_monstats;
-    int no_ratio = txt_get_int(t, ms, "noRatio", 0);
-    if (level <= 0 || (s_diff > 0 && (no_ratio || txt_get_int(t, ms, "boss", 0) == 1)))
+    int no_ratio = txt_get_int(t, ms, "noRatio", 0), boss = txt_get_int(t, ms, "boss", 0) == 1;
+    /* En una zona aterrorizada, por lo menos el nivel del terror (los jefes de misión, el de los
+       únicos: +5 sobre el jugador en vez de +2) */
+    int tz = u->enemy && !no_ratio && s_terror_at && txt_get_int(t, ms, "CannotDesecrate", 0) != 1 ? s_terror_at(u->x, u->y) : 0;
+    if (level <= 0 || (s_diff > 0 && (no_ratio || boss)))
         level = txt_get_int(t, ms, dcol(t, "Level"), 1);
+    if (tz > 0)
+        level = boss ? (level > tz + UNIQUE_LEVELS ? level : tz + UNIQUE_LEVELS) : level > tz ? level : tz;
+    u->terror = tz > 0;
+    u->tc_fixed = no_ratio || boss;
     char lv[8];
     snprintf(lv, sizeof lv, "%d", level);
     int ml = txt_find_row(&s_monlvl, txt_col(&s_monlvl, "Level"), lv);
@@ -1077,7 +1186,7 @@ static void monster_stats(Unit *u, int ms, int level)
     u->level = level;
     u->ac = base_ac * txt_get_int(t, ms, dcol(t, "AC"), 100) / 100;
     u->ar = base_th * txt_get_int(t, ms, dcol(t, "A1TH"), 100) / 100;
-    snprintf(u->tc, sizeof u->tc, "%s", txt_get(t, ms, txt_col(t, dcol(t, "TreasureClass"))));
+    snprintf(u->tc, sizeof u->tc, "%s", mon_tc(ms, "TreasureClass", u->terror));
     /* En el orden de ELEM_NONE (física), ELEM_FIRE, ELEM_COLD, ELEM_LTNG, ELEM_POIS y ELEM_MAG */
     static const char *const k_res_cols[6] = { "ResDm", "ResFi", "ResCo", "ResLi", "ResPo", "ResMa" };
     for (int e = 0; e < 6; e++)
@@ -1097,6 +1206,8 @@ static void monster_stats(Unit *u, int ms, int level)
     if (u->dmg_min < 1) u->dmg_min = 1;
     if (u->dmg_max < u->dmg_min) u->dmg_max = u->dmg_min;
     u->exp = base_xp * txt_get_int(t, ms, dcol(t, "Exp"), 100) / 100;
+    if (u->terror) /* y la experiencia de más del terror */
+        u->exp += u->exp * s_terror_xp / 100;
     u->attack_delay = txt_get_int(t, ms, dcol(t, "aidel"), 15);
     u->s1_min = base_dm * txt_get_int(t, ms, dcol(t, "S1MinD"), 0) / 100;
     u->s1_max = base_dm * txt_get_int(t, ms, dcol(t, "S1MaxD"), 0) / 100;
@@ -1176,7 +1287,7 @@ static void monster_look(int ms, int ms2, int enemy, int merc, CharLook *out, ch
     modes[0] = "nu";
     /* S1 solo hace falta para invocar (Blood Raven) y para salir del suelo
        (sus zombis): cargarla en todos ocupa mucha memoria */
-    const char *ai_name = txt_get(&s_monstats, ms, txt_col(&s_monstats, "AI"));
+    const char *ai_name = ai_alias(txt_get(&s_monstats, ms, txt_col(&s_monstats, "AI")));
     int need_s1 = merc || (enemy && (strcmp(ai_name, "BloodRaven") == 0 || strcmp(id, "zombie2") == 0 ||
                                      strcmp(ai_name, "FoulCrowNest") == 0 || strcmp(ai_name, "SandMaggot") == 0 ||
                                      strcmp(ai_name, "MaggotEgg") == 0 || strcmp(ai_name, "Vulture") == 0 ||
@@ -1259,14 +1370,25 @@ void units_check_anims(void)
    dificultad (Normal). Se lee en el hilo de trabajos, como los gráficos
    (en la Pi eran de 0,2 a 4 ms en el hilo del juego por cada tipo nuevo):
    hasta que está, el monstruo no se dibuja. NULL si no tiene. */
-static const PalShift *mon_palshift(const char *token, int ms, int ms2)
+/* El Utrans de esa fila en la dificultad de la partida (Utrans, Utrans(N) o
+   Utrans(H)); -1 si está vacío */
+static int utrans_of(const TxtTable *t, int row)
+{
+    static const char *const k_cols[3] = { "Utrans", "Utrans(N)", "Utrans(H)" };
+    const char *v = row >= 0 ? txt_get(t, row, txt_col(t, k_cols[s_diff > 0 && s_diff < 3 ? s_diff : 0])) : "";
+    return v[0] ? atoi(v) : -1;
+}
+
+/* La tabla `idx` (2..29; 1 = sin cambio, 30 o más = la 2) de ese tipo de monstruo */
+static const PalShift *palshift_get(const char *token, int idx)
 {
     static PalShift s_ps[PALSHIFT_MAX]; /* (las unidades apuntan acá: no se mueven) */
     static int s_nps;
-    const char *ut = txt_get(&s_monstats2, ms2, txt_col(&s_monstats2, "Utrans"));
-    int idx = ut[0] ? atoi(ut) : txt_get_int(&s_monstats, ms, "TransLvl", 0) + 2;
-    if (idx < 0 || idx >= 8)
+    idx = idx >= UTRANS_COUNT ? 2 : idx;
+    if (idx < 2)
         return NULL;
+    if (idx >= UTRANS_RAND0) /* (la misma para todos los tipos) */
+        token = "";
     for (int k = 0; k < s_nps; k++)
         if (s_ps[k].idx == idx && strcmp(s_ps[k].token, token) == 0)
             return &s_ps[k];
@@ -1278,6 +1400,24 @@ static const PalShift *mon_palshift(const char *token, int ms, int ms2)
     job_flag_set(&p->state, PS_LOADING);
     jobs_push(palshift_job, p, 0);
     return p;
+}
+
+/* Los colores de un monstruo: el Utrans de su fila de monstats2.txt en esta
+   dificultad (los jefes de acto y los Uber cambian en Pesadilla e Infierno);
+   si no tiene, el de su TransLvl + 2 */
+static const PalShift *mon_palshift(const char *token, int ms, int ms2)
+{
+    int ut = utrans_of(&s_monstats2, ms2);
+    return palshift_get(token, ut >= 0 ? ut : txt_get_int(&s_monstats, ms, "TransLvl", 0) + 2);
+}
+
+/* Los colores de un jefe: el Utrans de superuniques.txt en esta dificultad o,
+   si está vacío o en 0 (y en los jefes al azar), uno de randtransforms.dat al azar */
+static void boss_colors(Unit *u, int utrans)
+{
+    if (utrans <= 0)
+        utrans = UTRANS_RAND0 + (int)(spawn_rnd() % (uint32_t)(UTRANS_COUNT - UTRANS_RAND0));
+    u->pshift = palshift_get(u->gfx->look.token, utrans);
 }
 
 /* La tabla de colores de la unidad, si ya se leyó y cambia algo */
@@ -1443,6 +1583,9 @@ static Unit *create_monster(const char *id, float x, float y, int level, int ene
         u->undead = txt_get_int(&s_monstats, ms, "lUndead", 0) == 1 || txt_get_int(&s_monstats, ms, "hUndead", 0) == 1;
         snprintf(u->base, sizeof u->base, "%s", txt_get(&s_monstats, ms, txt_col(&s_monstats, "BaseId")));
         u->ai = (uint8_t)ai_kind(ai);
+        u->uber = (int8_t)ai_uber(ai);
+        if (strncmp(ai, "Colossal", 8) == 0)
+            u->colossal = (int8_t)(!strcmp(ai, "ColossalWhirlwind") ? 1 : !strcmp(ai, "ColossalThrow") ? 2 : 3);
         for (int k = 0; k < 8; k++) {
             char col[8];
             snprintf(col, sizeof col, "aip%d", k + 1);
@@ -1464,7 +1607,8 @@ static Unit *create_monster(const char *id, float x, float y, int level, int ene
             u->sk_lvl[k] = (int16_t)(txt_get_int(&s_monstats, ms, col, 1) + diff_int("MonsterSkillBonus", 0));
         }
         u->heal_target = -1;
-        if (u->ai == AI_MAGGOT || u->ai == AI_MAGGOTEGG || u->ai == AI_MAGGOTQUEEN || u->ai == AI_VILEMOTHER) /* el huevo que pone, la larva que sale, los gusanos de la reina, las crías de la madre */
+        if (u->ai == AI_MAGGOT || u->ai == AI_MAGGOTEGG || u->ai == AI_MAGGOTQUEEN || u->ai == AI_VILEMOTHER ||
+            u->ai == AI_EVILHOLE || u->colossal) /* el huevo que pone, la larva que sale, los gusanos de la reina, las crías de la madre, lo que larga el agujero, los espíritus de los colosales */
             snprintf(u->minion, sizeof u->minion, "%s", txt_get(&s_monstats, ms, txt_col(&s_monstats, "spawn")));
         if (u->ai && getenv("D2_AI_DEBUG"))
             printf("IA: aparece %s en (%.0f, %.0f) con IA %d y habilidades %s%s %s%s %s%s\n", id, x, y, u->ai, u->skill[0],
@@ -1547,6 +1691,31 @@ int units_spawn_monster(const char *id, float x, float y, int level)
     return u ? (int)(u - s_units) : -1;
 }
 
+void units_set_treasure_class(int i, const char *tc)
+{
+    if (i >= 0 && i < s_num_units)
+        snprintf(s_units[i].tc, sizeof s_units[i].tc, "%s", tc);
+}
+
+int units_zone_objects(int zone, int *ids, int max)
+{
+    int n = 0;
+    for (int i = 0; i < s_num_units && n < max; i++)
+        if (s_units[i].zone == zone && s_units[i].obj_row > 0 && !s_units[i].hidden)
+            ids[n++] = i;
+    return n;
+}
+
+int units_spawn_boss_at(const char *id, float x, float y, int level, int area_level)
+{
+    Unit *u = create_monster(id, x, y, level, 1);
+    if (!u)
+        return -1;
+    u->minion_level = area_level; /* (sus esbirros, del nivel del área) */
+    u->spawn_boss = u->no_bind = 1;
+    return (int)(u - s_units);
+}
+
 /* Un grupo de monstruos alrededor de (x, y), en lugares libres */
 static void spawn_group(const char *id, int count, float x, float y, int level)
 {
@@ -1571,6 +1740,8 @@ static int mod_hit(Unit *u, UnitTarget *t, int dmg)
         extra += half * (100 - t->res[0]) / 100;
     if (HAS_MOD(u, MOD_COLD))
         extra += half * (100 - t->res[1]) / 100;
+    if (u->col_enchant) /* el encantamiento de un Anciano colosal: su elemento */
+        extra += half * (100 - t->res[u->col_enchant - 1]) / 100;
     if (HAS_MOD(u, MOD_SPECTRAL)) /* un elemento al azar */
         extra += (half + (int)(rnd(u) % (uint32_t)half)) * (100 - t->res[rnd(u) % 3]) / 100;
     if (HAS_MOD(u, MOD_MANAHIT))
@@ -1653,6 +1824,19 @@ static void apply_mods(Unit *u, uint32_t mods)
         u->spray = 3;
 }
 
+/* El Diablo clon (endgame.inc): el próximo superunique que se arme es él */
+static int s_clone_pending, s_clone_unit = -1;
+
+void units_clone_next_superunique(int on)
+{
+    s_clone_pending = on;
+}
+
+int units_clone_unit(void)
+{
+    return s_clone_unit;
+}
+
 /* Los jefes con aura (para que se vea): sus números, revisados al pedirlos */
 static int s_aura_ids[8], s_num_aura;
 
@@ -1720,6 +1904,21 @@ static uint32_t random_mods(int n)
     return mods;
 }
 
+/* Los únicos aterrorizados: uno más de la lista de desecratedzones.json (en Infierno), a su peso */
+static uint32_t terror_mod(const Unit *u)
+{
+    if (!u->terror || s_terror_npool <= 0)
+        return 0;
+    int total = 0;
+    for (int k = 0; k < s_terror_npool; k++)
+        total += s_terror_pool[k][1];
+    int r = (int)(spawn_rnd() % (uint32_t)total);
+    for (int k = 0; k < s_terror_npool; k++)
+        if ((r -= s_terror_pool[k][1]) < 0)
+            return 1u << s_terror_pool[k][0];
+    return 0;
+}
+
 /* Un jefe al azar (más nivel, vida y experiencia, y sus modificadores al
    azar, como los únicos del original) */
 static Unit *spawn_random_boss(const char *id, float x, float y, int level)
@@ -1728,12 +1927,15 @@ static Unit *spawn_random_boss(const char *id, float x, float y, int level)
     if (!boss)
         return NULL;
     make_boss(boss, 5); /* +300% de vida en Normal y 5 veces la experiencia, como los de nombre (sub_6FC6E8D0) */
+    boss_colors(boss, 0);
     boss->spawn_boss = 1;
     int ms = mon_row(&s_monstats, id);
-    const char *utc = ms >= 0 ? txt_get(&s_monstats, ms, txt_col(&s_monstats, dcol(&s_monstats, "TreasureClassUnique"))) : "";
+    const char *utc = ms >= 0 ? mon_tc(ms, "TreasureClassUnique", boss->terror) : "";
     if (utc[0])
         snprintf(boss->tc, sizeof boss->tc, "%s", utc);
-    apply_mods(boss, random_mods(1 + s_diff) | (boss->ranged ? 1u << MOD_MULTISHOT : 0u));
+    apply_mods(boss, random_mods(1 + s_diff) | terror_mod(boss) | (boss->ranged ? 1u << MOD_MULTISHOT : 0u));
+    if (HAS_MOD(boss, MOD_AURA))
+        aura_enchant(boss, 0);
     return boss;
 }
 
@@ -1775,6 +1977,55 @@ int units_spawn_boss_pack(const char *id, float x, float y, int level)
     return i;
 }
 
+/* Un Heraldo (endgame.inc): un jefe de ese tipo con el nombre de su grado (HeraldName1..5), la vida y
+   el daño de más de desecratedzones.json, sus modificadores y siempre un aura, y esbirros del mismo
+   tipo, también más fuertes. Su clase de tesoro es la TreasureClassHerald, unos niveles más arriba. */
+int units_spawn_herald(const char *id, float x, float y, int level, const UnitsHerald *h)
+{
+    Unit *b = create_monster(id, x, y, level + UNIQUE_LEVELS, 1);
+    if (!b)
+        return -1;
+    make_boss(b, 5);
+    boss_colors(b, 0);
+    b->spawn_boss = b->no_bind = 1;
+    b->terror = 1;
+    b->herald = (int8_t)h->tier;
+    b->tc_boost = (int8_t)h->tc_boost;
+    int ms = mon_row(&s_monstats, id);
+    snprintf(b->tc, sizeof b->tc, "%s", txt_get(&s_monstats, ms, txt_col(&s_monstats, dcol(&s_monstats, "TreasureClassHerald"))));
+    char key[16];
+    snprintf(key, sizeof key, "HeraldName%d", h->tier);
+    b->display = str_get(key);
+    int64_t hp = (int64_t)b->max_hp * (100 + h->hp_pct) / 100;
+    b->max_hp = b->hp = hp > (1 << 30) ? 1 << 30 : (int)hp;
+    int pct = 100 + h->dmg_pct;
+    b->dmg_min = b->dmg_min * pct / 100;
+    b->dmg_max = b->dmg_max * pct / 100;
+    b->a2_min = b->a2_min * pct / 100;
+    b->a2_max = b->a2_max * pct / 100;
+    b->s1_min = b->s1_min * pct / 100;
+    b->s1_max = b->s1_max * pct / 100;
+    for (int k = 0; k < 3; k++) {
+        b->el[k].min = (int16_t)(b->el[k].min * pct / 100 < 32000 ? b->el[k].min * pct / 100 : 32000);
+        b->el[k].max = (int16_t)(b->el[k].max * pct / 100 < 32000 ? b->el[k].max * pct / 100 : 32000);
+    }
+    apply_mods(b, random_mods(h->mods) | 1u << MOD_AURA | (b->ranged ? 1u << MOD_MULTISHOT : 0u));
+    aura_enchant(b, 0);
+    for (int k = 1; k <= h->minions; k++) {
+        float px, py;
+        Unit *mu = group_spot(x, y, k, &px, &py) ? create_monster(id, px, py, level, 1) : NULL;
+        if (!mu)
+            continue;
+        mu->max_hp = mu->hp = (int)((int64_t)mu->max_hp * (100 + h->minion_hp_pct) / 100);
+        int mp = 100 + h->minion_dmg_pct;
+        mu->dmg_min = mu->dmg_min * mp / 100;
+        mu->dmg_max = mu->dmg_max * mp / 100;
+        mu->a2_min = mu->a2_min * mp / 100;
+        mu->a2_max = mu->a2_max * mp / 100;
+    }
+    return (int)(b - s_units);
+}
+
 /* Los campeones (sub_6FC6E940, MONSTERUNIQUE_UMod16..39): el tipo, con el
    mismo peso cada uno (cpick de monumod.txt en Normal) */
 enum { CHAMP_NONE, CHAMP_CHAMPION, CHAMP_GHOSTLY, CHAMP_FANATIC, CHAMP_POSSESSED, CHAMP_BERSERK };
@@ -1791,6 +2042,9 @@ static Unit *spawn_champion(const char *id, float x, float y, int level, int kin
     int bonus = s_diff ? diff_int("ChampionDamageBonus", 90) : 100;
     u->exp *= 5;                   /* UMod2 */
     u->champion = (int8_t)kind;
+    const char *ctc = mon_tc(ms, "TreasureClassChamp", u->terror); /* (sub_6FC631B0: la segunda de monstats) */
+    if (ctc[0])
+        snprintf(u->tc, sizeof u->tc, "%s", ctc);
     u->spawn_boss = 1;
     if (kind != CHAMP_BERSERK) { /* UMod16: -40% de experiencia, +100% de daño, +75% de puntería y más rápido */
         u->exp -= u->exp * 2 / 5;
@@ -1884,6 +2138,18 @@ static int spawn_superunique(const char *name, float x, float y, int level)
     int row = txt_find_row(&s_superuniques, 0, name);
     if (row < 0 || level <= 0)
         return -1;
+    if (s_clone_pending) { /* en su lugar, el Diablo clon (del nivel de monstats.txt, Level(H): 110) */
+        Unit *c = create_monster("diabloclone", x, y, txt_get_int(&s_monstats, mon_row(&s_monstats, "diabloclone"), "Level(H)", 110), 1);
+        if (c) {
+            s_clone_pending = 0;
+            c->spawn_boss = c->no_bind = c->unique = 1;
+            c->minion_level = level;
+            s_clone_unit = (int)(c - s_units);
+            if (getenv("D2_AI_DEBUG"))
+                printf("IA: el Diablo clon sale en lugar de %s en (%.0f, %.0f)\n", name, x, y);
+            return s_clone_unit;
+        }
+    }
     const char *cls = txt_get(&s_superuniques, row, txt_col(&s_superuniques, "Class"));
     Unit *u = create_monster(cls, x, y, level + UNIQUE_LEVELS, 1);
     if (!u)
@@ -1899,12 +2165,20 @@ static int spawn_superunique(const char *name, float x, float y, int level)
     }
     if (s_diff > 0) /* uno más al azar en Pesadilla y dos en Infierno */
         mods |= random_mods(s_diff);
+    mods |= terror_mod(u);
     apply_mods(u, mods);
     if (HAS_MOD(u, MOD_AURA))
         aura_enchant(u, strcmp(name, "Lord De Seis") == 0);
+    boss_colors(u, utrans_of(&s_superuniques, row));
     snprintf(u->name, sizeof u->name, "%s", name);
     u->display = str_get(txt_get(&s_superuniques, row, txt_col(&s_superuniques, "Name")));
     snprintf(u->tc, sizeof u->tc, "%s", txt_get(&s_superuniques, row, txt_col(&s_superuniques, dcol(&s_superuniques, "TC"))));
+    if (u->terror) { /* "TC(H) Desecrated" */
+        static const char *const k_dtc[3] = { "TC Desecrated", "TC(N) Desecrated", "TC(H) Desecrated" };
+        const char *d = txt_get(&s_superuniques, row, txt_col(&s_superuniques, k_dtc[s_diff]));
+        if (d[0])
+            snprintf(u->tc, sizeof u->tc, "%s", d);
+    }
     char cls_copy[32];
     snprintf(cls_copy, sizeof cls_copy, "%s", cls);
     int lo = txt_get_int(&s_superuniques, row, "MinGrp", 0), hi = txt_get_int(&s_superuniques, row, "MaxGrp", 0);
@@ -2998,7 +3272,7 @@ static void seq_attack(Unit *u, const Map *m, UnitTarget *pl)
     step = step < q->n ? step : q->n - 1;
     u->anim_acc += u->gfx->anim[q->anim[step]].speed;
     int now = u->anim_acc >> 8;
-    if (strcmp(sk, "MonLeap") == 0 || strcmp(sk, "MonLeapAttack") == 0) { /* del principio al final, por el aire (Korlic pega al caer) */
+    if (strcmp(sk, "MonLeap") == 0 || strcmp(sk, "MonLeapAttack") == 0 || strcmp(sk, "Korlic's Leap Attack") == 0) { /* del principio al final, por el aire (Korlic pega al caer) */
         float f = (float)(now < q->n ? now : q->n) / (float)q->n;
         u->x = u->leap_x0 + (u->leap_x1 - u->leap_x0) * f;
         u->y = u->leap_y0 + (u->leap_y1 - u->leap_y0) * f;
@@ -3021,7 +3295,7 @@ static void seq_attack(Unit *u, const Map *m, UnitTarget *pl)
         } else if (now > 13) {
             u->ai_p[2] = 0;
         }
-    } else if (strcmp(sk, "Whirlwind") == 0) { /* Talic gira hasta pasar al jugador, pegando en el camino */
+    } else if (strcmp(sk, "Whirlwind") == 0 || strcmp(sk, "Talic's Whirlwind") == 0) { /* Talic gira hasta pasar al jugador, pegando en el camino */
         float speed = u->speed;
         u->speed = speed * 2.0f;
         if (dist_to(u, u->leap_x1, u->leap_y1) > 0.5f)
@@ -3185,6 +3459,15 @@ static void enemy_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
         holy_freeze(u, pl, n);
     if (u->aura_sk && u->state < ST_DYING)
         boss_aura(u, pl, n);
+    if (u->colossal && u->state < ST_DYING)
+        colossal_tick(u, pl, n);
+    if (u->uber && u->state < ST_DYING) { /* Diablogeddon y la Armadura escalofriante de los Uber */
+        uber_geddon_tick(u);
+        if (u->chill_armor > 0)
+            u->chill_armor--;
+        if (u->chill_armor > 0 && s_unit_ticks % 4 == 0) /* (el estado chillingarmor: su overlay) */
+            overlays_add("chillarmor", OV_AT_UNIT, (int)(u - s_units), u->x, u->y, 4);
+    }
     if (u->ba_ticks > 0 && --u->ba_ticks == 0)
         u->ba_dmg = u->ba_ar = u->ba_ias = 0;
     if (u->ai == AI_SUMMONER) { /* las demoras de su Nova y su muro */
@@ -5494,15 +5777,19 @@ int units_find_reviver(float x, float y, float range)
    suben el daño, hasta el doble). Los monstruos no tienen tope. */
 /* La resistencia con Convicción: a los inmunes (100 o más) solo les baja un
    quinto, como en el original (pueden dejar de serlo) */
+/* Con un amuleto Sunder de ese elemento, la inmunidad queda en 95 (y Convicción o las maldiciones
+   siguen bajando solo un quinto; el resto, entero) */
 static int unit_res(const Unit *u, int elem)
 {
-    int r = u->res[elem];
+    int r = u->res[elem], immune = r >= 100;
+    if (immune && (s_sunder & (1u << elem)))
+        r = 95;
     if (u->conv_ticks > 0 && (elem == ELEM_FIRE || elem == ELEM_COLD || elem == ELEM_LTNG))
-        r -= r >= 100 ? u->conv_res / 5 : u->conv_res;
+        r -= immune ? u->conv_res / 5 : u->conv_res;
     if (u->nc_ticks > 0) { /* Amplificar daño y Decrepitud (lo físico), Bajar resistencias */
         int m = elem == ELEM_NONE ? u->nc_phys : elem != ELEM_MAG ? u->nc_res : 0;
         if (m > 0)
-            r -= r >= 100 ? m / 5 : m;
+            r -= immune ? m / 5 : m;
     }
     return r;
 }
@@ -5646,9 +5933,15 @@ void units_health(int i, int *hp, int *max_hp)
     *max_hp = s_units[i].max_hp;
 }
 
+/* En Pesadilla e Infierno, la de su grupo que va con su nivel (sub_6FC52110: no la de los jefes ni
+   la de los noRatio). Aterrorizados, todos (las "Desecrated A..H" de los jefes van por nivel); los
+   Heraldos, con los niveles de más de su grado. */
 const char *units_treasure_class(int i)
 {
-    return s_units[i].tc;
+    const Unit *u = &s_units[i];
+    if (u->tc[0] && ((s_diff > 0 && !u->tc_fixed) || u->terror))
+        return items_tc_for_level(u->tc, u->level + u->tc_boost);
+    return u->tc;
 }
 
 void units_debug_stats(int i, char *buf, size_t cap)
@@ -6101,6 +6394,48 @@ int units_is_ranged(int i)
 int units_is_unique(int i)
 {
     return s_units[i].unique;
+}
+
+static void describe_add(char *buf, size_t cap, const char *text)
+{
+    size_t n = strlen(buf);
+    if (text && text[0] && n + 2 < cap)
+        snprintf(buf + n, cap - n, "%s%s", n ? ", " : "", text);
+}
+
+void units_describe(int i, char *buf, size_t cap)
+{
+    buf[0] = '\0';
+    if (i < 0 || i >= s_num_units || cap < 2)
+        return;
+    const Unit *u = &s_units[i];
+    if (u->terror) /* (en el original, un ícono junto al nombre) */
+        describe_add(buf, cap, str_get("EnteringDesecratedLevelNotification"));
+    if (u->undead)
+        describe_add(buf, cap, str_get("UndeadDescriptX"));
+    else if (u->demon)
+        describe_add(buf, cap, str_get("DemonID"));
+    static const char *const k_champ[] = { NULL, "Champion", "champghostlyX", "champfanaticX", "champpossessedX", "champberserkX" };
+    if (u->champion > 0 && u->champion < (int)(sizeof k_champ / sizeof k_champ[0]))
+        describe_add(buf, cap, str_get_gender(k_champ[u->champion], GENDER_MS));
+    /* los modificadores de jefe, con los textos del juego (monsters.json) */
+    static const struct { int mod; const char *key; } k_mods[] = {
+        { MOD_STRONG, "uniquextrastrong" },      { MOD_FAST, "uniqueextrafast" },      { MOD_CURSE, "uniquecursed" },
+        { MOD_RESIST, "uniquemagicresistance" }, { MOD_FIRE, "uniquefireenchanted" }, { MOD_LIGHTNING, "monsteruniqueprop2" },
+        { MOD_COLD, "monsteruniqueprop1" },      { MOD_MANAHIT, "monsteruniqueprop3" }, { MOD_SPECTRAL, "monsteruniqueprop4" },
+        { MOD_STONESKIN, "monsteruniqueprop6" }, { MOD_MULTISHOT, "monsteruniqueprop7" }, { MOD_AURA, "monsteruniqueprop9" },
+    };
+    for (unsigned k = 0; k < sizeof k_mods / sizeof k_mods[0]; k++)
+        if (HAS_MOD(u, k_mods[k].mod))
+            describe_add(buf, cap, str_get(k_mods[k].key));
+    /* las inmunidades (strScaryMonDesc1..6: fuego, frío, rayo, veneno, físico y magia) */
+    static const int k_imm[6] = { ELEM_FIRE, ELEM_COLD, ELEM_LTNG, ELEM_POIS, ELEM_NONE, ELEM_MAG };
+    for (int k = 0; k < 6; k++)
+        if (u->res[k_imm[k]] >= 100) {
+            char key[24];
+            snprintf(key, sizeof key, "strScaryMonDesc%d", k + 1);
+            describe_add(buf, cap, str_get(key));
+        }
 }
 
 int units_count_enemies_in(float x0, float y0, float x1, float y1)

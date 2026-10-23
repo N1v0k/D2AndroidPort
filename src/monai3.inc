@@ -86,7 +86,7 @@ static int ai_area(Unit *u, int t, int k, const UnitTarget *tp)
     if (t < 0 || anim < 0 || !u->gfx->anim[anim].ok)
         return 0;
     Missile *mi = NULL;
-    if (strcmp(sk, "MonBlizzard") == 0) { /* el centro: cada tanto cae un trozo de hielo (monbliz1..4) */
+    if (strcmp(sk, "MonBlizzard") == 0 || (u->colossal && strcmp(sk, "Blizzard") == 0)) { /* el centro: cada tanto cae un trozo de hielo (monbliz1..4) */
         mi = missiles_effect("monblizcenter", tp->x, tp->y);
         if (mi) {
             mi->flags |= MF_EFFECT | MF_NOHIT | MF_BLIZZARD;

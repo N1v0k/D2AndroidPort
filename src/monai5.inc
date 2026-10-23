@@ -1202,7 +1202,7 @@ static int a5_ancient_kind(const Unit *u)
    Madawc grita y tira, Korlic salta; sin el rito, quietos */
 static int a5_ancient(Unit *u, const Map *m, int t, const UnitTarget *tp, float d, int combat)
 {
-    if (!s_a5_ancients || !tp) {
+    if ((!s_a5_ancients && !u->colossal) || !tp) { /* (los colosales no esperan el rito) */
         ai_stall(u, 25);
         return 1;
     }

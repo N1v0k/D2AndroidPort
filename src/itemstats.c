@@ -314,7 +314,10 @@ int itemstats_apply(const ItemType *t, int ilvl, const char *code, const char *p
             break;
         }
         case 23: /* etéreo: no hay durabilidad */
-        case 36:
+            break;
+        case 36: /* randclassskill (la Antorcha): + val a las habilidades de una clase al azar entre min y max */
+            v = p->val[k] ? p->val[k] : 3;
+            count = itemstats_add(out, count, cap, st, rnd_range(min, max), v);
             break;
         default: /* 1, 2, 8, 13: el valor tirado */
             v = rnd_range(min, max);

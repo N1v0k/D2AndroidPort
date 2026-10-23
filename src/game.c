@@ -226,6 +226,7 @@ typedef struct {
     int     chill_ticks;    /* enfriado (un golpe de frío): la mitad de rápido */
     int     aura_slow;      /* lo que lo frena un aura de un monstruo (la Congelación sagrada de Duriel), este tick */
     int     conv_def, conv_res; /* la Convicción de un jefe con aura, este tick: % de defensa y de resistencias (negativos) */
+    int     pierce[3];          /* lo que le quita el aura de un Anciano colosal (fuego, frío, rayo), este tick */
     int     antidote_ticks; /* poción de antídoto: el veneno hace la mitad */
     int     amp_ticks;      /* maldecido por un jefe: recibe el doble de daño físico */
     int     curse, curse_ticks, curse_lvl; /* A4C_*: la maldición de un Caballero del Olvido (Amplificar va en amp_ticks) */
@@ -281,6 +282,7 @@ typedef struct {
     int     chat_open, chat_sel;    /* la lista de frases (R3) y la elegida */
     int     den_done;               /* limpió la Den of Evil (falta hablar con Akara) */
     int     den_rewarded;           /* ya cobró la recompensa de la Den of Evil */
+    int     respec_done;            /* ya usó la de Akara en esta dificultad (endgame.inc) */
     int     den_started;            /* Akara ya le pidió limpiar la cueva */
     int     raven_started, raven_done, raven_rewarded; /* Cementerio de las Hermanas (Kashya) */
     uint64_t npc_met;               /* NPCs que ya se presentaron (un bit por NPC de k_npc_vo) */
@@ -657,6 +659,22 @@ static int      s_pause_qp, s_pause_qact, s_pause_qsel;
 static uint32_t s_pause_qanim;
 static int s_guide_open, s_guide_cat, s_guide_sel, s_guide_top; /* la Guía del cubo (en la pausa) */
 static int s_controls_open; /* la pantalla de controles (en la pausa) */
+static int s_pal_cur = -1;  /* la paleta cargada (0..4: act1..act5) */
+
+/* La paleta del nivel donde está el jugador 1 (Pal de levels.txt): como el original, los
+   infiernos de los portales rojos del Acto 5 usan la del Acto 4, y los mapas del evento
+   Pandemonium las de sus actos (las baldosas de la cripta, del desierto, de Tristram) */
+static void level_palette(void)
+{
+    const Level *lv = s_pl[0].level;
+    int want = lv && lv->pal >= 0 && lv->pal <= 4 ? lv->pal : s_act - 1;
+    if (want == s_pal_cur || s_pal_cur < 0)
+        return;
+    char pal[16];
+    snprintf(pal, sizeof pal, "act%d", want + 1);
+    if (pal_load_d2(pal) == 0)
+        s_pal_cur = want;
+}
 static int s_always_run; /* opción: corre siempre (el gatillo hace caminar) */
 static int s_show_pos;   /* opción: la zona y la posición en las esquinas (para avisar errores) */
 static int s_show_perf;  /* opción: cuadros por segundo y lo que tarda cada parte */
@@ -770,6 +788,17 @@ static void a3_zone_test_prep(void);
 static int  obj_passable(int u, int *x0, int *y0, int *w, int *h); /* objects.inc */
 static void cow_zone_loaded(int z); /* cows.inc */
 static int  cow_recipe(Player *p);
+static void uber_zone_loaded(int z); /* endgame.inc */
+static int  uber_recipe(Player *p);
+static void player_respec(Player *p);
+static void dclone_sold(Player *p, const Item *it);
+static int  endgame_use_item(Player *p, int i);
+static int  tz_mon_level(const Level *lv);   /* endgame.inc: las zonas de terror */
+static void tz_kill(const Player *p, int unit);
+static int  tz_level_on(const Level *lv);
+static int  tz_waypoint_marked(const char *level_name);
+static void tz_pause_line(char *out, size_t cap, int max_w);
+static int  s_tz_menu;
 static int  is_quest_item(const ItemType *t);
 static int  bag_index_of(const Player *p, const char *code);
 static int  war_kind(int kind);              /* skillwar.inc: las del Brujo */
@@ -940,8 +969,7 @@ static int load_class(CharClass *c)
 
 static int monster_level_at(float x, float y)
 {
-    const Level *lv = world_level_at(x, y);
-    return lv ? lv->mon_level : 0;
+    return tz_mon_level(world_level_at(x, y)); /* (el de la zona de terror, si lo está) */
 }
 
 static int level_monster_count(const Level *lv)
@@ -1016,7 +1044,7 @@ static int zone_monsters_try(void)
     if (lv->num_umon > 0 && ((s_zm.bosses < lv->umin && (int)(rnd() % 100) < 100 * g / lv->groups) ||
                              (s_zm.bosses < lv->umax && rnd() % 100 <= 5))) {
         /* (en Normal, de los umon1..umon10 del nivel) */
-        s_zm.bosses += units_spawn_level_boss(lv->umons[rnd() % (uint32_t)lv->num_umon], x + 0.5f, y + 0.5f, lv->mon_level);
+        s_zm.bosses += units_spawn_level_boss(lv->umons[rnd() % (uint32_t)lv->num_umon], x + 0.5f, y + 0.5f, tz_mon_level(lv));
         return 1;
     }
     const char *id = kinds[rnd() % (uint32_t)nkinds];
@@ -1037,7 +1065,7 @@ static int zone_monsters_try(void)
         float mx = x + (float)((int)(rnd() % (uint32_t)spread) - spread / 2),
               my = y + (float)((int)(rnd() % (uint32_t)spread) - spread / 2);
         if (!blocked_body(mx + 0.5f, my + 0.5f) && world_level_at(mx, my) == lv)
-            units_spawn_monster(shaman && k > 0 ? minion : id, mx + 0.5f, my + 0.5f, lv->mon_level);
+            units_spawn_monster(shaman && k > 0 ? minion : id, mx + 0.5f, my + 0.5f, tz_mon_level(lv));
     }
     return 1;
 }
@@ -2027,6 +2055,11 @@ void game_start(int num_players)
     if (env)
         sscanf(env, "%d,%d", &classes[0], &classes[1]);
     game_start_slots(num_players, slots, classes);
+}
+
+void game_set_terror_zones(int on)
+{
+    s_tz_menu = on != 0;
 }
 
 void game_set_difficulty(int diff)
@@ -3632,8 +3665,8 @@ static int player_resist(const Player *p, int ri)
             s_dl_resist;
     if (p->curse == A4C_LOWERRES) /* Bajar resistencias (dm56: de 25 a 70 %) */
         r -= 25 + (70 - 25) * (110 * p->curse_lvl / (p->curse_lvl + 6)) / 100;
-    if (ri < 3) /* la Convicción de un jefe con aura */
-        r += p->conv_res;
+    if (ri < 3) /* la Convicción de un jefe con aura y la de un Anciano colosal */
+        r += p->conv_res - p->pierce[ri];
     int most = 75 + p->bonus[k_res[ri] + 1] + (ri < 3 ? p->res_max[ri] + p->au_res_max[ri] : 0);
     most = most > 95 ? 95 : most;
     return r > most ? most : r < s_dl_res_floor ? s_dl_res_floor : r;
@@ -3898,6 +3931,8 @@ static void cube_transmute_now(Player *p)
     }
     if (cow_recipe(p)) /* la pierna de Wirt: el portal a las vacas (no es un objeto) */
         return;
+    if (uber_recipe(p)) /* las llaves y los órganos: los portales del evento Pandemonium */
+        return;
     Item out[3];
     char what[112];
     int n = cube_transmute(p->cube, p->cube_count, p->level_num, out, 3, what, sizeof what);
@@ -4005,7 +4040,7 @@ static void inventory_use(Player *p)
             cube_toggle(p);
             return;
         }
-        if (a3_use_item(p, i) || a5_use_item(p, i)) /* la Poción de la vida, el Pergamino de Resistencia */
+        if (a3_use_item(p, i) || a5_use_item(p, i) || endgame_use_item(p, i)) /* la Poción de la vida, el Pergamino de Resistencia, el Token */
             return;
         if (strcmp(t->code, "ass") == 0) { /* el Libro de Habilidad de Radament: un punto, una vez */
             if (!(p->a2_flags & A2F_BOOK)) {
@@ -4696,7 +4731,8 @@ static Shop s_shops[VENDOR_COUNT] = {
     { "drehya", VENDOR_ANYA, 5, { { 0 } }, 0 }, /* (y Nihlathak, hasta que se va: shop_of) */
 };
 
-enum { OPT_TALK, OPT_TRADE, OPT_HIRE, OPT_REVIVE, OPT_IMBUE, OPT_TRAVEL, OPT_GAMBLE, OPT_LEAVE, OPT_SOCKET, OPT_PERSONAL };
+enum { OPT_TALK, OPT_TRADE, OPT_HIRE, OPT_REVIVE, OPT_IMBUE, OPT_TRAVEL, OPT_GAMBLE, OPT_LEAVE, OPT_SOCKET, OPT_PERSONAL,
+       OPT_RESPEC };
 
 /* D2GAME_NPC_GenerateStoreItem: en Pesadilla e Infierno, con el personaje
    de nivel 26 o más, en lugar de lo de la tabla la versión excepcional o de
@@ -4799,6 +4835,8 @@ static int npc_options(const Player *p, const char *npc, int *opts)
         opts[n++] = OPT_SOCKET;
     if (strcmp(npc, "drehya") == 0 && p->nihl_q == 4) /* la de Nihlathak: personalizar un objeto */
         opts[n++] = OPT_PERSONAL;
+    if (strcmp(npc, "akara") == 0 && p->den_rewarded && !p->respec_done) /* después de la Den of Evil: una vez por dificultad */
+        opts[n++] = OPT_RESPEC;
     if (strncmp(npc, "warriv", 6) == 0 && p->andy_q >= 2) /* después de Andariel */
         opts[n++] = OPT_TRAVEL;
     if (strcmp(npc, "meshif1") == 0 && p->tombs_q >= 6) /* después de Duriel: el barco a Kurast */
@@ -4810,7 +4848,8 @@ static int npc_options(const Player *p, const char *npc, int *opts)
 }
 
 static const char *const k_option_names[] = { "Hablar", "Comerciar", "Contratar", "Resucitar", "Imbuir",
-                                              "Viajar al este", "Apostar", "Salir", "Engarzar", "Personalizar" };
+                                              "Viajar al este", "Apostar", "Salir", "Engarzar", "Personalizar",
+                                              "Restablecer puntos" };
 
 /* ---- Mercenarias ---- */
 
@@ -5964,6 +6003,12 @@ static void dialog_tick(Player *p, const PlayerInput *pi)
     case OPT_REVIVE:
         merc_revive(p);
         break;
+    case OPT_RESPEC: /* la de Akara (1.13): todos los puntos de nuevo, una vez por dificultad */
+        player_respec(p);
+        p->respec_done = 1;
+        close_ui(p);
+        save_character(p);
+        break;
     case OPT_IMBUE:
     case OPT_SOCKET:
     case OPT_PERSONAL: /* (la misma lista: imbuir, engarzar o personalizar) */
@@ -6177,6 +6222,7 @@ static void shop_tick(Player *p, const PlayerInput *pi)
         p->gold += items_price(&it, 1);
         audio_play_name("item_gold", AUDIO_NOPOS, AUDIO_NOPOS);
         bag_remove(p, (int)(items[p->shop_sel] - p->bag));
+        dclone_sold(p, &it); /* (una Piedra de Jordán en Infierno: el Diablo clon) */
         if (sh->count < SHOP_MAX && !shop_unlimited(it.type))
             sh->stock[sh->count++] = it;
     }
@@ -6656,6 +6702,7 @@ static void award_kill(Player *p, int unit, int exp)
     if (p->hp > p->hp_max)
         p->hp = p->hp_max;
     share_exp(p, exp);
+    tz_kill(p, unit);
     drop_loot(unit, p);
 }
 
@@ -8403,7 +8450,8 @@ static const char *const k_diff_pre[3] = { "", "d1 ", "d2 " };
 static int save_line_diff(const char *line, const char **rest)
 {
     static const char *const k_keys[] = { "den ", "quests ", "waypoints ", "talk ", "act1 ", "act2 ", "act3 ",
-                                          "act4 ", "act5 ", "cowking ", "inact ", "qseen ", "freehire ", "acttop " };
+                                          "act4 ", "act5 ", "cowking ", "inact ", "qseen ", "freehire ", "acttop ",
+                                          "respec " };
     int d = 0;
     if (line[0] == 'd' && (line[1] == '1' || line[1] == '2') && line[2] == ' ') {
         d = line[1] - '0';
@@ -8438,6 +8486,8 @@ static void save_diff(FILE *f, const Player *p, int d)
             p->baal_q, p->a5_flags, p->rescued);
     if (p->cow_king)
         fprintf(f, "%scowking 1\n", pre);
+    if (p->respec_done)
+        fprintf(f, "%srespec 1\n", pre);
     fprintf(f, "%sinact %d\n", pre, p->act);
     fprintf(f, "%sqseen %u\n", pre, (unsigned)p->quest_seen);
     fprintf(f, "%sfreehire %d\n", pre, p->free_hire);
@@ -8706,6 +8756,8 @@ static int load_character_from(FILE *f, Player *p, const char *path)
             p->rescued = q[7];
         } else if (sscanf(line, "cowking %d", &a) == 1) {
             p->cow_king = a != 0;
+        } else if (sscanf(line, "respec %d", &a) == 1) {
+            p->respec_done = a != 0;
         } else if (sscanf(line, "talk %d %d %llu %llu", &a, &b, &talk_mask, &talk_mask2) >= 3 && a >= 0 && a < NPC_TALKERS) {
             p->talk_next[a] = (uint8_t)(b >= 0 && b < GOSSIP_MAX ? b : 0);
             p->talk_heard[a][0] = talk_mask;
@@ -9633,6 +9685,8 @@ static void quest_zone_loaded(int z)
         a5_zone_loaded(z);
     if (s_act == 1)
         cow_zone_loaded(z);
+    if (s_act == 5)
+        uber_zone_loaded(z);
     int cain = party_max(offsetof(Player, cain_q));
     float sx = 0, sy = 0;
     int found = 0;
@@ -9713,6 +9767,7 @@ static void quest_zone_loaded(int z)
 static int bots_playing(void); /* la demostración o una prueba automática (autotest.inc) */
 #include "objects.inc" /* los cofres, barriles, santuarios y pozos */
 #include "cows.inc"    /* el nivel de las vacas */
+#include "endgame.inc" /* el evento Pandemonium */
 
 /* El objeto de misión más cercano al jugador (o -1) y qué se puede hacer
    con él; NULL si nada (ya está hecho o todavía no toca) */
@@ -10101,6 +10156,9 @@ static void quest_reset(void)
     tp_reset();
     obj_reset();
     cow_reset();
+    uber_reset();
+    dclone_reset();
+    tz_reset();
 }
 
 /* ---- Imbuir (la recompensa de Charsi) ---- */
@@ -11069,6 +11127,7 @@ static void act_switch(int act)
     char pal[8];
     snprintf(pal, sizeof pal, "act%d", s_act);
     pal_load_d2(pal);
+    s_pal_cur = s_act - 1;
     zone_load(0); /* el pueblo */
     /* Dónde se aparece: en el campamento, junto a la fogata; en Lut Gholein,
        al lado de Warriv */
@@ -11648,6 +11707,8 @@ static void a2_quest_test(void)
 #include "a3qtest.inc"
 #include "a4qtest.inc"
 #include "cowtest.inc"
+#include "ubertest.inc"
+#include "tztest.inc"
 
 static void debug_tour(void)
 {
@@ -12487,6 +12548,8 @@ int game_tick(const InputState *in)
     a3_quest_test();
     a4_quest_test();
     cow_test();
+    uber_test();
+    tz_test();
     tp_test();
     stash_test();
     zones_tick();
@@ -12738,6 +12801,8 @@ int game_tick(const InputState *in)
         p->aura_slow = p->state < PS_DYING ? t->aura_slow : 0;
         p->conv_def = p->state < PS_DYING ? t->aura_conv_def : 0;
         p->conv_res = p->state < PS_DYING ? t->aura_conv_res : 0;
+        for (int k = 0; k < 3; k++)
+            p->pierce[k] = p->state < PS_DYING ? t->aura_pierce[k] : 0;
         if (t->poison_total > 0 && p->state < PS_DYING)
             player_poison(p, (float)t->poison_total / (float)t->poison_ticks, t->poison_ticks);
     }
@@ -12780,6 +12845,10 @@ int game_tick(const InputState *in)
 
     quest_tick();
     cow_tick();
+    uber_tick();
+    dclone_tick();
+    tz_tick();
+    level_palette();
     obj_tick();
     bossfx_tick();
     if (s_den_light > 0 && s_den_light < 1000)
@@ -13803,8 +13872,11 @@ static int draw_banner_line(int cx, int y, int max_w, const char *text, int scal
 static void draw_player_banners(const Player *p, int cx, int y, int max_w)
 {
     char text[96];
-    if (p->banner_ticks > 0 && p->level)
+    if (p->banner_ticks > 0 && p->level) {
         y += draw_banner_line(cx, y, max_w, str_get(p->level->name), 3, COL(R_GOLD, 14));
+        if (tz_level_on(p->level)) /* (EnteringDesecratedLevelNotification) */
+            y += draw_banner_line(cx, y, max_w, str_get("EnteringDesecratedLevelNotification"), 2, g_text_shift[11][COL(R_GRAY, 15)]);
+    }
     if (p->levelup_ticks > 0) {
         snprintf(text, sizeof text, tr("SUBISTE AL NIVEL %d"), p->level_num);
         y += draw_banner_line(cx, y, max_w, text, 3, COL(R_GOLD, 15));
@@ -13865,6 +13937,11 @@ static void draw_banners(void)
    barra roja translúcida con el nombre encima (dorado si es un jefe) */
 static void draw_target_bar(void)
 {
+    if (getenv("D2_SHOW_TARGET")) { /* depuración: ese monstruo (por su Id o el nombre del jefe) */
+        int id;
+        if (units_find_all(getenv("D2_SHOW_TARGET"), &id, 1) == 1)
+            s_shown_target = id;
+    }
     if (s_shown_target < 0)
         return;
     int hp, hp_max;
@@ -13879,6 +13956,33 @@ static void draw_target_bar(void)
     font_draw_centered(SCREEN_W / 2, y + (h - font_height(2)) / 2, name, 2,
                        units_is_unique(s_shown_target) ? COL(R_GOLD, 15) : units_is_champion(s_shown_target) ? COL(R_BLUE, 15)
                                                                                            : COL(R_GRAY, 15));
+    /* Debajo, como el original: no muerto o demonio, lo del jefe o del campeón y las inmunidades
+       (en dos renglones si no entra) */
+    char desc[256];
+    units_describe(s_shown_target, desc, sizeof desc);
+    if (!desc[0])
+        return;
+    int dy = y + h + 2, most = SCREEN_W / 2 - 20;
+    char *line = desc;
+    for (int row = 0; row < 2 && *line; row++) {
+        char *cut = NULL;
+        if (font_width(line, 1) > most) /* corta en la última coma que entra */
+            for (char *c = strchr(line, ','); c; c = strchr(c + 1, ',')) {
+                *c = '\0';
+                int fits = font_width(line, 1) <= most;
+                *c = ',';
+                if (!fits)
+                    break;
+                cut = c;
+            }
+        if (cut)
+            *cut = '\0';
+        int tw = font_width(line, 1);
+        fb_blend_rect(SCREEN_W / 2 - tw / 2 - 4, dy - 1, tw + 8, font_height(1) + 2, COL(R_GRAY, 0), BLEND_50);
+        font_draw_centered(SCREEN_W / 2, dy, line, 1, COL(R_GRAY, 15));
+        dy += font_height(1) + 2;
+        line = cut ? cut + 2 : line + strlen(line);
+    }
 }
 
 
@@ -14145,6 +14249,12 @@ static int item_tip_req(const Item *it, TipLine *l, int str, int dex, int level)
         }
         if (strcmp(t->code, "tsc") == 0)
             n = tip_add(l, n, TIP_WHITE, "X: abrir el portal");
+        if (strncmp(t->code, "xa", 2) == 0 && t->code[2] >= '1' && t->code[2] <= '5' && !t->code[3]) { /* (UseTerrorTokenAct1..5) */
+            snprintf(buf, sizeof buf, tr("X: aterrorizar el Acto %d"), t->code[2] - '0');
+            n = tip_add(l, n, TIP_WHITE, buf);
+        }
+        if (strcmp(t->code, "toa") == 0)
+            n = tip_add(l, n, TIP_WHITE, "X: reasignar los puntos");
     }
     int rstr, rdex;
     item_reqs(s_tip_owner, t, it, &rstr, &rdex);
@@ -15953,6 +16063,8 @@ static void draw_waypoints(const Player *p)
         int icon = k == here ? 2 : active ? (k == p->wp_sel ? 1 : 0) : 3;
         ui_frame("menu/waygateicons", icon, px + 17, by);
         uint8_t color = k == here ? COL(R_BLUE, 15) : active ? COL(R_GRAY, 15) : COL(R_STONE, 9);
+        if (active && k != here && tz_waypoint_marked(k_wp_levels[k])) /* el más cerca de la zona de terror */
+            color = g_text_shift[11][COL(R_GRAY, 15)];
         font_draw(px + 17 + 44, by - 6, str_get(k_wp_levels[k]), FONT_FORMAL, color);
         if (k == p->wp_sel)
             draw_pentagram(px + 17 + 52 + font_width(str_get(k_wp_levels[k]), FONT_FORMAL), by + 3, 20, 1);
@@ -16692,9 +16804,12 @@ static void draw_pause(void)
     int ox = qx + PANEL_W + 24, ow = SCREEN_W - 28 - ox, oy = qy;
     ui_dark_box(ox, oy, ow, PANEL_H);
     font_draw_centered(ox + ow / 2, oy + 12, "PAUSA", 6, COL(R_GOLD, 15));
-    char diff[48];
+    char diff[48], tz[192];
     snprintf(diff, sizeof diff, tr("Dificultad: %s"), tr(k_diff_names[s_diff]));
-    font_draw_centered(ox + ow / 2, oy + 52, diff, 2, s_diff ? COL(R_RED, 14) : COL(R_GRAY, 13));
+    tz_pause_line(tz, sizeof tz, ow - 16); /* y la zona de terror, abajo, en violeta */
+    font_draw_centered(ox + ow / 2, oy + (tz[0] ? 44 : 52), diff, 2, s_diff ? COL(R_RED, 14) : COL(R_GRAY, 13));
+    if (tz[0])
+        font_draw_centered(ox + ow / 2, oy + 61, tz, 1, g_text_shift[11][COL(R_GRAY, 15)]);
     for (int i = 0; i < PAUSE_COUNT; i++) {
         int y = oy + 76 + i * 33, chosen = i == s_pause_sel;
         uint8_t c = chosen ? COL(R_GOLD, 15) : COL(R_GRAY, 13);

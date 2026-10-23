@@ -193,6 +193,12 @@ enum {
     STAT_AURA = 151,
     STAT_NOFREEZE = 153,
     STAT_PIERCE = 156,
+    STAT_SUNDER_COLD = 187,  /* los amuletos Sunder: rompen la inmunidad de los monstruos (D2R) */
+    STAT_SUNDER_FIRE = 189,
+    STAT_SUNDER_LTNG = 190,
+    STAT_SUNDER_POIS = 191,
+    STAT_SUNDER_PHYS = 192,
+    STAT_SUNDER_MAG = 193,
     STAT_SKILL_TAB = 188,    /* + a una solapa (param: clase << 3 | solapa) */
     STAT_FIRE_MASTERY = 329, /* % de daño de fuego de las habilidades */
     STAT_LTNG_MASTERY = 330,
@@ -275,6 +281,8 @@ int             items_level_req(const Item *it); /* nivel que pide (el del objet
    calidad de cada uno se tira como en el original (ItemRatio.txt y lo que
    suma la clase de tesoro), con la búsqueda de magia `mf` (%). */
 int items_roll_drop(const char *treasure_class, int monster_level, int mf, Item *out, int max);
+/* La clase de su grupo que va con ese nivel ("Act 1 (H) H2H A" -> "... C"); la misma si no tiene grupo */
+const char *items_tc_for_level(const char *name, int lvl);
 /* Lo mismo con la calidad pedida (QUALITY_MAGIC, QUALITY_SUPERIOR...) en lo
    que la puede tener, como el nQuality de OBJMODE_DropFromChestTCWithQuality
    y el ITEMDROPFLAG_SUPERIOR de los estantes; el resto (oro, pociones) sale normal */
@@ -287,6 +295,7 @@ int items_make_magic(Item *it, int item_level);
 int items_make_rare(Item *it, int item_level);
 /* Único o de conjunto de ese objeto (si hay uno de nivel <= item_level); 0 si no */
 int items_make_unique(Item *it, int item_level);
+int items_make_unique_named(Item *it, const char *key); /* ese único (por su nombre de uniqueitems.txt), si es de ese objeto */
 /* El Amuleto de la Víbora, el Bastón de los Reyes y el Báculo Horádrico son
    únicos (uniqueitems.txt): con su nombre y sus propiedades. 1 si lo era. */
 int items_quest_unique(Item *it);

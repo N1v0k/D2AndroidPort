@@ -2,6 +2,15 @@
    (%d, %s...) tienen que ser los mismos y en el mismo orden (lo revisa
    tools/check_lang.py). Los del Resurrected no van acá: salen de sus .json. */
 
+/* Las zonas de terror (endgame.inc) */
+{ "Acto %d", "Act %d" },
+{ "Zona de terror: %s", "Terror zone: %s" },
+{ "Zona de terror: %s (%d min)", "Terror zone: %s (%d min)" },
+{ "Izq. / der.: zonas de terror SÍ", "Left / right: terror zones ON" },
+{ "Izq. / der.: zonas de terror NO", "Left / right: terror zones OFF" },
+{ "X: aterrorizar el Acto %d", "X: terrorize Act %d" },
+{ "X: reasignar los puntos", "X: reassign your points" },
+
 /* El cofre (stash), con sus pestañas y el oro guardado, y el oro que se pierde al morir */
 { "Cofre", "Stash" },
 { "A: levantar   X: pasar   LB: ordenar   B: cerrar", "A: pick up   X: move   LB: sort   B: close" },
@@ -834,3 +843,10 @@
 { "Pausa (los dos)", "Pause (both)" },
 { "con el clic, el jugador 1 camina", "hold the button: player 1 walks" },
 { "Izquierda / derecha (o LB / RB): otra solapa    B: volver", "Left / right (or LB / RB): other tab    B: back" },
+/* El evento Pandemonium (endgame.inc) */
+{ "Solo se abre en Harrogath, en Infierno", "It only opens in Harrogath, in Hell" },
+{ "Los tres portales ya se abrieron en esta partida", "The three portals were already opened in this game" },
+{ "El portal a Tristram ya se abrió en esta partida", "The portal to Tristram was already opened in this game" },
+{ "Restablecer puntos", "Reset Points" },
+{ "%d puntos de atributo y %d de habilidad para repartir", "%d attribute and %d skill points to spend" },
+{ "Solo se abre en el Acto 5, en Infierno", "It only opens in Act 5, in Hell" },

@@ -1,8 +1,25 @@
 # El endgame del original: qué hay y qué haría falta (investigación, 23/10/2026)
 
 Lo que pidió el usuario: investigar bien el endgame de Diablo II (el Diablo
-clon y la Antorcha, "y todo eso") antes de la próxima actualización. Esto es
-la investigación; todavía no hay nada hecho.
+clon y la Antorcha, "y todo eso") antes de la próxima actualización. Abajo
+está la investigación; después pidió hacerlo todo ("haz lo necesario todo").
+
+**Estado (23/10/2026): está todo hecho** (`src/endgame.inc`,
+`src/monaiu.inc`; las pruebas `D2_UBERTEST` y `D2_TZTEST`, en
+`docs/desarrollo.md`):
+- el evento Pandemonium, con los colores de cada Uber (Utrans por
+  dificultad) y la Antorcha;
+- el Token of Absolution y la reasignación de Akara (una por dificultad);
+- el Diablo clon, con la regla propia de vender una Piedra de Jordán en
+  Infierno;
+- los Ancianos colosales;
+- las zonas de terror, con las astillas, los Heraldos y los amuletos Sunder
+  (punto 3).
+
+Y de paso, como el original (`sub_6FC631B0` y `sub_6FC52110` de D2MOO): los
+campeones sueltan de su `TreasureClassChamp`, y en Pesadilla e Infierno la
+clase de tesoro sube dentro de su grupo con el nivel del monstruo (no la de
+los jefes de misión ni la de los noRatio).
 
 Fuentes: el código de D2MOO (`D:\tools\D2MOO`, lo marcado
 `D2_VERSION_HAS_UBERS`), las tablas de **nuestra** copia del Resurrected
@@ -137,11 +154,49 @@ El clon usa la IA de Diablo, que ya tenemos, más Diablogeddon.
   Heavens, Rotting Fissure, Bone Break, Black Cleft: rompen la inmunidad a
   ese elemento).
 
-**Qué falta:**
-- **La lista de zonas** (`desecratedzones.json`): no la importamos, habría
-  que sumarla al importador.
-- **Toda la lógica**: es del Resurrected y no está en D2MOO, así que habría
-  que armarla con las guías y los datos.
+**Cómo quedó** (`src/endgame.inc`; la lógica es del servidor de Blizzard,
+así que sale de las notas de los parches y de las guías):
+- `desecratedzones.json` ahora lo trae el importador. De ahí salen las 34
+  zonas, los cinco grupos de un acto entero (las astillas), los límites de
+  nivel de cada dificultad (Infierno 70..96, +2), el +25 % de experiencia,
+  los modificadores de más de los únicos de Infierno y los cinco grados de
+  Heraldo.
+- Se abren al matar a Baal en esa dificultad, con el personaje del jugador
+  1 (el que "crea" la partida). La pantalla de la dificultad las puede
+  apagar.
+- **La rotación** es cada 30 minutos de hora real. El orden lo sortea el
+  servidor del original; acá cada ciclo de 34 turnos pasa por todas, en un
+  orden sacado de la semilla del json, sin repetir seguido. No coincide con
+  el de Battle.net.
+- **Los monstruos** tienen el nivel del jugador 1 + 2 (entre los límites), o
+  el suyo si era más. Los campeones y los únicos suman lo de siempre (el +4
+  y +5 de las notas), y los jefes de misión, +5. Además:
+  - +25 % de experiencia;
+  - sus clases de tesoro "Desecrated", que suben por nivel;
+  - en Infierno, los únicos tienen un modificador más, de la lista del json
+    con el aura;
+  - abajo del nombre dice "Aterrorizado".
+- **Los avisos:** "Temblores corrompidos golpean…" al empezar y en cada
+  cambio, los avisos de los últimos tres minutos, y "Aterrorizado" en el
+  cartel del nivel. En la pausa está la zona con los minutos que le quedan, y
+  en los waypoints, los de la zona en violeta.
+- **Las astillas** (`xa1`..`xa5`, X en la mochila) aterrorizan su acto
+  entero el resto de la partida, en lugar de la rotación. Sin Baal muerto,
+  dicen "El Monte Arreat se encuentra inerte".
+- **Los Heraldos** (solo en Infierno):
+  - cada muerte en la zona sube la probabilidad de que salga uno, según la
+    curva logística del json para su grado;
+  - avisa, cinco segundos de rayos y sale cerca;
+  - es un jefe de un tipo del nivel (que no tenga `CannotHerald`), con el
+    nombre de su grado, la vida, el daño y los esbirros del json, sus
+    modificadores y siempre un aura;
+  - suelta de su `TreasureClassHerald`, subida los niveles de su grado; de
+    ahí salen los amuletos Sunder y las astillas;
+  - cada uno muerto sube el grado del próximo, hasta 5.
+- **Los amuletos Sunder** dejan en 95 la inmunidad de ese elemento. Lo que
+  baja un quinto (Convicción, las maldiciones) sigue bajando un quinto, y el
+  resto, entero. Acá valen para el daño de todos en la partida (los dos
+  jugadores, sus mascotas y la mercenaria).
 
 ## 4. Los Ancianos colosales (Colossal Summit, expansión del Brujo)
 

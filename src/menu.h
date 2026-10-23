@@ -18,6 +18,7 @@ int        menu_players(void);
 const int *menu_slots(void);   /* partida de cada jugador (1..6) */
 const int *menu_classes(void); /* clase de los personajes nuevos */
 int        menu_difficulty(void); /* la dificultad elegida (0 Normal, 1 Pesadilla, 2 Infierno) */
+int        menu_terror_zones(void); /* las zonas de terror: 1 sí (se abren al vencer a Baal en esa dificultad) */
 int        menu_is_main(void);   /* en la pantalla principal (para la demostración) */
 const char *menu_movie(void);    /* la cinemática elegida (MENU_MOVIE) */
 

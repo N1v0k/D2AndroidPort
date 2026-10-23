@@ -18,6 +18,7 @@ void game_start_slots(int num_players, const int *slots, const int *classes);
 /* La dificultad de la partida que sigue (0 Normal, 1 Pesadilla, 2 Infierno),
    antes de game_start_slots */
 void game_set_difficulty(int diff);
+void game_set_terror_zones(int on); /* las zonas de terror (con Baal muerto en esa dificultad) */
 int  game_difficulty(void);
 int  game_tick(const InputState *in);
 void game_render(float alpha);

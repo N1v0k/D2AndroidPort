@@ -176,6 +176,7 @@ language: the voices are replaced and the language is written to
 **Index**
 
 - [The acts](#the-acts)
+- [The endgame](#the-endgame)
 - [Classes and skills](#classes-and-skills)
 - [Monsters](#monsters)
 - [Combat](#combat)
@@ -251,6 +252,50 @@ mercenaries and the resistance penalty (-40 and -100).
 - A quest log with the state of each quest (in the panels and in the pause
   menu).
 
+### The endgame
+
+- **The Pandemonium Event** (Uber Tristram), as in the original:
+  - in Hell, the Countess, the Summoner and Nihlathak drop the three keys;
+  - in Harrogath, the keys in the cube open a red portal to one of three
+    maps: Matron's Den (Lilith), the Forgotten Sands (Uber Duriel) or the
+    Furnace of Pain (Uber Izual). Each one drops its organ;
+  - the three organs open Uber Tristram, with Uber Mephisto, Uber Diablo
+    and Uber Baal and their minions;
+  - killing them drops the **Hellfire Torch** and a Standard of Heroes for
+    each player;
+  - the Uber bosses have their own colors, like in the original.
+- **The Token of Absolution:** the four essences (Andariel and Duriel,
+  Mephisto, Diablo and Baal in Hell) make it in the cube, and using it
+  gives back every skill and attribute point. Akara also does it once per
+  difficulty, after the Den of Evil.
+- **Diablo Clone:** sell a Stone of Jordan in Hell and "Diablo walks the
+  earth": the next superunique monster you find is Uber Diablo, who drops
+  **Annihilus**.
+- **The Colossal Ancients** (Reign of the Warlock):
+  - the act bosses drop the five Ancient statues in Hell;
+  - the statues in the cube, in Act 5, open the Colossal Summit;
+  - there Talic, Korlic and Madawc fight together. They call their spirits,
+    have auras that lower your resistances and get stronger as they lose
+    life;
+  - the last one to die drops its **Colossal Jewel**.
+- **Terror Zones** (Resurrected 2.5, with the Reign of the Warlock
+  additions):
+  - they open on each difficulty after defeating Baal there, and can be
+    turned off in the difficulty screen;
+  - every 30 minutes (real time) a different zone becomes terrorized. Its
+    monsters are 2 levels above player 1 (up to 45, 71 or 96, depending on
+    the difficulty) and give 25% more experience. They use the "terrorized"
+    treasure classes, and in Hell the unique monsters get one more
+    modifier;
+  - a Worldstone Shard terrorizes a whole act for the rest of the game;
+  - in Hell, each kill in the zone makes a **Herald** more likely to come
+    hunting you. Every Herald killed makes the next one stronger, up to
+    tier 5, and they drop the shards and the **Sunder charms**, which break
+    a monster immunity;
+  - the screen shows it all: the messages, "Terrorized" under the level
+    name and under each monster's name, the zone and its minutes in the
+    pause menu, and its waypoints in purple.
+
 ### Classes and skills
 
 - **The seven original classes** (Barbarian, Amazon, Sorceress, Paladin,
@@ -285,6 +330,8 @@ mercenaries and the resistance penalty (-40 and -100).
   hands (poison, fire, cold or unholy) and throws that kind, and the
   aura-enchanted bosses carry a Paladin aura: Lord De Seis always
   Fanaticism, Hephasto and Bremm Sparkfist a random one.
+- Under the name of the monster you attack: undead or demon, champion,
+  its boss modifiers and its immunities, with the game's own texts.
 
 ### Combat
 
@@ -301,7 +348,9 @@ mercenaries and the resistance penalty (-40 and -100).
 ### Items
 
 - **The original loot:** treasure classes, magic find and each monster's
-  level.
+  level. Champions and uniques have their own treasure classes, and in
+  Nightmare and Hell a monster's treasure class moves up its group with its
+  level, as in the original.
 - **All qualities:** normal, low quality, superior, magic (blue), rare
   (yellow), unique (gold), set (green, with their partial set bonuses) and
   runewords.
@@ -578,6 +627,19 @@ purpose, to play comfortably on a Raspberry Pi with a gamepad.
 - **Walls:** characters move continuously here (the original stops them on
   subtile centers), so players keep half a subtile away from the drawn
   thickness of walls, so they never stand on top of a wall's base.
+
+### The endgame
+
+- **Diablo Clone:** in the original he only came out on Battle.net, when
+  the realm's servers counted enough Stones of Jordan sold by everybody.
+  Here, selling one in Hell is enough.
+- **Terror Zones:** the original's servers choose the order of the zones.
+  Here the order comes from the seed in Resurrected's data, so it is not
+  the same as on Battle.net. Each cycle of 34 turns goes through every
+  zone. The Herald and Colossal Ancient rules come from the patch notes and
+  guides, because that code is not public.
+- **Sunder charms** break the immunity for everyone's damage in the game
+  (both players, their pets and the mercenaries).
 
 ### Simplified or not done yet
 

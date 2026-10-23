@@ -27,6 +27,7 @@ typedef struct {
     int         sound_env; /* música y ambiente (levels.txt SoundEnv -> soundenviron.txt) */
     int         groups;    /* grupos de monstruos al azar */
     int         waypoint;  /* número del waypoint del nivel (levels.txt Waypoint), -1 = no tiene */
+    int         pal;       /* su paleta (Pal de levels.txt: 0..4 = act1..act5; los infiernos del Acto 5 usan la 3) */
     int         id;        /* levels.txt Id */
     int         vis[8];    /* adónde lleva cada estilo de salto (levels.txt Vis0..7, Id de nivel; 0 = nada) */
     int         noint;     /* los estilos cuyo salto es una trampilla (lvlwarp.txt NoInteract): se usan con A */

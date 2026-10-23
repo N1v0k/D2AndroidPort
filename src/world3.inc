@@ -719,6 +719,7 @@ static const struct {
     { 125, A3M_LAVA, "Hell1", 24, 3, 0, 5, 12 },
     { 126, A3M_LAVA, "Hell2", 24, 3, 0, 5, 12 },
     { 127, A3M_LAVA, "Hell3", 24, 3, 0, 5, 12 },
+    { 135, A3M_LAVA, "#135", 24, 3, 0, 5, 12 }, /* (Furnace of Pain: solo en Infierno, world5.inc) */
     { 128, A3M_BAAL, "The Worldstone Keep Level 1", 16, 9, 0, 6, 14 },
     { 129, A3M_BAAL, "The Worldstone Keep Level 2", 16, 9, 0, 6, 14 },
     { 130, A3M_BAAL, "The Worldstone Keep Level 3", 16, 9, 0, 6, 14 },
@@ -752,13 +753,15 @@ static const struct {
     { 124, 864, "Halls of Vaught", 85, 85, 12 },
     { 131, 1086, "Throne of Destruction", 41, 53, 6 },
     { 132, 1087, "The Worldstone Chamber", 56, 56, 0 },
+    { 136, 1090, "#136", 44, 49, 0 }, /* (Uber Tristram: solo en Infierno, world5.inc) */
+    { 137, 1091, "#137", 21, 29, 0 }, /* (la Colossal Summit de Resurrected: ídem) */
 };
 
 /* Los calabozos de un acto (3 o 5) en las filas de abajo: sus zonas y niveles */
 static void a3_add_dungeons(int act)
 {
     for (int k = 0; k < (int)COUNT(k_act3_mazes); k++) {
-        if ((k_act3_mazes[k].id > 102 ? 5 : 3) != act)
+        if ((k_act3_mazes[k].id > 102 ? 5 : 3) != act || k_act3_mazes[k].id >= 133) /* (los del evento, aparte) */
             continue;
         int x, y, w = k_act3_mazes[k].grid * k_act3_mazes[k].room + 1;
         pack(w, w, &x, &y);
@@ -766,7 +769,7 @@ static void a3_add_dungeons(int act)
         add_level(k_act3_mazes[k].name, z, x, y, x + w, y + w, k_act3_mazes[k].groups, 1);
     }
     for (int k = 0; k < (int)COUNT(k_act3_presets); k++) {
-        if ((k_act3_presets[k].id > 102 ? 5 : 3) != act)
+        if ((k_act3_presets[k].id > 102 ? 5 : 3) != act || k_act3_presets[k].id >= 133)
             continue;
         int x, y, w = k_act3_presets[k].w, h = k_act3_presets[k].h;
         pack(w, h, &x, &y);

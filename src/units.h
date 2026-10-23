@@ -34,6 +34,7 @@ typedef struct {
     int   chill_ticks;               /* lo enfriaron (un golpe de frío): más lento */
     int   aura_slow;                 /* % que lo frena un aura (la Congelación sagrada de Duriel) */
     int   aura_conv_def, aura_conv_res; /* la Convicción de un jefe con aura: % de defensa y de resistencias (negativos) */
+    int   aura_pierce[3];            /* el aura de un Anciano colosal: % de resistencia al fuego, frío o rayo que le quita */
     float body;                      /* lo que su cuerpo es más ancho que el de un jugador (los gólems) */
     int   life_pct;                  /* % de vida que le queda (los fetiches se alejan si está entero) */
     /* Los del Acto 4 (monai4.inc) */
@@ -192,6 +193,9 @@ int         units_defense(int i);
 int         units_count_enemies(void);
 int         units_count_enemies_in(float x0, float y0, float x1, float y1); /* en subtiles */
 int         units_is_unique(int i);
+/* Lo que el original muestra debajo del nombre: no muerto o demonio, la clase de campeón o los
+   modificadores del jefe y las inmunidades, separados por coma ("" si nada) */
+void        units_describe(int i, char *buf, size_t cap);
 int         units_is_ranged(int i);          /* dispara de lejos (arqueras, chamanes, ratas de púas) */
 
 /* Habilidades de los jugadores (radio en subtiles, duración en ticks) */
@@ -242,6 +246,29 @@ int  units_ally_owner(int i);                  /* su jugador (-1 = ninguno) */
 void units_ally_aura(int i, const AllyAura *a); /* lo que le dan las auras ahora */
 /* Los jefes con aura (el modificador Aura Enchanted) vivos: su número y el SK_* de su aura */
 int  units_aura_bosses(int *ids, int *kinds, int max);
+/* Un jefe (los Uber del evento Pandemonium): del nivel `level`, y sus esbirros del del área */
+int  units_spawn_boss_at(const char *id, float x, float y, int level, int area_level);
+int  units_zone_objects(int zone, int *ids, int max); /* los objetos de la zona, en el orden en que se armaron */
+void units_set_treasure_class(int i, const char *tc); /* "" = no suelta nada */
+/* Las zonas de terror (endgame.inc): `at` da el nivel del terror en un lugar (0 = no está
+   aterrorizado), con xp_pct de experiencia de más; el modificador de más de los únicos (mod, peso);
+   los elementos (1 << ELEM_*) a los que los amuletos Sunder les rompen la inmunidad */
+void units_set_terror(int (*at)(float x, float y), int xp_pct);
+void units_terror_pool(const int *mods, const int *weights, int n);
+void units_set_sunder(unsigned mask);
+int  units_is_terror(int i);
+int  units_herald_tier(int i); /* 0 = no es un Heraldo */
+typedef struct {
+    int tier;                          /* 1..5: HeraldName1..5 */
+    int hp_pct, dmg_pct;               /* de más */
+    int minions, minion_hp_pct, minion_dmg_pct;
+    int mods;                          /* modificadores de jefe (más un aura, siempre) */
+    int tc_boost;                      /* niveles de más para su clase de tesoro */
+} UnitsHerald;
+int  units_spawn_herald(const char *id, float x, float y, int level, const UnitsHerald *h);
+/* El Diablo clon: con 1, el próximo superunique que se arme es él; el número del último que salió (-1 = ninguno) */
+void units_clone_next_superunique(int on);
+int  units_clone_unit(void);
 const AllyAura *units_ally_aura_get(int i);
 int  units_ally_heal(int i, int amount);       /* Plegaria: 1 si le faltaba vida */
 /* La resistencia de la mercenaria a fuego (0), frío (1) o rayo (2), con las auras */

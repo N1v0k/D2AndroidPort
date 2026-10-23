@@ -306,6 +306,9 @@ for s in levels monsters npcs objects shrines ui item-names item-nameaffixes ite
     assets+=("data/local/lng/strings/$s.json")
 done
 assets+=(data/local/lng/strings/metadata/metadata-audio-vo.json) # qué grabación va con cada texto
+assets+=(data/global/monsters/randtransforms.dat) # los colores de los jefes (Utrans de 8 a 29)
+assets+=(data/global/tiles/garden) # la Colossal Summit (los Ancianos colosales, endgame.inc)
+assets+=(data/hd/global/excel/desecratedzones.json) # las zonas de terror (endgame.inc)
 # Los archivos, sin repetidos: una carpeta que aparecía dos veces (un monstruo
 # de dos actos) se copiaba adentro de sí misma
 ( cd "$root" && for a in "${assets[@]}"; do

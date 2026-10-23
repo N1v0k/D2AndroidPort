@@ -89,6 +89,8 @@ static int a4_food(const Unit *u, float range)
 static void a4_inferno_start(Unit *u)
 {
     int k = u->a4_k, lvl = ai_sklvl(u, k), ms2 = mon_row(&s_monstats2, u->name);
+    if (ms2 < 0) /* (un jefe con nombre, como el Infector de Almas: el de su clase) */
+        ms2 = mon_row(&s_monstats2, u->base);
     if (!s_skilltab.rows)
         load_table(&s_skilltab, "skills");
     int row = txt_find_row(&s_skilltab, txt_col(&s_skilltab, "skill"), u->skill[k]);

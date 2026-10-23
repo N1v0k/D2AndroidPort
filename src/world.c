@@ -109,10 +109,12 @@ enum {
     ZK_FORTRESS, ZK_MESA, ZK_RIVER, ZK_SANCTUM, /* el Acto 4 (world4.inc: Zone.floor de las mesetas = cuál) */
     ZK_HARROGATH, ZK_SIEGE, ZK_BARRICADE, /* el Acto 5 (world5.inc: Zone.floor de las barricadas = BARR_*) */
     ZK_COWS, /* la Granja Muu Muu del Acto 1 (solo por el portal del cubo) */
+    ZK_UBERDEN, /* Matron's Den, del evento Pandemonium (world5.inc: los cuatro, solo en Infierno) */
 };
 
 /* Las zonas del desierto (Zone.floor de ZK_DESERT), en el orden en que se encadenan */
 enum { DZ_ROCKY, DZ_DRY, DZ_OASIS, DZ_LOST, DZ_VALLEY, DZ_COUNT };
+#define DZ_SANDS (DZ_COUNT + 1) /* las Forgotten Sands del evento Pandemonium (en el mundo del Acto 5) */
 
 typedef struct {
     int         kind;
@@ -1326,6 +1328,7 @@ static void add_level(const char *name, int zone, int x0, int y0, int x1, int y1
         return;
     }
     l->id = txt_get_int(t, row, "Id", 0);
+    l->pal = txt_get_int(t, row, "Pal", s_act - 1);
     l->sound_env = txt_get_int(t, row, "SoundEnv", 2);
     for (int k = 0; k < 8; k++) {
         char col[8], wid[12];
@@ -2250,6 +2253,16 @@ static void build_maze(Map *m, int z)
                    1 + (int)(rnd() % (uint32_t)(g - 2)), exits, &s, e, f == 2 ? 2 : 1);
         break;
     }
+    case ZK_UBERDEN: {
+        /* Como el Mausoleo (DRLGMAZE, LVLTYPE_ACT1_CRYPT): salas de 8x8, 36 en Infierno (lvlmaze.txt), la de
+           la llegada (CryptWarpPrev: ahí está el portal rojo de vuelta) y la del cofre brillante
+           (CryptConsol: ahí sale Lilith, uber.inc) en la punta más lejana */
+        MazeRoom s = { "crypt%cwarpprev", "", 1, -1, 0 };
+        MazeRoom e = { "crypt%cconsol", "", 1, -1, 0 };
+        maze_build(m, z, &k_crypt, x, y, MAZE_MAX, MAZE_MAX, 36, (int)(rnd() % MAZE_MAX), (int)(rnd() % MAZE_MAX), 0, &s,
+                   &e, 1);
+        break;
+    }
     case ZK_CELLAR: {
         int f = zone->floor;
         MazeRoom s = { "crypt%cwarpprev", "", 1, f == 1 ? z_tower : z_cellar[f - 1], 0 };
@@ -2484,6 +2497,12 @@ static void build_desert(Map *m, int z)
         desert_variants(m, &w, k_fill_lost_small, 1, 1);
         desert_variants(m, &w, k_fill_lost_small, 1, 1);
         break;
+    case DZ_SANDS: /* DRLGOUTDESR, LEVEL_PANDEMONIUMRUN2: el KingWarp en la celda 4,4 (ahí se llega), el borde y los rellenos */
+        desert_fixed(m, &w, OUT2 "kingwarp.ds1", 4, 4, 1, 1, z, -1);
+        desert_borders(m, &w, zone);
+        desert_variants(m, &w, k_fill_rocky, COUNT(k_fill_rocky), 0);
+        desert_variants(m, &w, k_fill_lost, COUNT(k_fill_lost), 0);
+        break;
     default: /* el Valley of Snakes: la entrada del Claw Viper Temple en el medio */
         desert_borders(m, &w, zone);
         desert_exit(m, &w, OUT2 "viper1.ds1", 2, z);
@@ -2554,7 +2573,7 @@ static void zone_generate(Map *m, int z)
     case ZK_COWS:
         build_wild(m, z);
         break;
-    case ZK_DEN: case ZK_PASSAGE: case ZK_BARRACKS: case ZK_JAIL: case ZK_CATACOMBS: case ZK_CELLAR:
+    case ZK_DEN: case ZK_PASSAGE: case ZK_BARRACKS: case ZK_JAIL: case ZK_CATACOMBS: case ZK_CELLAR: case ZK_UBERDEN:
         build_maze(m, z);
         break;
     case ZK_MONASTERY: /* el claustro y la fachada encima (la fachada pisa la fila que comparten) */
