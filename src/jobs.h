@@ -9,6 +9,14 @@ typedef void (*JobFn)(void *ptr, int arg);
 void jobs_start(void);
 int  jobs_running(void);
 void jobs_push(JobFn fn, void *ptr, int arg);
+/* Adelante de los que esperan (lo que hace falta antes: los DT1 de la zona
+   que se va a armar, delante de los gráficos que se piden al llegar). Sin
+   hilo o con la cola llena no lo hace: 0 */
+int  jobs_push_first(JobFn fn, void *ptr, int arg);
+/* Lo que conviene tener hecho pero se puede saltear (precargar sonidos): va
+   después de todos los otros; con la cola llena no se hace y jobs_wait
+   descarta los que no empezaron. Sin el hilo, ahora. */
+void jobs_push_idle(JobFn fn, void *ptr, int arg);
 int  jobs_pending(void); /* los que faltan (en la cola o haciéndose) */
 void jobs_wait(int max_ms); /* espera a que terminen (al salir) */
 

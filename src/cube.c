@@ -49,6 +49,7 @@ typedef struct {
 typedef struct {
     char    desc[112];
     int     cat;        /* CUBE_CAT_*: dónde va en la guía */
+    int     portal;     /* solo para la guía: el portal a las vacas (lo abre game.c, cows.inc) */
     int     nin, total; /* entradas y cuántos objetos en total */
     CubeIn  in[7];
     int     nout;
@@ -197,6 +198,22 @@ int cube_init(void)
         return 0;
     }
     for (int r = 1; r < t.rows && s_nrec < MAX_RECIPES; r++) {
+        /* La del portal a las vacas, solo para la guía (game.c la hace): el port
+           no tiene el Tomo de Portal, así que lleva los pergaminos */
+        if (strcmp(txt_get(&t, r, txt_col(&t, "output")), "Cow Portal") == 0 && txt_get_int(&t, r, "enabled", 0) == 1) {
+            Recipe rc;
+            memset(&rc, 0, sizeof rc);
+            snprintf(rc.desc, sizeof rc.desc, "%s", txt_get(&t, r, txt_col(&t, "description")));
+            rc.cat = CUBE_CAT_OTHER;
+            rc.portal = 1;
+            snprintf(rc.in[0].code, sizeof rc.in[0].code, "leg");
+            snprintf(rc.in[1].code, sizeof rc.in[1].code, "tsc");
+            rc.in[0].qty = rc.in[1].qty = 1;
+            rc.nin = rc.total = 2;
+            rc.nout = 1;
+            s_rec[s_nrec++] = rc;
+            continue;
+        }
         /* Las de siempre, en Normal, sin condiciones (las de los portales y las misiones tienen op;
            de esas, solo el Báculo Horádrico: su op es que la misión no esté cumplida) */
         int staff = strcmp(txt_get(&t, r, txt_col(&t, "output")), "hst") == 0 ||
@@ -407,7 +424,7 @@ int cube_transmute(const Item *in, int n, int clvl, Item *out, int max, char *wh
         what[0] = '\0';
     for (int r = 0; r < s_nrec; r++) {
         const Recipe *rc = &s_rec[r];
-        if (rc->total != n)
+        if (rc->portal || rc->total != n)
             continue;
         uint8_t used[CUBE_W * CUBE_H * 2] = { 0 };
         int first = -1;
@@ -551,6 +568,10 @@ int cube_recipe_info(int i, CubeLine *in, int max_in, CubeLine *out)
     const CubeOut *o = &rc->out[0];
     memset(out, 0, sizeof *out);
     out->qty = 1;
+    if (rc->portal) {
+        snprintf(out->text, sizeof out->text, "%s", tr("Portal al nivel de las vacas (en el campamento, muerto Baal)"));
+        return n;
+    }
     int use_first = !strcmp(o->code, "usetype") || !strcmp(o->code, "useitem");
     out->icon = use_first ? icon_of(rc->in[0].code) : icon_of(o->code);
     if (!strcmp(o->code, "useitem"))

@@ -73,6 +73,17 @@ typedef struct {
     float mx, my;     /* MF_MAKER: dónde dejó el último fuego; MF_HAMMER: el centro de la espiral */
     float ang;        /* MF_HAMMER: el ángulo en la espiral */
     const char *trail; /* MF_MAKER: lo que va dejando (NULL = el fuego del Muro de fuego) */
+    int   lob_total;  /* las pociones que se tiran en arco: cuántos ticks vuela (cae donde estaba el blanco) */
+    float spd;        /* la velocidad de ahora (subtiles por tick): cambia con Accel */
+    float accel, max_spd; /* Accel de missiles.txt (cada 5 ticks) hasta MaxVel; 0 = no cambia */
+    int   acc_n;
+    float travel;     /* lo que recorrió (para D2_MISS_DEBUG) */
+    float lob_h;      /* y qué tan alto llega, en píxeles */
+    int   is_trail;   /* un pedazo del rastro de un rayo (missiles_trail): solo se ve, sin luz */
+    int   fall;       /* el Meteoro (missiles_meteor): cae en diagonal en sus últimos `fall` cuadros */
+    float fall_speed; /* (píxeles por cuadro) */
+    float zx;         /* lo que se corre en pantalla mientras cae (píxeles; a la izquierda < 0) */
+    const MissileDef *also; /* otro dibujo en el mismo lugar (la cola del Meteoro) */
     int   used;
 } Missile;
 
@@ -87,6 +98,10 @@ void missiles_level_damage(const char *name, int lvl, int *emin, int *emax);
    completar el daño y el dueño; NULL si no existe o no hay lugar */
 Missile *missiles_spawn(const char *name, float x, float y, float dx, float dy);
 Missile *missiles_effect(const char *name, float x, float y); /* explosión que solo se ve */
+/* Los rayos (pCltDoFunc 8): deja detrás los pedazos que forman el rayo largo (cada tick, después de moverlo) */
+void missiles_trail(int i);
+/* El Meteoro de ese centro ("meteorcenter"): escondido hasta los últimos cuadros y después cae en diagonal con su cola */
+void missiles_meteor(Missile *mi, const char *center);
 /* Lo que sigue a un efecto encadenado: su ExplosionMissile o, si no tiene,
    lo que suelta al tocar el piso (CltHitSubMissile1); NULL si nada */
 const char *missiles_chain_next(const Missile *mi);
@@ -96,6 +111,42 @@ int missiles_can_pierce(const Missile *mi);
 int missiles_light(const Missile *mi);
 /* ProgOverlay: el efecto que deja sobre el que toca (el destello del rayo); NULL si nada */
 const char *missiles_prog_overlay(const Missile *mi);
+/* CollideKill: 0 si al pegarle a alguien sigue de largo (el aliento de las momias) */
+int missiles_collide_kill(const Missile *mi);
+/* Size de missiles.txt (1 un subtile, 2 una cruz, 3 un cuadrado de 3x3) */
+int missiles_size(const Missile *mi);
+/* ¿Un proyectil de ese tamaño en el subtile (mx, my) toca a una unidad de
+   tamaño usize (1..3; los jugadores, 2) parada en (ux, uy)? La tabla del
+   original (D2Common_10407) */
+int missiles_touches(int msize, int mx, int my, float ux, float uy, int usize);
+/* pSrvHitFunc: lo que hace al pegar o caer (24 la poción de fuego de las
+   felinas, 25 la de gas) */
+int missiles_hit_func(const Missile *mi);
+/* HitSubMissile1 (lo que suelta al pegar: el gas) y CltHitSubMissile1 (lo
+   que se ve: la explosión); NULL si nada */
+const char *missiles_hit_sub(const Missile *mi);
+const char *missiles_clt_hit_sub(const Missile *mi);
+/* Las pociones van en arco hasta donde estaba el blanco (el original lo hace
+   con las pociones, no con una columna): 1 si es una */
+int missiles_is_lob(const Missile *mi);
+/* Que vuele en arco hasta (tx, ty): cae ahí (o al final de su alcance) */
+void missiles_lob_to(Missile *mi, float tx, float ty);
+/* ELen (ticks): cuánto dura el veneno o el frío de ese proyectil (0 = nada) */
+int missiles_elen(const char *name);
+/* El veneno de missiles.txt es por cuadro, en 1/256 << HitShift: el total
+   de los ELen cuadros (lo que reparte el veneno del juego) */
+void missiles_poison_total(const char *name, int *emin, int *emax);
+/* Param1 de missiles.txt (las nubes de gas: con qué velocidad se abren) */
+int missiles_param1(const char *name);
+int missiles_param2(const char *name);
+int missiles_is(const Missile *mi, const char *name); /* ¿es ese proyectil de missiles.txt? */ /* Param2 de missiles.txt (el largo de las llamas del aliento) */
+/* Subtiles por tick de una unidad de Vel de missiles.txt */
+float missiles_vel_scale(void);
+/* La velocidad de ahora (con lo que aceleró o frenó) */
+float missiles_speed(const Missile *mi);
+/* Range de missiles.txt en ese nivel: en el Resurrected puede ser una
+   fórmula ("10 + (lvl * 2)", el relámpago de los centinelas) */
+int missiles_range(const char *name, int lvl);
 
 int      missiles_capacity(void);
 Missile *missiles_get(int i);  /* NULL si el lugar está libre */

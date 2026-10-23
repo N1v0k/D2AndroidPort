@@ -224,6 +224,10 @@ static void st_weapons(const Player *p, int kind, const char **main, const char 
 
 static void st_equip(Player *p, int kind)
 {
+    /* Lo de la misión en cualquier mano (la Voluntad de Khalim, hasta romper
+       el Orbe) no se toca: esto borra las dos manos */
+    if (is_quest_item(p->equip[SLOT_WEAPON].type) || is_quest_item(p->equip[SLOT_SHIELD].type))
+        return;
     memset(&p->equip[SLOT_WEAPON], 0, sizeof(Item));
     memset(&p->equip[SLOT_SHIELD], 0, sizeof(Item));
     const char *main, *off;
@@ -231,12 +235,14 @@ static void st_equip(Player *p, int kind)
     const ItemType *t = items_find(main);
     if (t) {
         p->equip[SLOT_WEAPON] = items_make(t);
+        demo_diff_item(p, &p->equip[SLOT_WEAPON]); /* (en Pesadilla e Infierno, la versión mejor y rara) */
         if (p->equip[SLOT_WEAPON].amount > 0)
             p->equip[SLOT_WEAPON].amount = 500;
     }
     t = off ? items_find(off) : NULL;
     if (t) {
         p->equip[SLOT_SHIELD] = items_make(t);
+        demo_diff_item(p, &p->equip[SLOT_SHIELD]);
         if (p->equip[SLOT_SHIELD].amount > 0)
             p->equip[SLOT_SHIELD].amount = 500;
     }
@@ -374,6 +380,12 @@ static int skilltest_start(void)
     s_st.alevel = units_level(id);
     units_position(id, 1.0f, &s_st.ax, &s_st.ay);
     units_scale_hp(id, ST_HP_PCT);
+    /* Los demás monstruos de la guarida se van: la prueba mide cada habilidad
+       contra Andariel (y desde que te ven en toda la pantalla se sumaban a la
+       pelea y alargaban las rondas) */
+    for (int u = 0; u < units_count(); u++)
+        if (u != id && units_alive_enemy(u) && units_zone(u) == lv->zone)
+            units_remove(u);
     if (getenv("D2_ST_MONSTER")) { /* otro monstruo en su lugar */
         units_remove(id);
         st_spawn_andariel();

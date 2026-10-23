@@ -7,7 +7,7 @@
  *   d2fmt ds1 <archivo.ds1>
  *   d2fmt cof <archivo.cof>
  *   d2fmt flac <archivo.flac> <salida.raw> [stream]
- *   d2fmt raw <carpeta> <archivo.dcc>...   (los cuadros en crudo, para tools/sprites_export.py)
+ *   d2fmt raw <carpeta> <archivo.dcc>...   (los cuadros en crudo)
  */
 #include "../src/fmt/flac.h"
 #include "../src/fmt/formats.h"
@@ -273,6 +273,24 @@ static int cmd_ds1(int argc, char **argv)
     for (int i = 0; i < m.num_objects; i++)
         printf("  objeto tipo %d id %3d en (%d, %d) flags %d\n", m.objects[i].type, m.objects[i].id,
                m.objects[i].x, m.objects[i].y, m.objects[i].flags);
+    /* Los grupos de sustitución (archivos de reglas de lvlsub.txt) y lo que
+       marca cada celda de su capa 0 de paredes (estilo/secuencia) */
+    for (int i = 0; i < m.num_groups; i++) {
+        const Ds1Group *g = &m.groups[i];
+        printf("  grupo %d: (%d, %d) de %dx%d, %d alternativas\n", i, g->x, g->y, g->w, g->h, g->alts);
+        for (int y = g->y; y < g->y + g->h; y++) {
+            printf("   ");
+            for (int x = g->x; x < g->x + (g->w + 1) * (g->alts + 1) && x < m.width; x++) {
+                const Ds1Cell *c = ds1_wall(&m, 0, x, y);
+                const Ds1Cell *f = ds1_floor(&m, 0, x, y);
+                if (c->prop1 & 1)
+                    printf(" %2d/%-2d", c->style, c->sequence);
+                else
+                    printf("  %s  ", f->prop1 & 2 ? "f2" : " .");
+            }
+            printf("\n");
+        }
+    }
     ds1_free(&m);
     return 0;
 }

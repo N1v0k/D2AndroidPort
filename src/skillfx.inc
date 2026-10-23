@@ -158,15 +158,25 @@ static int second_target(const Player *p)
 
 /* ---- Salto y Salto de ataque ---- */
 
+/* ¿Se puede caer ahí? Libre para el cuerpo y sin una pared ni una puerta en
+   la línea desde el jugador (SKILLS_FindLeapTargetPosition: el trazado con
+   COLLIDE_MASK_PLAYER_FLYING); si no, el Bárbaro de la demostración saltaba
+   la pared de una cueva y quedaba encerrado */
+static int bad_landing(const Player *p, float x1, float y1)
+{
+    return blocked_body(x1, y1) ||
+           map_ray(&s_map, (int)p->x, (int)p->y, (int)x1, (int)y1, COLL_MISSILE_BARRIER | COLL_DOOR, NULL, NULL);
+}
+
 /* Un lugar libre (con la cruz) yendo de (x1, y1) hacia el jugador */
 static void free_landing(const Player *p, float *x1, float *y1)
 {
     float dx = p->x - *x1, dy = p->y - *y1, l = sqrtf(dx * dx + dy * dy);
-    for (float k = 0.0f; k < l && blocked_body(*x1, *y1); k += 0.5f) {
+    for (float k = 0.0f; k < l && bad_landing(p, *x1, *y1); k += 0.5f) {
         *x1 = *x1 + dx / l * 0.5f;
         *y1 = *y1 + dy / l * 0.5f;
     }
-    if (blocked_body(*x1, *y1)) {
+    if (bad_landing(p, *x1, *y1)) {
         *x1 = p->x;
         *y1 = p->y;
     }
@@ -610,6 +620,8 @@ static void melee_strike(Player *p, int target)
         war_hit(p, target, exp > 0); /* el maleficio del arma del Brujo */
     if (lifetap > 0)
         p->hp += (s_one_hit ? phys : dmg) * lifetap / 100;
+    if (p->curse == A4C_IRONMAIDEN) /* la Doncella de hierro de un Caballero del Olvido: le vuelve 200 % + 25 por nivel */
+        take_damage(p, phys * (200 + 25 * (p->curse_lvl - 1)) / 100, 0);
     s_shown_target = target;
     s_shown_ticks = 3 * TICK_RATE;
     /* Robo de vida y de maná: un porcentaje del daño hecho */

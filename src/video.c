@@ -304,6 +304,80 @@ void video_present(void)
     }
 }
 
+/* ---- Cinemáticas (cinema.c) ----
+   El cuadro llega en YUV 4:2:0 y lo convierte la GPU (en la Pi, sin pasar
+   por el procesador). Se dibuja en toda la ventana, no en los 800x600 del
+   juego: en una tele ancha se ve más grande. */
+static SDL_Texture *s_movie;
+static int          s_movie_w, s_movie_h;
+static char         s_movie_shot[256]; /* guardar el próximo cuadro ahí (depuración) */
+
+void video_movie_shot(const char *path)
+{
+    snprintf(s_movie_shot, sizeof s_movie_shot, "%s", path ? path : "");
+}
+
+int video_movie_begin(int w, int h)
+{
+    if (!s_ren)
+        return -1;
+    s_movie = SDL_CreateTexture(s_ren, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING, w, h);
+    if (!s_movie) {
+        fprintf(stderr, "cinemática: %s\n", SDL_GetError());
+        return -1;
+    }
+#if SDL_VERSION_ATLEAST(2, 0, 12)
+    SDL_SetTextureScaleMode(s_movie, SDL_ScaleModeLinear);
+#endif
+    s_movie_w = w;
+    s_movie_h = h;
+    SDL_RenderSetLogicalSize(s_ren, 0, 0);
+    return 0;
+}
+
+void video_movie_frame(const uint8_t *y, int ys, const uint8_t *u, int us, const uint8_t *v, int vs)
+{
+    if (!s_movie)
+        return;
+    if (y)
+        SDL_UpdateYUVTexture(s_movie, NULL, y, ys, u, us, v, vs);
+    int ww, wh;
+    if (SDL_GetRendererOutputSize(s_ren, &ww, &wh) != 0 || ww <= 0 || wh <= 0)
+        return;
+    /* Lo más grande que entra sin deformarlo */
+    SDL_Rect r;
+    r.w = ww;
+    r.h = (int)((long long)ww * s_movie_h / s_movie_w);
+    if (r.h > wh) {
+        r.h = wh;
+        r.w = (int)((long long)wh * s_movie_w / s_movie_h);
+    }
+    r.x = (ww - r.w) / 2;
+    r.y = (wh - r.h) / 2;
+    SDL_SetRenderDrawColor(s_ren, 0, 0, 0, 255);
+    SDL_RenderClear(s_ren);
+    SDL_RenderCopy(s_ren, s_movie, NULL, &r);
+    if (s_movie_shot[0]) { /* D2_CINEMA_SHOT: lo que se ve, como sale de la GPU */
+        SDL_Surface *sf = SDL_CreateRGBSurfaceWithFormat(0, ww, wh, 32, SDL_PIXELFORMAT_ARGB8888);
+        if (sf && SDL_RenderReadPixels(s_ren, NULL, SDL_PIXELFORMAT_ARGB8888, sf->pixels, sf->pitch) == 0)
+            SDL_SaveBMP(sf, s_movie_shot);
+        SDL_FreeSurface(sf);
+        s_movie_shot[0] = '\0';
+    }
+    SDL_RenderPresent(s_ren);
+    if (s_hide_cursor)
+        hide_cursor();
+}
+
+void video_movie_end(void)
+{
+    if (s_movie)
+        SDL_DestroyTexture(s_movie);
+    s_movie = NULL;
+    if (s_ren)
+        SDL_RenderSetLogicalSize(s_ren, SCREEN_W, SCREEN_H);
+}
+
 double video_convert_bench(void)
 {
     static uint32_t *buf;

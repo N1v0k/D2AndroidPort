@@ -280,6 +280,15 @@ static void a3_quest_test(void)
         a3t_log(p, "Alkor (la poción)");
         a3t_use(p, "xyz");
         a3t_log(p, "tomó la poción");
+        /* El portal rojo lleva al Acto 4: la primera vez con la cinemática, la segunda no */
+        for (int k = 0; k < 2; k++) {
+            if (s_act != 3)
+                act_switch(3);
+            a2t_object(p, "HellGate", "Durance of Hate Level 3");
+            const char *mv = game_take_movie();
+            printf("A3: portal rojo (vez %d): cinemática %s, acto %d (%s)\n", k + 1, mv ? mv : "ninguna", s_act,
+                   p->level ? p->level->name : "?");
+        }
         step = -1;
         printf("A3: terminado\n");
         break;

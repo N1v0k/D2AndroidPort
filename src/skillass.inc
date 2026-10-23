@@ -433,8 +433,10 @@ static int ass_trap_shot(int unit, int target)
             }
             case SK_LIGHTNING_SENTRY: { /* un relámpago que atraviesa */
                 Missile *mi = spell_missile(p, "chainlightning", x, y, dx, dy, ELEM_LTNG, lo, hi, 0);
-                if (mi)
+                if (mi) {
                     mi->flags |= MF_PIERCE;
+                    mi->life = missiles_range("sentrylightningbolt", lvl); /* el alcance crece con el nivel (10 + 2 por nivel) */
+                }
                 break;
             }
             case SK_WAKE_OF_FIRE: { /* una ola de fuego en abanico */
@@ -481,8 +483,10 @@ static int ass_trap_shot(int unit, int target)
                     }
                 }
                 Missile *mi = spell_missile(p, "chainlightning", x, y, dx, dy, ELEM_LTNG, lo, hi, 0);
-                if (mi)
+                if (mi) {
                     mi->flags |= MF_PIERCE;
+                    mi->life = missiles_range("sentrylightningbolt", lvl); /* el alcance crece con el nivel (10 + 2 por nivel) */
+                }
                 break;
             }
             default:

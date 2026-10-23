@@ -48,6 +48,14 @@ void video_set_565(int on);    /* textura de 16 bits (más rápida en la Pi) o d
 int  video_is_565(void);
 int  video_save_bmp(const char *path);
 
+/* Cinemáticas: una textura YUV 4:2:0 de w x h que se dibuja en toda la
+   ventana sin deformarse (video_movie_frame con y en NULL redibuja el
+   último cuadro). video_movie_end vuelve a la pantalla del juego. */
+int  video_movie_begin(int w, int h);
+void video_movie_frame(const uint8_t *y, int ys, const uint8_t *u, int us, const uint8_t *v, int vs);
+void video_movie_end(void);
+void video_movie_shot(const char *path); /* guarda el próximo cuadro como BMP (D2_CINEMA_SHOT) */
+
 void pal_init_placeholder(void);
 int  pal_load_d2(const char *act); /* "act1".."act5"; 0 si cargó */
 /* Los menús usan los colores de palette/units (sin tablas propias: las

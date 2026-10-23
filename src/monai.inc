@@ -219,6 +219,8 @@ static int summoner_cast(Unit *u, int t, int what)
 
 #include "monai1.inc"
 #include "monai3.inc"
+#include "monai4.inc"
+#include "monai5.inc"
 
 /* Lo que decide cada IA cuando terminó lo anterior. t: el jugador que ve
    (-1 = ninguno) a d subtiles. 0 = que siga la del motor. */

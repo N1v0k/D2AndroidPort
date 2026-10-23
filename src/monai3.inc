@@ -44,6 +44,16 @@ static int ai_cast(Unit *u, int t, int k, int shots, int ring, int flags)
     int elem, lo, hi, dmin, dmax;
     missiles_base_damage(mis, &elem, &lo, &hi, &dmin, &dmax);
     missiles_level_damage(mis, ai_sklvl(u, k), &lo, &hi);
+    if (!lo && !hi && !dmin && !dmax) { /* el de la habilidad (la Nova helada de Izual: EType y EMin/EMax de skills.txt) */
+        static const char *const k_types[] = { "fire", "cold", "ltng", "pois", "mag" };
+        int row = txt_find_row(&s_skilltab, txt_col(&s_skilltab, "skill"), u->skill[k]);
+        const char *type = row >= 0 ? txt_get(&s_skilltab, row, txt_col(&s_skilltab, "EType")) : "";
+        for (int e = 0; e < 5 && type[0]; e++)
+            if (strcmp(type, k_types[e]) == 0) {
+                elem = e + 1;
+                skill_elem_damage(u->skill[k], ai_sklvl(u, k), &lo, &hi);
+            }
+    }
     if (!lo && !hi && !dmin && !dmax) { /* (los rayos cargados de Mefisto) */
         dmin = anim == ANIM_ATTACK2 ? u->a2_min : u->dmg_min;
         dmax = anim == ANIM_ATTACK2 ? u->a2_max : u->dmg_max;
@@ -92,8 +102,7 @@ static int ai_area(Unit *u, int t, int k, const UnitTarget *tp)
             int flo, fhi;
             mi->flags |= MF_EFFECT | MF_LAND | MF_METEOR;
             mi->life = 60;
-            mi->z = 300.0f;
-            mi->vz = 5.0f;
+            missiles_meteor(mi, "vampiremeteorcenter"); /* cae en diagonal en sus últimos cuadros, con la cola */
             mi->elem = ELEM_FIRE;
             skill_elem_damage(sk, lvl, &mi->emin, &mi->emax);
             mi->radius10 = 30;
@@ -103,7 +112,8 @@ static int ai_area(Unit *u, int t, int k, const UnitTarget *tp)
             mi->burn_max = (fhi << 3) * TICK_RATE / 256 + 1;
             mi->burn_life = 90;
         }
-    } else if (strcmp(sk, "VampireFirewall") == 0) { /* dos que avanzan de costado, dejando fuego */
+    } else if (strcmp(sk, "VampireFirewall") == 0 || strcmp(sk, "PrimeFirewall") == 0) {
+        /* dos que avanzan de costado, dejando fuego (el de Diablo usa los mismos proyectiles) */
         float dx = u->x - tp->x, dy = u->y - tp->y, l = sqrtf(dx * dx + dy * dy);
         int flo, fhi;
         l = l > 0.01f ? l : 1.0f;
@@ -117,6 +127,33 @@ static int ai_area(Unit *u, int t, int k, const UnitTarget *tp)
             w->burn_min = (flo << 3) * TICK_RATE / 256 + 1;
             w->burn_max = (fhi << 3) * TICK_RATE / 256 + 1;
             w->burn_life = 90;
+            w->mx = w->my = -1000.0f;
+            mi = w;
+        }
+    } else if (strcmp(sk, "HellMeteor") == 0) { /* el meteoro del río: cae donde eligió (SrvDo028) */
+        mi = missiles_effect("hellmeteordown", tp->x, tp->y);
+        if (mi) {
+            mi->flags |= MF_EFFECT | MF_LAND;
+            mi->life = 25;
+            mi->elem = ELEM_FIRE;
+            missiles_level_damage("hellmeteordown", lvl, &mi->emin, &mi->emax);
+            mi->radius10 = 30;
+        }
+    } else if (strcmp(sk, "DiabWall") == 0) { /* SrvDo102: tantos como su nivel hacia el jugador, dejando fuego; casi todos en zigzag */
+        float dx = tp->x - u->x, dy = tp->y - u->y, l = sqrtf(dx * dx + dy * dy);
+        int flo, fhi;
+        l = l > 0.01f ? l : 1.0f;
+        missiles_level_damage("diabwall", lvl, &flo, &fhi);
+        for (int s = 0; s < lvl; s++) {
+            Missile *w = missiles_spawn("diabwallmaker", u->x, u->y, dx / l, dy / l);
+            if (!w)
+                continue;
+            w->flags |= MF_MAKER | MF_NOHIT | (rnd(u) % 100 >= 20 ? MF_CHARGED : 0);
+            w->life = w->life < 77 ? w->life : 77;
+            w->trail = "diabwall";
+            w->burn_min = (flo << 3) * TICK_RATE / 256 + 1;
+            w->burn_max = (fhi << 3) * TICK_RATE / 256 + 1;
+            w->burn_life = 36;
             w->mx = w->my = -1000.0f;
             mi = w;
         }
@@ -203,15 +240,20 @@ static int ai_dead_fetish(const Unit *u, float range)
     return best;
 }
 
-/* MonTeleport: aparece en (x, y) o cerca, si ahí se puede pisar */
+/* MonTeleport: aparece en (x, y) o cerca, si ahí se puede pisar (primero
+   en el lugar mismo: antes empezaba por la esquina de arriba a 2 subtiles,
+   que podía quedar del otro lado de una pared) */
 static int ai_teleport(Unit *u, const Map *m, float x, float y)
 {
-    for (int tries = 0; tries < 8; tries++) {
+    static const int k_order[9] = { 4, 1, 3, 5, 7, 0, 2, 6, 8 }; /* el centro, la cruz y las esquinas */
+    for (int k = 0; k < 9; k++) {
+        int tries = k_order[k];
         float tx = x + (float)(tries % 3 - 1) * 2.0f, ty = y + (float)(tries / 3 - 1) * 2.0f;
         if (m && !wall_foot(m, tx, ty, u->foot, u->move_mask)) {
             missiles_effect("teleport", u->x, u->y);
             u->x = u->prev_x = tx;
             u->y = u->prev_y = ty;
+            grid_moved(u);
             missiles_effect("teleport", tx, ty);
             ai_stall(u, 6);
             return 1;
@@ -283,6 +325,8 @@ static void ehydra_tick(const UnitTarget *pl, int n)
 }
 
 /* Lo que decide cada IA del Acto 3. 0 = que siga la del motor. */
+static int ai_think4(Unit *u, const Map *m, UnitTarget *pl, int t, float d, int hurt); /* (monai4.inc) */
+
 static int ai_think3(Unit *u, const Map *m, UnitTarget *pl, int t, float d)
 {
     const UnitTarget *tp = t >= 0 ? &pl[t] : NULL;
@@ -991,6 +1035,6 @@ static int ai_think3(Unit *u, const Map *m, UnitTarget *pl, int t, float d)
         return 1;
     }
     default:
-        return ai_think1(u, m, pl, t, d, hurt);
+        return ai_think4(u, m, pl, t, d, hurt);
     }
 }

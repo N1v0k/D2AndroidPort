@@ -1577,20 +1577,12 @@ static void war_icon_frame(SpriteFrame *dst, const SpriteFrame *src, const uint8
             dst->pixels[k] = g_light[14][dst->pixels[k]];
 }
 
-/* La hoja de íconos del Brujo (frames en el orden de IconCel). Si están sus
-   íconos HD pasados a 48x48 con la paleta (tools/hd_icons.py, desde el
-   waskillicon.sprite del Resurrected), esos; si no, armados con los efectos. */
+/* La hoja de íconos del Brujo (frames en el orden de IconCel): su
+   waskillicon.dc6 del Resurrected es una copia del del Druida, así que se
+   arman con lo que se ve de cada habilidad. */
 static int war_icons_build(Sprite *out)
 {
     memset(out, 0, sizeof *out);
-    size_t hn;
-    uint8_t *hd = fs_read("data/global/ui/spells/waskillicon.d2rw", &hn);
-    if (hd) {
-        int ok = raw_load(hd, hn, out) == 0;
-        free(hd);
-        if (ok)
-            return 1;
-    }
     int cls = 7, most = 0;
     for (int i = 0; i < skills_count(cls); i++)
         if (skills_get(cls, i)->icon + 2 > most)

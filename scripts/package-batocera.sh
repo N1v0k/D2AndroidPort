@@ -27,6 +27,7 @@ assets=(
     data/global/excel/levels.txt
     data/global/excel/lvlwarp.txt
     data/global/excel/lvlprest.txt
+    data/global/excel/lvlsub.txt
     data/global/excel/lvltypes.txt
     data/global/excel/rareprefix.txt
     data/global/excel/raresuffix.txt
@@ -36,6 +37,7 @@ assets=(
     data/global/excel/monpet.txt
     data/global/excel/gamble.txt
     data/global/excel/difficultylevels.txt
+    data/global/excel/monumod.txt
     data/global/excel/monseq.txt
     data/global/excel/itemstatcost.txt
     data/global/excel/properties.txt
@@ -61,6 +63,7 @@ assets=(
     data/global/ui/charselect
     data/global/ui/frontend/gameselectscreenexp.dc6
     data/global/ui/frontend/widebuttonblank.dc6
+    data/global/ui/frontend/cinematicsselectionexp.dc6
     data/global/ui/loading/loadingscreen_blank.dc6
     data/global/ui/frontend/d2logoblackleft.dc6
     data/global/ui/frontend/d2logoblackright.dc6
@@ -90,9 +93,19 @@ assets=(
     data/global/ui/menu/a3q4.dc6
     data/global/ui/menu/a3q5.dc6
     data/global/ui/menu/a3q6.dc6
+    data/global/ui/menu/a4q1.dc6
+    data/global/ui/menu/a4q2.dc6
+    data/global/ui/menu/a4q3.dc6
+    data/global/ui/menu/a5q1.dc6
+    data/global/ui/menu/a5q2.dc6
+    data/global/ui/menu/a5q3.dc6
+    data/global/ui/menu/a5q4.dc6
+    data/global/ui/menu/a5q5.dc6
+    data/global/ui/menu/a5q6.dc6
     data/global/ui/hireables/rogueicon.dc6
     data/global/ui/hireables/act2hireableicon.dc6
     data/global/ui/hireables/act3hireableicon.dc6
+    data/global/ui/hireables/barbhirable_icon.dc6
     data/global/excel/superuniques.txt
     data/global/excel/treasureclassex.txt
     data/global/excel/weapons.txt
@@ -105,10 +118,14 @@ assets=(
     data/global/excel/monstats2.txt
     data/global/excel/objects.txt
     data/global/excel/objpreset.txt
+    data/global/excel/objgroup.txt
+    data/global/excel/shrines.txt
     data/global/palette
     data/global/tiles/act1
     data/global/tiles/act2
     data/global/tiles/act3
+    data/global/tiles/act4
+    data/global/tiles/expansion
     data/global/chars/ba
     data/global/chars/am
     data/global/chars/so
@@ -133,8 +150,11 @@ mapfile -t act1_tokens < <(python3 "$root/tools/act1monsters.py" "$root" tokens)
 # y los del Acto 2 (Lut Gholein, sus niveles y sus jefes)
 mapfile -t act2_tokens < <(python3 "$root/tools/act1monsters.py" "$root" tokens 2)
 mapfile -t act3_tokens < <(python3 "$root/tools/act1monsters.py" "$root" tokens 3) # y los del Acto 3
-for m in ps gh rc ci wa ck cw hx sk g1 g2 g3 g4 bw lg e9 b8 k9 40 tg hk wf b7 x3 x4 xw gm bh 45 "${act1_tokens[@]}" \
-         "${act2_tokens[@]}" "${act3_tokens[@]}"; do
+mapfile -t act4_tokens < <(python3 "$root/tools/act1monsters.py" "$root" tokens 4) # y los del Acto 4
+mapfile -t act5_tokens < <(python3 "$root/tools/act1monsters.py" "$root" tokens 5) # y los del Acto 5
+# (y la cimitarra voladora st: sale de los barriles y ataúdes de los Actos 2 y 3)
+for m in ps gh rc ci wa ck cw hx sk g1 g2 g3 g4 bw lg e9 b8 k9 40 tg hk wf b7 x3 x4 xw gm bh 45 st "${act1_tokens[@]}" \
+         "${act2_tokens[@]}" "${act3_tokens[@]}" "${act4_tokens[@]}" "${act5_tokens[@]}"; do
     assets+=("data/global/monsters/$m")
 done
 # Sonidos y música: solo los que usa el motor (tools/soundfiles.py los saca de
@@ -149,6 +169,7 @@ sound_specs=(
     vo:Ormus vo:Alkor vo:Asheara vo:Hratli vo:Natalya vo:MeshifAct3 vo:CainAct3
     env:23 env:24 env:25 env:26 env:27 env:28 env:29 env:30 mon:act3hire ironwolf_command_1
     object_sewer_lever object_gidbinn_decoy object_stairs object_bridge_mephisto object_door_hellgate_open
+    player_townportal_cast player_townportal_enter object_townportal
     compellingorb_death item_potion_drink
     missile:monsterlight missile:mephisto missile:chargedstrikebolt missile:primepoisoncloud missile:monbliz1
     missile:monbliz2 missile:monbliz3 missile:monbliz4 missile:vampiremeteor missile:vampiremeteorfire
@@ -198,11 +219,46 @@ sound_specs=(
     mon:druidhawk mon:spiritwolf mon:fenris mon:druidbear mon:oaksage mon:heartofwolverine mon:spiritofbarbs
     mon:plaguepoppy mon:cycleoflife mon:vinecreature
     class:war warlock_hit_1 warlock_death_1 mon:wargoatman mon:warbighead mon:warputriddefiler
+    # los cofres, barriles, santuarios y pozos (src/objects.inc)
+    object_chest_small object_casket object_bed object_grave object_barrel_explode object_rockpile object_stone_small
+    object_wood_break_1 object_wood_break_2 object_wood_break_3 object_wood_break_4 object_wood_break_5
+    object_urn_break_1 object_urn_break_2 object_urn_break_3 object_urn_break_4 object_urn_break_5
+    object_basket_1 object_basket_2 object_basket_3 object_basket_4 object_basket_5
+    object_glass_break_1 object_glass_break_2 object_glass_break_3 object_cocoon_1 object_cocoon_2 object_cocoon_3
+    object_ratnest_1 object_ratnest_2 object_ratnest_3 object_goopile_1 object_goopile_2 object_goopile_3
+    object_skullpile_1 object_skullpile_2 object_skullpile_3 object_skullpile_4 object_skullpile_5
+    object_stash_jungle_1 object_stash_jungle_2 object_stash_jungle_3 object_stash_jungle_4
+    object_stash_mephisto_1 object_stash_mephisto_2 object_armorstand object_weaponrack object_bookshelf object_well
+    object_corpse_loot object_trap_trigger object_fire_loop_brazier item_key_used
+    shrine_refill shrine_recharge shrine_exchange shrine_armorboost shrine_combatboost shrine_resistfire
+    shrine_resistcold shrine_resistlightning shrine_resistpoison shrine_skill shrine_experience shrine_ofenirhs
+    shrine_portal shrine_gemupgrade shrine_storm shrine_warping shrine_exploding shrine_poison
+    missile:trapfirebolt missile:trapnova missile:chainlightning missile:fireball
     missile:miasmaboltcloud missile:miasmachainscloud missile:miasmapuff missile:flamewavelingerfire missile:flamewave
     missile:bladewarpexplode missile:ringoffireexplode missile:abyssexplode missile:hexpurgeexplode
     missile:bloodboilexplode missile:engorgecorpseeffect missile:taintedfireball missile:echoingstrike_detonate
     missile:sigillethargymedium missile:sigillethargylarge missile:sigilrancormedium missile:sigilrancorlarge
     missile:sigildeathmedium missile:sigildeathlarge
+    # el Acto 4: sus NPC, la música y el ambiente, las misiones y los hechizos de sus monstruos
+    vo:Tyrael vo:TyraelAct4 vo:CainAct4 vo:Izual vo:HellsAngel env:31 env:32 env:33 env:34
+    music_quest_izual music_quest_diablo object_diabloseal quest_hellforge_place quest_hellforge_smash
+    quest_hellforge_flash_1 quest_hellforge_flash_2
+    missile:diablight missile:diabfire missile:diabwall missile:diabwallmaker missile:megademoninferno
+    missile:undeadmissile1 missile:monbonespirit missile:fingermagespider missile:hellmeteordown missile:frostnova
+    # el Acto 5: la música y el ambiente de sus zonas y las voces de Harrogath (lo de las misiones, cuando estén)
+    env:36 env:37 env:38 env:39 env:40 env:41 env:42 env:43 env:44 env:45 env:46 env:47 env:48 env:49
+    vo:Larzuk vo:Malah vo:QualKehk vo:Nihlathak vo:CainAct5 vo:Anya
+    music_quest_shenk music_quest_nihlathak music_quest_baal # (src/a5quest.inc)
+    monster_baal_taunt_1 # la risa de Baal cuando se burla (BaalTaunt, src/monai5.inc)
+    # los proyectiles de los monstruos del Acto 5 que tira src/monai5.inc
+    "missile:healing vortex" "missile:catapultchargedball" "missile:catapult spike ball" "missile:catapult cold ball"
+    "missile:catapult plague ball" "missile:catapult meteor ball" missile:suicidefireexplode missile:suicideiceexplode
+    missile:suicidecorpseexplode "missile:baal cold maker" "missile:baal taunt lightning" "missile:baal taunt poison"
+    # y los que encontró la demostración del Acto 5 jugando con los archivos del paquete
+    barricadedoor_1 barricadedoor_2 barricadedoor_3 creature_chicken_1 creature_chicken_2 creature_chicken_3
+    creature_chicken_4 deathmauler_spikes_1 deathmauler_spikes_2 deathmauler_spikes_3 deathmauler_spikes_4
+    deathmauler_spikes_5 imp_missile_1 impact_fire_1 impact_fire_2 impact_fire_3 succubus_msissile_1
+    succubus_msissile_2 succubus_msissile_3 succubus_msissile_impact
 )
 # Las auras del Paladín (el onsound de su estado en states.txt)
 for a in might prayer resistfire holyfire thorns defiance resistcold blessedaim cleansing resistlightning \
@@ -219,8 +275,8 @@ for c in barbarian amazon sorceress paladin necromancer assassin druid warlock; 
              act2_find_radament act2_find_tomb_decoy act2_find_tomb_true act2_near_tightspot act2_complete_tightspot \
              act3_complete_beneath act3_complete_blackened act3_complete_blade act3_complete_guardian \
              act3_complete_lamesen act3_find_beneath act3_find_blackened act3_find_guardian act3_find_jade \
-             act3_find_lamesen \
-             impossible_1 not_in_town_1 cantuseyet chat_a_1 chat_b_1 chat_c_1 chat_d_1 chat_e_1 chat_f_1 chat_g_1 \
+             act3_find_lamesen act4_free_izual act4_kill_diablo \
+             impossible_1 not_in_town_1 cantuseyet needkey_1 chat_a_1 chat_b_1 chat_c_1 chat_d_1 chat_e_1 chat_f_1 chat_g_1 \
              chat_h_1; do
         sound_specs+=("${c}_$f")
     done
@@ -240,25 +296,35 @@ done
 while read -r id; do
     sound_specs+=("mon:$id")
 done < <(python3 "$root/tools/act1monsters.py" "$root" ids; python3 "$root/tools/act1monsters.py" "$root" ids 2;
-         python3 "$root/tools/act1monsters.py" "$root" ids 3)
+         python3 "$root/tools/act1monsters.py" "$root" ids 3; python3 "$root/tools/act1monsters.py" "$root" ids 4;
+         python3 "$root/tools/act1monsters.py" "$root" ids 5)
 mapfile -t sound_files < <(python3 "$root/tools/soundfiles.py" "$root" "${sound_specs[@]}" 2>/dev/null)
 assets+=("${sound_files[@]}")
 
 # Textos en español (zonas, monstruos, NPCs, objetos, propiedades mágicas y habilidades)
-for s in levels monsters npcs objects ui item-names item-nameaffixes item-modifiers item-runes item-gems skills quests vo mercenaries; do
+for s in levels monsters npcs objects shrines ui item-names item-nameaffixes item-modifiers item-runes item-gems skills quests vo mercenaries; do
     assets+=("data/local/lng/strings/$s.json")
 done
 assets+=(data/local/lng/strings/metadata/metadata-audio-vo.json) # qué grabación va con cada texto
 # Los archivos, sin repetidos: una carpeta que aparecía dos veces (un monstruo
 # de dos actos) se copiaba adentro de sí misma
+# (sin los .d2rw: los dibujos editados, como la skin personal del Brujo, no van
+# en el paquete; sin ellos el motor usa los del juego)
 ( cd "$root" && for a in "${assets[@]}"; do
       if [ -d "$a" ]; then find "$a" -type f; elif [ -f "$a" ]; then echo "$a"; fi
-  done ) | sort -u > "$game/archivos-todos.txt"
-# La lista del importador: solo los del juego (los .d2rw son dibujos nuestros:
-# la skin del Brujo y sus íconos, que van en el parche aparte)
-grep -v '\.d2rw$' "$game/archivos-todos.txt" > "$game/archivos.txt"
+  done ) | grep -v '\.d2rw$' | sort -u > "$game/archivos-todos.txt"
+# La lista del importador: los del juego
+cp "$game/archivos-todos.txt" "$game/archivos.txt"
 # y la misma lista en el código, para importar ahí (tools/archivos-del-juego.txt)
 cmp -s "$game/archivos.txt" "$root/tools/archivos-del-juego.txt" || cp "$game/archivos.txt" "$root/tools/archivos-del-juego.txt"
+# Las cinemáticas ya convertidas (no van en la lista: el importador las
+# convierte aparte con ffmpeg, ver import_movies), también las de la expansión
+for f in new_bliz.mpg bliznorth.mpg d2intro.mpg act02start.mpg act03start.mpg act04start.mpg act04end.mpg \
+         d2x_intro.mpg d2x_out.mpg idioma.txt; do
+    if [ -f "$root/data/global/video/$f" ]; then
+        echo "data/global/video/$f" >> "$game/archivos-todos.txt"
+    fi
+done
 if [ -z "${SIN_DATOS:-}" ]; then
     tar -C "$root" -cf - -T "$game/archivos-todos.txt" | tar -C "$game" -xf -
 fi

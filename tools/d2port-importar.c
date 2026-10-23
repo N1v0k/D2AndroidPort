@@ -5,6 +5,7 @@
  * Blizzard: cada uno los pone desde su copia del juego.
  *
  *   d2port-importar [--idioma es|en] [--juego <carpeta del D2R>] [--destino <carpeta>] [--sin-pausa]
+ *                   [--sin-cinematicas]
  *
  * Sin argumentos pregunta lo que falta. El destino es la carpeta `ports` del
  * paquete (o su `.data/d2port`): ahí está `archivos.txt`, la lista de lo que
@@ -14,7 +15,8 @@
  * jugarlo desde el código. Solo se copian los de la lista, no el juego
  * entero. Las voces salen del idioma elegido (las del español latino, de
  * locales/audio/esmx) y el idioma queda anotado en `idioma.txt`, que el
- * juego lee al arrancar.
+ * juego lee al arrancar. Las cinemáticas se convierten aparte, con ffmpeg
+ * (import_movies), salvo con --sin-cinematicas.
  *
  * Compila para Windows (mingw), Linux y la Pi (aarch64); ver
  * scripts/package-release.sh.
@@ -386,6 +388,139 @@ static int extract_one(HANDLE storage, const char *casc_name, const char *out_pa
     return ok ? 0 : -1;
 }
 
+/* ---- Las cinemáticas ----
+   No se copian tal cual: el Resurrected las trae en 1080p (VP8, cientos de
+   MB cada una) con el sonido aparte por idioma. Se sacan de a una y ffmpeg
+   las pasa a lo que lee el port (src/cinema.c): MPEG-1 de 640x288 (sin las
+   franjas negras) con el sonido MP2 del idioma elegido. Las de la expansión:
+   d2x_intro (la presentación de la expansión) y d2x_out (el final, después
+   de Baal). */
+static const struct {
+    const char *name, *video, *audio;
+} k_movies[] = {
+    { "new_bliz", "data/global/video/new_bliz.webm", NULL },
+    { "bliznorth", "data/global/video/bliznorth.webm", NULL },
+    { "d2intro", "data/global/video/d2intro.webm", "data/local/video/d2intro.flac" },
+    { "act02start", "data/global/video/act2/act02start.webm", "data/local/video/act2/act02start.flac" },
+    { "act03start", "data/global/video/act3/act03start.webm", "data/local/video/act3/act03start.flac" },
+    { "act04start", "data/global/video/act4/act04start.webm", "data/local/video/act4/act04start.flac" },
+    { "act04end", "data/global/video/act4/act04end.webm", "data/local/video/act4/act04end.flac" },
+    { "d2x_intro", "data/global/video/d2x_intro.webm", "data/local/video/d2x_intro.flac" },
+    { "d2x_out", "data/global/video/act5/d2x_out.webm", "data/local/video/act5/d2x_out.flac" },
+};
+#define NUM_MOVIES ((int)(sizeof k_movies / sizeof k_movies[0]))
+static char *s_movie_video[NUM_MOVIES], *s_movie_audio[NUM_MOVIES]; /* sus nombres en el CASC */
+static int   s_movie_audio_prio[NUM_MOVIES];
+
+#ifdef _WIN32
+#define NULL_OUT " >NUL 2>&1"
+#else
+#define NULL_OUT " >/dev/null 2>&1"
+#endif
+
+/* Uno grande, de a 1 MB (los videos no entran enteros en la memoria de la Pi) */
+static int extract_stream(HANDLE storage, const char *casc_name, const char *out_path)
+{
+    static unsigned char buf[1 << 20];
+    HANDLE file;
+    if (!CascOpenFile(storage, casc_name, 0, CASC_OPEN_BY_NAME, &file))
+        return -1;
+    FILE *f = mkdirs_for(out_path) == 0 ? fopen(out_path, "wb") : NULL;
+    int ok = f != NULL;
+    while (ok) {
+        DWORD got = 0;
+        if (!CascReadFile(file, buf, (DWORD)sizeof buf, &got))
+            ok = 0;
+        else if (got == 0)
+            break;
+        else if (fwrite(buf, 1, got, f) != got)
+            ok = 0;
+    }
+    CascCloseFile(file);
+    if (f && fclose(f) != 0)
+        ok = 0;
+    if (!ok)
+        remove(out_path);
+    return ok ? 0 : -1;
+}
+
+static void import_movies(HANDLE storage, const char *pkg, const char *lang)
+{
+    char dir[1024], mark[1024], old[8] = "";
+    join(dir, sizeof dir, pkg, "data/global/video");
+    join(mark, sizeof mark, dir, "idioma.txt");
+    FILE *mf = fopen(mark, "r");
+    if (mf) {
+        if (!fgets(old, sizeof old, mf))
+            old[0] = '\0';
+        chomp(old);
+        fclose(mf);
+    }
+    printf("%s", T("\nCinemáticas: ", "\nCinematics: "));
+    if (system("ffmpeg -version" NULL_OUT) != 0) {
+        printf("%s", T("no está ffmpeg, así que no se convierten (el juego anda igual, sin ellas).\n"
+                       "  Para tenerlas: instalá ffmpeg (en Batocera ya viene) y volvé a correr el importador.\n",
+                       "ffmpeg is not installed, so they are not converted (the game works without them).\n"
+                       "  To get them: install ffmpeg (Batocera already has it) and run the importer again.\n"));
+        return;
+    }
+    printf("%s", T("se convierten con ffmpeg a calidad baja (unos 190 MB; en la Pi tarda más de una hora).\n",
+                   "converting them with ffmpeg to low quality (about 190 MB; on the Pi it takes over an hour).\n"));
+    int ok_all = 1;
+    for (int i = 0; i < NUM_MOVIES; i++) {
+        char out[1024], tmp_out[1024], tmp_video[1024], tmp_audio[1024], file[64], cmd[4096];
+        snprintf(file, sizeof file, "%s.mpg", k_movies[i].name);
+        join(out, sizeof out, dir, file);
+        /* ya convertida (con el sonido de este idioma): no hace falta otra vez */
+        if (exists(out) && (!k_movies[i].audio || strcmp(old, lang) == 0)) {
+            printf(T("  %s: ya estaba\n", "  %s: already there\n"), k_movies[i].name);
+            continue;
+        }
+        if (!s_movie_video[i] || (k_movies[i].audio && !s_movie_audio[i])) {
+            printf(T("  %s: no está en el juego\n", "  %s: not in the game\n"), k_movies[i].name);
+            ok_all = 0;
+            continue;
+        }
+        printf(T("  %s (%d de %d)...\n", "  %s (%d of %d)...\n"), k_movies[i].name, i + 1, NUM_MOVIES);
+        fflush(stdout);
+        snprintf(file, sizeof file, "%s.tmp.webm", k_movies[i].name);
+        join(tmp_video, sizeof tmp_video, dir, file);
+        snprintf(file, sizeof file, "%s.tmp.flac", k_movies[i].name);
+        join(tmp_audio, sizeof tmp_audio, dir, file);
+        snprintf(file, sizeof file, "%s.tmp.mpg", k_movies[i].name);
+        join(tmp_out, sizeof tmp_out, dir, file);
+        int ok = extract_stream(storage, s_movie_video[i], tmp_video) == 0 &&
+                 (!k_movies[i].audio || extract_stream(storage, s_movie_audio[i], tmp_audio) == 0);
+        if (ok && k_movies[i].audio)
+            snprintf(cmd, sizeof cmd,
+                     "ffmpeg -v error -y -i \"%s\" -i \"%s\" -map 0:v -map 1:a"
+                     " -vf crop=1920:864:0:108,scale=640:288:flags=bicubic -r 24"
+                     " -c:v mpeg1video -q:v 5 -g 24 -bf 2 -c:a mp2 -b:a 128k -ac 2 -ar 44100 -f mpeg \"%s\"",
+                     tmp_video, tmp_audio, tmp_out);
+        else if (ok) /* los logos no tienen sonido */
+            snprintf(cmd, sizeof cmd,
+                     "ffmpeg -v error -y -i \"%s\" -an -vf scale=640:480:flags=bicubic -r 24"
+                     " -c:v mpeg1video -q:v 4 -g 24 -bf 2 -f mpeg \"%s\"",
+                     tmp_video, tmp_out);
+        ok = ok && system(cmd) == 0;
+        remove(tmp_video);
+        remove(tmp_audio);
+        if (ok) {
+            remove(out);
+            ok = rename(tmp_out, out) == 0;
+        }
+        if (!ok) {
+            remove(tmp_out);
+            printf(T("  %s: no se pudo convertir\n", "  %s: could not convert it\n"), k_movies[i].name);
+            ok_all = 0;
+        }
+    }
+    if (ok_all && (mf = fopen(mark, "w")) != NULL) {
+        fprintf(mf, "%s\n", lang);
+        fclose(mf);
+    }
+}
+
 static void pause_exit(int pause)
 {
     if (!pause)
@@ -403,7 +538,7 @@ int main(int argc, char **argv)
     SetConsoleOutputCP(CP_UTF8);
 #endif
     char lang[8] = "", game[1024] = "", dest[1024] = "", pkg[1024];
-    int pause = 1;
+    int pause = 1, movies = 1;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--idioma") == 0 && i + 1 < argc)
             snprintf(lang, sizeof lang, "%s", argv[++i]);
@@ -413,9 +548,11 @@ int main(int argc, char **argv)
             snprintf(dest, sizeof dest, "%s", argv[++i]);
         else if (strcmp(argv[i], "--sin-pausa") == 0)
             pause = 0;
+        else if (strcmp(argv[i], "--sin-cinematicas") == 0)
+            movies = 0;
         else {
             printf("uso / usage: %s [--idioma es|en] [--juego <Diablo II Resurrected>] [--destino <ports | código / source>]"
-                   " [--sin-pausa]\n",
+                   " [--sin-pausa] [--sin-cinematicas]\n",
                    argv[0]);
             return 2;
         }
@@ -513,6 +650,17 @@ int main(int argc, char **argv)
             e->casc_name = strdup(fd.szFileName);
             e->prio = prio;
         }
+        /* las cinemáticas: el video, y el sonido con la misma regla del idioma */
+        const char *bare = local ? name + strlen(loc) : name;
+        for (int i = 0; i < NUM_MOVIES; i++) {
+            if (!local && !s_movie_video[i] && strcmp(bare, k_movies[i].video) == 0)
+                s_movie_video[i] = strdup(fd.szFileName);
+            if (k_movies[i].audio && strcmp(bare, k_movies[i].audio) == 0 && prio > s_movie_audio_prio[i]) {
+                free(s_movie_audio[i]);
+                s_movie_audio[i] = strdup(fd.szFileName);
+                s_movie_audio_prio[i] = prio;
+            }
+        }
     } while (CascFindNextFile(find, &fd));
     CascFindClose(find);
 
@@ -544,6 +692,8 @@ int main(int argc, char **argv)
         if (++done % 1000 == 0)
             printf(T("  %ld de %d...\n", "  %ld of %d...\n"), done, s_num);
     }
+    if (movies)
+        import_movies(storage, pkg, lang);
     CascCloseStorage(storage);
     if (log)
         fclose(log);

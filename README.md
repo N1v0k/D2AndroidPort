@@ -10,7 +10,7 @@ game's 2D files.
 > from your Diablo II: Resurrected installation only the files the port
 > uses.
 
-> **This is a work in progress.** Acts 1, 2 and 3 are fully playable, but
+> **This is a work in progress.** Acts 1 to 5 are fully playable, but
 > **there are still bugs to fix** (see
 > [Known bugs and what is missing](#known-bugs-and-what-is-missing)). If you
 > find one, please open an issue.
@@ -37,7 +37,12 @@ For now: **Linux and Batocera**. A Windows importer will come later.
 - **Diablo II: Resurrected** installed with Battle.net. On Linux it is
   installed with Wine, Lutris, Bottles or Steam (Proton); the game folder
   copied from a Windows PC works too.
-- 1.7 GB free on the Pi (the port plus the imported files).
+- 1.7 GB free on the Pi (the port plus the imported files), plus about
+  190 MB for the cinematics.
+- **ffmpeg** on the computer that runs the importer, for the cinematics
+  (`sudo apt install ffmpeg` or your distribution's package; Batocera
+  already has it). Without it everything else is imported and the game
+  works, just without cinematics.
 
 **The whole game is not copied:** only the files the port uses (about
 30,000 of them, 1.6 GB of Resurrected's roughly 40 GB), the ones listed in
@@ -72,7 +77,9 @@ it together with the rest (in the file manager, Ctrl+H shows hidden files).
    the usual places (`~/.wine`, Lutris' `~/Games/*`, Bottles and Steam
    prefixes): if it cannot find it, it asks for the folder (you can drag it
    to the terminal). It copies the files to the same package's
-   `batocera/ports`, in under a minute.
+   `batocera/ports`, in under a minute. Then it converts the cinematics
+   with ffmpeg to a low quality the Pi can play (MPEG-1, 640x288, with the
+   audio of the chosen language): a couple of minutes on a PC.
 4. Copy the contents of `batocera/ports` to Batocera's ports folder,
    `/userdata/roms/ports`. For example, over the network:
 
@@ -91,8 +98,8 @@ have Batocera's share mounted:
 ```
 
 All the options: `--idioma es|en` (language), `--juego <game folder>`,
-`--destino <ports folder>` and `--sin-pausa` (do not wait for Enter at the
-end).
+`--destino <ports folder>`, `--sin-pausa` (do not wait for Enter at the
+end) and `--sin-cinematicas` (skip the cinematics).
 
 #### On the Pi itself (coming soon)
 
@@ -113,19 +120,6 @@ It is chosen when importing: **English** or **Spanish** (with Latin
 American Spanish voices). To change it, import again with the other
 language: the voices are replaced and the language is written to
 `.data/d2port/idioma.txt`.
-
-### The Warlock patch (optional)
-
-There is an optional **personal skin for the Warlock** (it changes how his
-head, torso, arms, legs and shoulders look), distributed separately from
-this repository. Without it, the Warlock looks as in Resurrected. It is
-injected after importing, with its `instalar.sh`:
-
-```bash
-./instalar.sh                                # on the Pi, over SSH: uses /userdata/roms/ports
-./instalar.sh /path/to/share/roms/ports      # from Linux, with the share mounted
-./instalar.sh --quitar /userdata/roms/ports  # to remove it
-```
 
 ### Saved games, updating and uninstalling
 
@@ -174,7 +168,12 @@ injected after importing, with its `instalar.sh`:
 
 ### The acts
 
-The first three acts, complete, on Normal difficulty.
+The five acts, complete, in the three difficulties: **Normal**,
+**Nightmare** and **Hell**. Nightmare opens after defeating Baal in Normal,
+and Hell after Nightmare, as in the original; each one has its own quests,
+waypoints and rewards, its monsters (levels, life, damage, resistances,
+skills and treasure from the tables of that difficulty), shops,
+mercenaries and the resistance penalty (-40 and -100).
 
 - **Act 1:** the Rogue Encampment, the Blood Moor, the Cold Plains, the
   Stony Field, the Dark Wood, the Black Marsh, the Tamoe Highland, the
@@ -196,8 +195,31 @@ The first three acts, complete, on Normal difficulty.
   six temples and the Durance of Hate. The six quests: The Golden Bird,
   Blade of the Old Religion (the Gidbinn), Khalim's Will, Lam Esen's Tome,
   The Blackened Temple (the High Council) and The Guardian (Mephisto).
+- **Act 4:** the Pandemonium Fortress (Tyrael, Cain, Halbu and Jamella),
+  the Outer Steppes, the Plains of Despair, the City of the Damned, the
+  River of Flame with the Hellforge, and the Chaos Sanctuary with its five
+  seals. The three quests: The Fallen Angel (Izual and his spirit), Hell's
+  Forge (Hephasto, the Soulstone and the gems) and Terror's End (the seal
+  bosses and Diablo, with all his skills), and Hadriel on the last bridge.
+  After Diablo, Tyrael opens the last portal: the epilogue plays and it
+  takes you to Act 5.
+- **Act 5:** Harrogath (Larzuk, Malah, Qual-Kehk, Anya, Nihlathak and
+  Cain, and the barbarian mercenaries), the Bloody Foothills, the Frigid
+  Highlands, the Arreat Plateau and the Frozen Tundra with their
+  barricades, the ice caves, the Arreat Summit, Nihlathak's temple, the
+  Worldstone Keep, the Throne of Destruction and the Worldstone Chamber,
+  and the three hells of the red portals. The six quests: Siege on
+  Harrogath (Shenk and Larzuk's socket), Rescue on Mount Arreat (the 15
+  prisoners), Prison of Ice (Anya), Betrayal of Harrogath (Nihlathak and
+  Anya's personalization), Rite of Passage (the three Ancients) and Eve of
+  Destruction (Baal's five waves, Baal and the ending cinematic).
+- **The Secret Cow Level:** Wirt's body in Tristram drops his leg; with Baal
+  dead, the leg and the Town Portal scrolls in the cube open a red portal in
+  the Rogue Encampment to the Moo Moo Farm, with its herds of Hell Bovines
+  and the Cow King in the middle of the bivouac (killing him closes the
+  level for that character, as in the original).
 - The original waypoints of each act, with a tab per act, and the travel
-  between acts (Warriv, Meshif).
+  between acts (Warriv, Meshif, Mephisto's red portal, Tyrael's portal).
 - Quests follow the original logic (D2MOO's `QUESTS`): their texts, voices,
   rewards and details, like the Gidbinn altar decoy or the jade figurine
   carried by the first boss of the act.
@@ -242,7 +264,9 @@ The first three acts, complete, on Normal difficulty.
 - Missiles from `missiles.txt` (skills' and monsters'), with their
   graphics, sounds and area damage.
 - States: poison, frozen, stunned, curses and auras.
-- Death and resurrection in town.
+- Death and resurrection in town. Dying costs part of the gold you carry
+  (your level %, up to 20%, as in the original); your equipment and the
+  gold in the stash are safe.
 
 ### Items
 
@@ -254,9 +278,24 @@ The first three acts, complete, on Normal difficulty.
 - **Sockets:** gems, runes and jewels; runes in the right order make a
   runeword.
 - Rings, amulets, charms, arrows and bolts, throwing weapons, potions
-  (healing, mana, rejuvenation, stamina, antidote, thawing) and scrolls.
-- Strength, dexterity, level and class requirements; durability; the fixed
-  properties of class items.
+  (healing, mana, rejuvenation, stamina, antidote, thawing), keys and
+  Town Portal scrolls.
+- Strength, dexterity, level and class requirements; the fixed properties
+  of class items.
+- Items never wear out and drop already identified: there is no
+  durability or identification, on purpose.
+- **Town Portal:** a scroll (X on it in the inventory) opens a blue portal
+  next to you and its pair in town; you come back through the same one and
+  it closes, as in the original. Each player has their own and anyone can
+  use it. There is no tome: the scrolls stack up to 20 in one slot. New
+  characters start with a scroll, and Akara, Drognan and Ormus sell them
+  (X in the shop fills the stack). The bots use it to go heal and shop.
+- **Stash:** the chest in each town (A next to it) opens tabs of 10x6 in
+  place of the equipment, with the backpack below. You start with one tab
+  and get one more for each act you reach; more can be bought with gold,
+  each three times the price of the previous one (50,000, 150,000,
+  450,000...), up to five. Gold can be stored too (it is not lost when
+  you die).
 - Inventory, equipment (two hands, shield and quiver) and belt as in the
   original, handled with the gamepad. The equipment shows on the character.
 
@@ -286,16 +325,31 @@ The first three acts, complete, on Normal difficulty.
 - **No loading screens between areas:** each act is a single map, and areas
   are built and released one by one as you walk.
 - The original collision (the 16-bit masks of each tile) and 8-direction
-  pathing.
+  pathing. Since movement here is continuous (the original stops characters
+  on subtile centers), players also keep half a subtile away from the drawn
+  thickness of walls, so they don't stand on top of wall bases and corners.
 - The original lighting, day and night in the towns, and the roof of the
-  building you are in is not drawn (as in the original).
+  building you are in is not drawn (as in the original), including the
+  thatched huts of the Kurast Docks.
 - **Automap** with the explored areas, the players, the mercenary, the
   waypoints and the exits.
+- **Objects you can use** with A, as in the original (D2MOO's
+  `ObjMode.cpp`): chests (locked ones take a key; the Assassin opens them
+  without one), caskets, urns, barrels (some explode), corpses and hidden
+  stashes, weapon racks and armor stands, bookshelves, shrines (healing,
+  mana, the timed ones like armor, combat, resistances, skill and
+  experience, and portal, gem, fire, monster...) and wells. Some are
+  trapped (lightning, fire, poison, nova, or monsters inside). Besides the
+  ones in the original maps, each room gets the random objects of its level
+  (`ObjGrp` of `levels.txt` and `objgroup.txt`). What you opened stays
+  opened for the whole game, also when you come back to an area.
 
 ### The interface
 
 - The original interface (life and mana orbs, experience bar, belt,
   monster name and life), at 800x600 like the original.
+- Icons of what is affecting you (buffs, auras, shrines, potions, poison,
+  cold and curses), with the seconds left, above the middle of the bar.
 - Inventory, skills, buttons, character, mercenary and quest panels,
   designed for the gamepad (Select opens, Y goes to the next one).
 - A does the right thing next to something: talk, pick up, use stairs, a
@@ -311,6 +365,24 @@ The first three acts, complete, on Normal difficulty.
   splits along a line perpendicular to the one joining them, and joins
   again when they get together.
 - Quests, bosses and experience count for both.
+
+### Cinematics
+
+- The original cinematics, in low quality so the Pi plays them smoothly
+  (MPEG-1 640x288 decoded with [pl_mpeg](https://github.com/phoboslab/pl_mpeg),
+  colors converted by the GPU), with the audio in **English** or **Latin
+  American Spanish**. A, B, Start or Esc skips one.
+- They play where the original plays them (the server's packet 0x61 in
+  D2MOO's `QUESTS_ActChange` and `QUESTS_HellPortalActChange`):
+  - the Blizzard logos and the **introduction** when the game starts;
+  - **Act II**: the first time you travel east with Warriv;
+  - **Act III**: the first time you sail east with Meshif;
+  - **Act IV**: the first time you enter Mephisto's red portal;
+  - the **epilogue**: when you enter the last portal after Diablo;
+  - the **ending**: when you enter Tyrael's portal after Baal.
+- **Cinematics** in the main menu, like the original: watch again the ones
+  you have already seen. The expansion's introduction is always there: the
+  original never plays it during the game either.
 
 ### Sound, music and voices
 
@@ -335,11 +407,14 @@ The first three acts, complete, on Normal difficulty.
 ### Demo and automated tests
 
 - **Demo:** if the main menu is left alone for 10 seconds, two bots create
-  characters and play by themselves.
-- **Automated tests** (`--autotest act1`, `act2`, `act3`): two bots play
-  each act from start to end, every quest step, with 1 and 2 players.
-  Today all three pass (68, 63 and 74 steps), in English and in Spanish, as
-  does the skills test (24 of 24).
+  characters (a different pair of classes each time) and play the whole
+  campaign by themselves: Acts 1 to 5 in Normal, then Nightmare and Hell,
+  with the same two characters and all their skills (`D2_DEMO_ACT=1` to `5`
+  plays only that act).
+- **Automated tests** (`--autotest act1` to `act5`): two bots play each
+  act from start to end, every quest step, with 1 and 2 players. Today all
+  five pass (68, 63, 74, 36 and 61 steps), as does the skills test (24 of
+  24); the first three were also checked in English.
 
 ### Performance on the Raspberry Pi
 
@@ -394,15 +469,22 @@ original game's code) so that they behave the same:
 - **Deliberate gameplay changes**, to play comfortably with a gamepad:
   - walking is 10% and running 20% faster;
   - belt potions have 3 sips and drop 35% less often;
+  - potions stack up to 10 per backpack slot and keys up to 20 (the
+    original does not stack potions and keys go up to 12); the number shows
+    on the slot, and they go to the belt and the cube one at a time;
   - when a belt potion runs out, one from the backpack takes its place;
   - each belt slot is used with the d-pad;
   - RB drops the item under the inventory cursor to the ground and LB
     sorts the backpack;
   - an "always run" option;
   - the life and mana numbers above the orbs;
+  - the icons of the active buffs and debuffs above the bar;
+  - potions stack, Town Portal scrolls stack up to 20 and there is no
+    tome; the stash has tabs, and dying only costs part of the gold you
+    carry;
   - the mercenary follows closer and at your pace.
-- **The Warlock** is Resurrected's new class; his personal skin is optional
-  (see [the patch](#the-warlock-patch-optional)).
+- **The Warlock** is Resurrected's new class, drawn with the classic sprites
+  Resurrected ships for him (the Necromancer's).
 
 ---
 
@@ -427,13 +509,10 @@ if you can, the `d2port.log`.
 
 **What is missing:**
 
-- **Acts 4 and 5** (after Mephisto's portal, the game says Act 4 is not
-  there yet).
-- **Nightmare and Hell** difficulties (only Normal).
-- **Chests, urns, barrels, shrines and wells** you can use, and the random
-  objects of each level (today only the quest objects are there); locked
-  chests.
-- In Act 2, the desert shrines and the secondary border of some areas.
+- Some details of the usable objects: the room themes (rooms full of
+  barrels or weapon racks), the throwing potions of the exploding and poison
+  shrines (only their damage), and the Enirhs shrine.
+- In Act 2, the secondary border of some areas.
 - The **importer for the Pi** (written, not tested yet) and for **Windows**.
 - Network play: not planned (the two players share one screen).
 
@@ -463,8 +542,7 @@ cmake --build build -j
 The importer looks for Resurrected by itself (in Wine, Lutris, Bottles or
 Steam prefixes; under WSL, the Windows one) and asks if it cannot find it.
 The importer from the release package works too, with
-`--destino <source folder>`. The Warlock skin is added with its patch's
-`instalar.sh`, pointing at the same folder.
+`--destino <source folder>`.
 
 **For the Pi** (from Linux or WSL, with the cross compiler;
 `scripts/setup-wsl.sh` installs it):
@@ -504,7 +582,8 @@ comments). The plans of each act are in
 | Panels: inventory, skills, buttons, character, mercenary, quests | Select opens; Y goes to the next one (or T to the skill tree) | Select opens; Y goes to the next one (or U) |
 | In the skill tree: learn / put on a button | A / X opens "Put on:" (the d-pad chooses the button, A assigns, B cancels) | Same |
 | Buttons page: change what a button does | The d-pad chooses the button, A shows what it can have, A assigns it | Same |
-| Talk to an NPC | A next to them (B closes) | A next to them (B closes) |
+| Talk to an NPC | A next to them, if no monster is right next to you (B closes) | Same |
+| Open the waypoints (walking past a new one activates it) | A next to one, if no monster is right next to you (B closes) | Same |
 | Use stairs or a portal | A next to it (if no monster is right next to you) | A next to it |
 | Inventory: pick up / drop / use | A / X or A / X | A / X or A / X |
 | Inventory: drop what you hold / put it away / sort | Y / B / LB | Y / B / LB |

@@ -1,6 +1,7 @@
 #include "menu.h"
 
 #include "audio.h"
+#include "cinema.h"
 #include "font.h"
 #include "game.h"
 #include "ui.h"
@@ -19,9 +20,11 @@
    - Elegir personaje: la pantalla de selección con las seis partidas.
    - Clase del personaje nuevo, y confirmar el borrado. */
 
-enum { MS_MAIN, MS_SLOTS, MS_CLASS, MS_DELETE };
+enum { MS_MAIN, MS_SLOTS, MS_CLASS, MS_DELETE, MS_CINEMA, MS_DIFF };
 
-static const char *const k_items[] = { "UN JUGADOR", "DOS JUGADORES", "SALIR" };
+/* Como el original: las cinemáticas entre jugar y salir */
+enum { ITEM_ONE, ITEM_TWO, ITEM_CINEMA, ITEM_QUIT };
+static const char *const k_items[] = { "UN JUGADOR", "DOS JUGADORES", "CINEMÁTICAS", "SALIR" };
 #define NUM_ITEMS ((int)(sizeof k_items / sizeof k_items[0]))
 
 static int      s_state;
@@ -36,6 +39,10 @@ static uint32_t s_ticks;
 static SlotInfo s_info[SAVE_SLOTS];
 static char     s_note[64];     /* aviso corto ("Ya la eligió el jugador 1") */
 static int      s_note_ticks;
+static int      s_movie_sel;    /* en el panel de cinemáticas (la última fila es "Cancelar") */
+static int      s_diff_sel;     /* la dificultad elegida (0 Normal, 1 Pesadilla, 2 Infierno) */
+static int      s_diff_max;     /* la más alta que tienen abierta todos los elegidos */
+static const char *const k_diffs[3] = { "NORMAL", "PESADILLA", "INFIERNO" };
 
 static void read_slots(void)
 {
@@ -46,6 +53,23 @@ static void read_slots(void)
 int menu_is_main(void)
 {
     return s_state == MS_MAIN;
+}
+
+const char *menu_movie(void)
+{
+    return cinema_name(s_movie_sel);
+}
+
+/* Las imágenes del menú, en el hilo de trabajos mientras carga el juego */
+void menu_preload(void)
+{
+    static const char *const k_images[] = {
+        "frontend/gameselectscreenexp", "frontend/d2logoblackleft", "frontend/d2logoblackright",
+        "frontend/d2logofireleft", "frontend/d2logofireright", "frontend/widebuttonblank", "cursor/pentspin",
+        "charselect/characterselectscreenexp", "charselect/charselectbox", "frontend/cinematicsselectionexp",
+    };
+    for (unsigned k = 0; k < sizeof k_images / sizeof k_images[0]; k++)
+        ui_preload(k_images[k]);
 }
 
 void menu_open(void)
@@ -88,6 +112,11 @@ const int *menu_classes(void)
     return s_classes;
 }
 
+int menu_difficulty(void)
+{
+    return s_diff_sel;
+}
+
 static void note(const char *text)
 {
     snprintf(s_note, sizeof s_note, "%s", tr(text));
@@ -102,6 +131,20 @@ static MenuResult picked(int slot, int cls)
     if (s_picking + 1 < s_players) {
         s_picking++;
         s_state = MS_SLOTS;
+        return MENU_NONE;
+    }
+    /* La dificultad, si todos tienen abierta otra además de Normal (como el
+       original: Pesadilla al vencer a Baal en Normal, Infierno en Pesadilla).
+       Arranca en la más alta */
+    s_diff_max = 2;
+    for (int i = 0; i < s_players; i++) {
+        const SlotInfo *info = s_slots[i] >= 1 && s_slots[i] <= SAVE_SLOTS ? &s_info[s_slots[i] - 1] : NULL;
+        int m = info && info->used ? info->diff_max : 0;
+        s_diff_max = m < s_diff_max ? m : s_diff_max;
+    }
+    s_diff_sel = s_diff_max;
+    if (s_diff_max > 0) {
+        s_state = MS_DIFF;
         return MENU_NONE;
     }
     return MENU_START;
@@ -131,8 +174,13 @@ MenuResult menu_tick(const InputState *in)
             s_sel = (s_sel + 1) % NUM_ITEMS;
         if (in->confirm || in->start) {
             click();
-            if (s_sel == 2)
+            if (s_sel == ITEM_QUIT)
                 return MENU_QUIT;
+            if (s_sel == ITEM_CINEMA) {
+                s_movie_sel = 0;
+                s_state = MS_CINEMA;
+                return MENU_NONE;
+            }
             s_players = s_sel + 1;
             s_picking = 0;
             s_state = MS_SLOTS;
@@ -202,6 +250,42 @@ MenuResult menu_tick(const InputState *in)
         }
         return MENU_NONE;
     }
+
+    case MS_CINEMA: {
+        /* Las que no se vieron todavía no se pueden elegir (las saltea) */
+        int n = cinema_count() + 1, step = in->menu_up ? -1 : in->menu_down ? 1 : 0;
+        for (int k = 0; step && k < n; k++) {
+            s_movie_sel = (s_movie_sel + step + n) % n;
+            if (s_movie_sel == n - 1 || cinema_seen(s_movie_sel))
+                break;
+        }
+        if (back || ((in->confirm || in->start) && s_movie_sel == n - 1)) {
+            click();
+            s_state = MS_MAIN;
+            return MENU_NONE;
+        }
+        if ((in->confirm || in->start) && cinema_seen(s_movie_sel)) {
+            click();
+            return MENU_MOVIE;
+        }
+        return MENU_NONE;
+    }
+
+    case MS_DIFF:
+        if (in->menu_up)
+            s_diff_sel = (s_diff_sel + s_diff_max) % (s_diff_max + 1);
+        if (in->menu_down)
+            s_diff_sel = (s_diff_sel + 1) % (s_diff_max + 1);
+        if (back) {
+            click();
+            s_state = MS_SLOTS;
+            return MENU_NONE;
+        }
+        if (in->confirm || in->start) {
+            click();
+            return MENU_START;
+        }
+        return MENU_NONE;
 
     case MS_DELETE:
         if (in->menu_up || in->menu_down || in->menu_left || in->menu_right)
@@ -380,6 +464,32 @@ static void draw_class_choice(void)
     font_draw_centered(317, 530, "A: crear     B: volver", 2, COL(R_GRAY, 14));
 }
 
+/* El panel de cinemáticas de la expansión (cinematicsselectionexp: siete
+   filas y el botón de abajo, 326x427), sobre la pantalla principal */
+static void draw_cinema(void)
+{
+    ui_grid("frontend/gameselectscreenexp", 0, 12, 4, 0, 0);
+    draw_logo();
+    const int x = (SCREEN_W - 326) / 2, y = 140;
+    ui_frame("frontend/cinematicsselectionexp", 0, x, y);
+    ui_frame("frontend/cinematicsselectionexp", 1, x + 256, y);
+    ui_frame("frontend/cinematicsselectionexp", 2, x, y + 256);
+    ui_frame("frontend/cinematicsselectionexp", 3, x + 256, y + 256);
+    font_draw_centered(x + 163, y + 24, "ELEGÍ UNA CINEMÁTICA", FONT_EXOCET, COL(R_GOLD, 15));
+    int n = cinema_count();
+    for (int i = 0; i <= n; i++) {
+        int last = i == n, cy = last ? y + 392 : y + 81 + i * 43; /* el centro de cada fila del dibujo */
+        const char *text = last ? "CANCELAR" : cinema_title(i);
+        int ok = last || cinema_seen(i), fy = cy - font_height(FONT_EXOCET) / 2;
+        font_draw_centered(x + 163, fy, text, FONT_EXOCET,
+                           !ok ? COL(R_STONE, 6) : i == s_movie_sel ? COL(R_GOLD, 15) : COL(R_GRAY, 14));
+        if (i == s_movie_sel)
+            draw_pentagrams(x + 163, cy, font_width(text, FONT_EXOCET), 22);
+    }
+    font_draw_centered(SCREEN_W / 2, SCREEN_H - 30, "A: ver     B: volver     (las que todavía no se vieron no se pueden elegir)",
+                       1, COL(R_GRAY, 13));
+}
+
 static void draw_delete(void)
 {
     draw_slots();
@@ -398,6 +508,24 @@ static void draw_delete(void)
     }
 }
 
+/* La dificultad: las tres, con las cerradas apagadas */
+static void draw_difficulty(void)
+{
+    draw_slots();
+    ui_dark_box(150, 180, 334, 200);
+    font_draw_centered(317, 196, "ELEGÍ LA DIFICULTAD", FONT_EXOCET, COL(R_GOLD, 15));
+    for (int i = 0; i < 3; i++) {
+        int y = 240 + i * 34, open = i <= s_diff_max;
+        font_draw_centered(317, y, k_diffs[i], FONT_EXOCET,
+                           !open ? COL(R_STONE, 6) : i == s_diff_sel ? COL(R_GOLD, 15) : COL(R_GRAY, 13));
+        if (i == s_diff_sel)
+            draw_pentagrams(317, y + font_height(FONT_EXOCET) / 2, font_width(k_diffs[i], FONT_EXOCET), 22);
+    }
+    if (s_diff_max < 2)
+        font_draw_centered(317, 340, "Se abre al vencer a Baal en la anterior", 1, COL(R_STONE, 12));
+    font_draw_centered(317, 356, "A: jugar     B: volver", 1, COL(R_GRAY, 14));
+}
+
 void menu_render(void)
 {
     clip_reset();
@@ -407,5 +535,7 @@ void menu_render(void)
     case MS_SLOTS:  draw_slots(); break;
     case MS_CLASS:  draw_class_choice(); break;
     case MS_DELETE: draw_delete(); break;
+    case MS_CINEMA: draw_cinema(); break;
+    case MS_DIFF:   draw_difficulty(); break;
     }
 }

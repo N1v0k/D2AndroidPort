@@ -19,17 +19,24 @@
 /* Velocidad de missiles.txt -> subtiles por tick (la misma escala que la
    de los personajes: velocidad * 5/6 subtiles por segundo) */
 #define SPEED_SCALE (5.0f / 6.0f / TICK_RATE)
+/* Accel y MaxVel están en las unidades del camino del original (PATH): Vel
+   pasa a (Vel << 8) al 75%, o sea 192 por unidad de Vel, y MaxVel a
+   MaxVel << 8 (sin el 75%) */
+#define PATH_SPEED (SPEED_SCALE / 192.0f)
 
 struct MissileDef {
     char   name[32];
     char   celfile[40];
     float  speed;
     int    range;
+    int    range_lvl;    /* lo que suma por nivel ("7 + (lvl * 2)") */
+    int    accel, maxvel; /* Accel y MaxVel */
     int    anim_len;
     int    loop;
     char   explosion[32];
     char   hit_sub[32];  /* CltHitSubMissile1: lo que suelta al tocar el piso */
     int    pierce;       /* Perforar lo puede hacer atravesar */
+    int    size;         /* Size: 1 un subtile, 2 una cruz, 3 un cuadrado de 3x3 (contra las unidades) */
     uint16_t coll;       /* lo del mapa que lo frena (por su CollideType) */
     int    elem, emin, emax, dmin, dmax;
     int    elev_min[5], elev_max[5]; /* MinELev1..5 y MaxELev1..5: lo que sube por nivel de la habilidad */
@@ -37,6 +44,17 @@ struct MissileDef {
     int    light;     /* Light: cuánto alumbra en la oscuridad (0 = nada) */
     char   prog_overlay[32]; /* ProgOverlay: el efecto sobre el que toca (el destello del rayo) */
     int    travel_sound, hit_sound, impact_sound; /* sounds.txt (-1 = nada) */
+    int    elen;         /* ELen: cuánto dura el veneno o el frío (cuadros) */
+    int    hit_shift;    /* HitShift: el veneno es por cuadro en 1/256 << esto */
+    int    collide_kill; /* CollideKill: 0 = al pegarle a alguien sigue de largo */
+    int    hit_func;     /* pSrvHitFunc */
+    int    param1, param2; /* Param1 y Param2 */
+    int    lob;          /* una poción: vuela en arco */
+    char   hit_sub2[32]; /* HitSubMissile1: lo que suelta al pegar (el gas) */
+    char   clt_hit[32];  /* CltHitSubMissile1: lo que se ve al pegar (la explosión) */
+    int    clt_do, clt_param1; /* pCltDoFunc y CltParam1 (8: el rayo que deja su rastro) */
+    int    clt_param2, clt_param3; /* (9, el centro del Meteoro: los cuadros que cae y los píxeles por cuadro) */
+    char   clt_sub2[32];       /* CltSubMissile2 (la cola del Meteoro) */
     int    gfx_state; /* 0 = sin cargar, 1 = bien, -1 = sin gráfico, 2 = cargándose (job_flag) */
     Sprite sprite;
 };
@@ -77,6 +95,12 @@ int missiles_init(void)
         lower_copy(m->celfile, sizeof m->celfile, txt_get(&t, r, txt_col(&t, "CelFile")));
         m->speed = txt_get_int(&t, r, "Vel", 0) * SPEED_SCALE;
         m->range = txt_get_int(&t, r, "Range", 20);
+        { /* "25 + (lvl * 15)": la base y lo que suma por nivel */
+            const char *rs = txt_get(&t, r, txt_col(&t, "Range")), *lv = strstr(rs, "lvl"), *st = lv ? strchr(lv, '*') : NULL;
+            m->range_lvl = st ? atoi(st + 1) : 0;
+        }
+        m->accel = txt_get_int(&t, r, "Accel", 0);
+        m->maxvel = txt_get_int(&t, r, "MaxVel", 0);
         /* Lo del mapa que frena cada tipo de choque (la tabla del original,
            gCollTable de la 1.10 descrita en la Phrozen Keep): los que no
            chocan (0, 4) y los que solo chocan con otros proyectiles (7) pasan
@@ -92,6 +116,8 @@ int missiles_init(void)
         lower_copy(m->explosion, sizeof m->explosion, txt_get(&t, r, txt_col(&t, "ExplosionMissile")));
         lower_copy(m->hit_sub, sizeof m->hit_sub, txt_get(&t, r, txt_col(&t, "CltHitSubMissile1")));
         m->pierce = txt_get_int(&t, r, "Pierce", 0);
+        m->size = txt_get_int(&t, r, "Size", 1);
+        m->size = m->size < 1 ? 1 : m->size > 3 ? 3 : m->size; /* (vacío en los efectos: el original no los choca) */
         static const char *const elems[] = { "", "fire", "cold", "ltng", "pois", "mag" };
         const char *et = txt_get(&t, r, txt_col(&t, "EType"));
         for (int e = 1; e < 6; e++)
@@ -109,6 +135,29 @@ int missiles_init(void)
         m->trans = txt_get_int(&t, r, "Trans", 0);
         m->light = txt_get_int(&t, r, "Light", 0);
         lower_copy(m->prog_overlay, sizeof m->prog_overlay, txt_get(&t, r, txt_col(&t, "ProgOverlay")));
+        m->elen = txt_get_int(&t, r, "ELen", 0);
+        m->hit_shift = txt_get_int(&t, r, "HitShift", 0);
+        m->collide_kill = txt_get_int(&t, r, "CollideKill", 0);
+        m->hit_func = txt_get_int(&t, r, "pSrvHitFunc", 0);
+        m->param1 = txt_get_int(&t, r, "Param1", 0);
+        m->param2 = txt_get_int(&t, r, "Param2", 0);
+        lower_copy(m->hit_sub2, sizeof m->hit_sub2, txt_get(&t, r, txt_col(&t, "HitSubMissile1")));
+        lower_copy(m->clt_hit, sizeof m->clt_hit, txt_get(&t, r, txt_col(&t, "CltHitSubMissile1")));
+        /* El arco de las pociones no es una columna: el original lo hace con
+           las pociones (las que tira el jugador y las de las felinas) */
+        m->lob = strstr(m->name, "potion") != NULL || strstr(m->name, "poition") != NULL ||
+                 strncmp(m->name, "pantherpot", 10) == 0;
+        /* Los rayos sin dibujo (CelFile null, pCltDoFunc 8: los de los fuegos
+           fatuos, los sacerdotes y Mefisto) los dibuja el cliente del original
+           como un rayo: acá, con el del Rayo (LightningStrike) */
+        m->clt_do = txt_get_int(&t, r, "pCltDoFunc", 0);
+        m->clt_param1 = txt_get_int(&t, r, "CltParam1", 0);
+        m->clt_param2 = txt_get_int(&t, r, "CltParam2", 0);
+        m->clt_param3 = txt_get_int(&t, r, "CltParam3", 0);
+        lower_copy(m->clt_sub2, sizeof m->clt_sub2, txt_get(&t, r, txt_col(&t, "CltSubMissile2")));
+        if ((!m->celfile[0] || strcmp(m->celfile, "null") == 0) && m->clt_do == 8 &&
+            m->speed > 0.0f)
+            snprintf(m->celfile, sizeof m->celfile, "lightningstrike");
         m->dmin = txt_get_int(&t, r, "MinDamage", 0);
         m->dmax = txt_get_int(&t, r, "MaxDamage", m->dmin);
         { /* en 1/256 << HitShift, como el original (8 = puntos enteros; el
@@ -201,11 +250,8 @@ static const Sprite *def_sprite(MissileDef *m)
     return job_flag_get(&m->gfx_state) == 1 ? &m->sprite : NULL;
 }
 
-Missile *missiles_spawn(const char *name, float x, float y, float dx, float dy)
+static Missile *spawn_def(MissileDef *def, float x, float y, float dx, float dy, int sound)
 {
-    MissileDef *def = find_def(name);
-    if (!def)
-        return NULL;
     int slot = -1;
     for (int i = 0; i < MAX_MISSILES && slot < 0; i++)
         if (!s_missiles[i].used)
@@ -225,14 +271,70 @@ Missile *missiles_spawn(const char *name, float x, float y, float dx, float dy)
         mi->vy = dy / l * def->speed;
     }
     mi->life = def->range > 0 ? def->range : 1;
+    mi->spd = def->speed;
+    if (def->accel && def->speed > 0.0f) { /* las novas y los gritos frenan; el Martillo bendito acelera */
+        mi->accel = (float)def->accel * PATH_SPEED;
+        mi->max_spd = (float)(def->maxvel << 8) * PATH_SPEED;
+    }
     mi->source = -1;
     mi->used = 1;
-    mi->sound = audio_play(def->travel_sound, x, y);
+    mi->sound = sound ? audio_play(def->travel_sound, x, y) : -1;
     if (def->speed <= 0.0f)
         mi->flags |= MF_EFFECT; /* explosiones y nubes: quietas */
     s_prev[slot][0] = x;
     s_prev[slot][1] = y;
     return mi;
+}
+
+Missile *missiles_spawn(const char *name, float x, float y, float dx, float dy)
+{
+    MissileDef *def = find_def(name);
+    return def ? spawn_def(def, x, y, dx, dy, 1) : NULL;
+}
+
+/* pCltDoFunc 8 (el Rayo, el Rayo en cadena, los rayos de los sacerdotes y de
+   Mefisto): en el original se ve el rayo entero, desde donde salió hasta la
+   punta, mientras avanza. Acá la punta deja cada tick un pedazo de su dibujo
+   (cada uno en otro cuadro de la animación: así se ve quebrado) que dura hasta
+   que el rayo termina y un poco más (sin sonido ni luz). */
+#define TRAIL_FADE 8
+
+void missiles_trail(int i)
+{
+    Missile *mi = missiles_get(i);
+    if (!mi || mi->is_trail || mi->def->clt_do != 8 || (mi->flags & MF_EFFECT) || mi->def->speed <= 0.0f)
+        return;
+    MissileDef *def = (MissileDef *)mi->def;
+    Missile *t = spawn_def(def, s_prev[i][0], s_prev[i][1], 0.0f, 0.0f, 0);
+    if (!t)
+        return;
+    t->flags |= MF_EFFECT | MF_NOHIT;
+    t->vx = mi->vx; /* (solo para la dirección del dibujo: los efectos no se mueven) */
+    t->vy = mi->vy;
+    t->life = mi->life + TRAIL_FADE < 2 * TRAIL_FADE ? mi->life + TRAIL_FADE : 2 * TRAIL_FADE; /* (si choca antes, no queda colgado) */
+    t->age = mi->age * 3; /* (el cuadro de la animación de cada pedazo) */
+    t->is_trail = 1;
+}
+
+/* El Meteoro (pCltDoFunc 9 de su centro): la piedra y su cola
+   (CltSubMissile2) aparecen los últimos CltParam2 cuadros antes de caer y
+   bajan CltParam3 píxeles por cuadro en diagonal, desde arriba a la
+   izquierda, con la inclinación del dibujo de la cola */
+#define METEOR_SLOPE 0.36f
+
+void missiles_meteor(Missile *mi, const char *center)
+{
+    const MissileDef *c = find_def(center);
+    mi->fall = c && c->clt_param2 > 0 ? c->clt_param2 : 25;
+    mi->fall_speed = c && c->clt_param3 > 0 ? (float)c->clt_param3 : 15.0f;
+    mi->also = c && c->clt_sub2[0] ? find_def(c->clt_sub2) : NULL;
+    mi->z = mi->vz = 0.0f;
+}
+
+static void meteor_step(Missile *mi)
+{
+    mi->z = mi->life <= mi->fall ? mi->fall_speed * (float)(mi->life - 1) : 0.0f;
+    mi->zx = -METEOR_SLOPE * mi->z;
 }
 
 Missile *missiles_effect(const char *name, float x, float y)
@@ -250,7 +352,7 @@ Missile *missiles_effect(const char *name, float x, float y)
 
 int missiles_light(const Missile *mi)
 {
-    return mi->def->light;
+    return mi->is_trail ? 0 : mi->def->light;
 }
 
 const char *missiles_prog_overlay(const Missile *mi)
@@ -261,6 +363,125 @@ const char *missiles_prog_overlay(const Missile *mi)
 int missiles_can_pierce(const Missile *mi)
 {
     return mi->def->pierce;
+}
+
+int missiles_collide_kill(const Missile *mi)
+{
+    return mi->def->collide_kill;
+}
+
+int missiles_size(const Missile *mi)
+{
+    return mi->def->size;
+}
+
+/* D2Common_10407 del original: el proyectil en el subtile (mx, my) toca a la
+   unidad si el subtile de ella cae en la huella de los dos juntos */
+int missiles_touches(int msize, int mx, int my, float ux, float uy, int usize)
+{
+    int dx = abs((int)floorf(ux) - mx), dy = abs((int)floorf(uy) - my);
+    switch (usize + 3 * (msize - 1)) {
+    case 1: /* punto contra un subtile */
+        return dx == 0 && dy == 0;
+    case 2: /* punto contra una cruz, cruz contra un subtile */
+    case 4:
+        return dx + dy <= 1;
+    case 5: /* cruz contra cruz */
+        return dx + dy <= 2;
+    case 3: /* punto contra un 3x3, 3x3 contra un subtile */
+    case 7:
+        return dx <= 1 && dy <= 1;
+    case 6: /* cruz contra un 3x3 y al revés */
+    case 8:
+        return (dx <= 2 && dy <= 1) || (dx <= 1 && dy <= 2);
+    default: /* 3x3 contra 3x3 */
+        return dx <= 2 && dy <= 2;
+    }
+}
+
+int missiles_hit_func(const Missile *mi)
+{
+    return mi->def->hit_func;
+}
+
+const char *missiles_hit_sub(const Missile *mi)
+{
+    return mi->def->hit_sub2[0] ? mi->def->hit_sub2 : NULL;
+}
+
+const char *missiles_clt_hit_sub(const Missile *mi)
+{
+    return mi->def->clt_hit[0] ? mi->def->clt_hit : NULL;
+}
+
+int missiles_is(const Missile *mi, const char *name)
+{
+    return strcmp(mi->def->name, name) == 0;
+}
+
+int missiles_is_lob(const Missile *mi)
+{
+    return mi->def->lob;
+}
+
+void missiles_lob_to(Missile *mi, float tx, float ty)
+{
+    float sp = sqrtf(mi->vx * mi->vx + mi->vy * mi->vy);
+    float d = sqrtf((tx - mi->x) * (tx - mi->x) + (ty - mi->y) * (ty - mi->y));
+    int ticks = sp > 0.0001f ? (int)lroundf(d / sp) : 1;
+    ticks = ticks < 2 ? 2 : ticks > mi->life ? mi->life : ticks;
+    mi->life = mi->lob_total = ticks;
+    mi->lob_h = 24.0f + d * 4.0f; /* más alto cuanto más lejos */
+    if (mi->lob_h > 80.0f)
+        mi->lob_h = 80.0f;
+    if (getenv("D2_MISS_DEBUG"))
+        printf("proyectil: %s en arco de (%.1f, %.1f) a (%.1f, %.1f), %d ticks, %.0f px de alto\n", mi->def->name, mi->x, mi->y,
+               tx, ty, ticks, mi->lob_h);
+}
+
+int missiles_elen(const char *name)
+{
+    const MissileDef *m = find_def(name);
+    return m ? m->elen : 0;
+}
+
+void missiles_poison_total(const char *name, int *emin, int *emax)
+{
+    const MissileDef *m = find_def(name);
+    if (!m || m->elen <= 0)
+        return;
+    int hs = m->hit_shift < 0 ? 0 : m->hit_shift > 8 ? 8 : m->hit_shift;
+    long long lo = ((long long)*emin << hs) * m->elen / 256, hi = ((long long)*emax << hs) * m->elen / 256;
+    *emin = lo < 1 && *emin > 0 ? 1 : (int)lo;
+    *emax = hi < *emin ? *emin : (int)hi;
+}
+
+float missiles_vel_scale(void)
+{
+    return SPEED_SCALE;
+}
+
+float missiles_speed(const Missile *mi)
+{
+    return mi->spd;
+}
+
+int missiles_range(const char *name, int lvl)
+{
+    const MissileDef *m = find_def(name);
+    return m ? m->range + m->range_lvl * lvl : 0;
+}
+
+int missiles_param1(const char *name)
+{
+    const MissileDef *m = find_def(name);
+    return m ? m->param1 : 0;
+}
+
+int missiles_param2(const char *name)
+{
+    const MissileDef *m = find_def(name);
+    return m ? m->param2 : 0;
 }
 
 const char *missiles_chain_next(const Missile *mi)
@@ -333,6 +554,8 @@ int missiles_step(int i, const Map *m)
     s_prev[i][0] = mi->x;
     s_prev[i][1] = mi->y;
     mi->age++;
+    if (mi->fall > 0)
+        meteor_step(mi);
     if (mi->vz > 0.0f) { /* cae: termina al tocar el piso */
         mi->z -= mi->vz;
         if (mi->z <= 0.0f) {
@@ -340,10 +563,36 @@ int missiles_step(int i, const Map *m)
             return 2;
         }
     }
-    if (--mi->life <= 0)
+    if (--mi->life <= 0) {
+        if (mi->def->accel && getenv("D2_MISS_DEBUG"))
+            printf("proyectil: %s terminó a los %d ticks: recorrió %.1f subtiles, velocidad %.3f (empezó en %.3f)\n",
+                   mi->def->name, mi->age, mi->travel, mi->spd, mi->def->speed);
         return 2;
+    }
+    if (mi->lob_total > 0) { /* en arco: sube y baja (una parábola) hasta caer */
+        float f = (float)mi->age / (float)mi->lob_total;
+        mi->z = 4.0f * mi->lob_h * f * (1.0f - f);
+    }
     if (mi->flags & MF_EFFECT)
         return 0;
+    /* Accel cada 5 cuadros, sin pasarse de MaxVel ni bajar de 0 (el camino
+       del original, sub_6FD5CEB0): las novas se abren cada vez más lento */
+    if (mi->accel != 0.0f && ++mi->acc_n >= 5) {
+        mi->acc_n = 0;
+        float ns = mi->spd + mi->accel;
+        if (ns > mi->max_spd) {
+            ns = mi->max_spd;
+            mi->accel = 0.0f;
+        }
+        if (ns < 0.0f)
+            ns = 0.0f;
+        if (!(mi->flags & MF_HAMMER) && mi->spd > 0.0001f) { /* (el Martillo hace su espiral con esta velocidad) */
+            mi->vx *= ns / mi->spd;
+            mi->vy *= ns / mi->spd;
+        }
+        mi->spd = ns;
+    }
+    mi->travel += sqrtf(mi->vx * mi->vx + mi->vy * mi->vy);
     /* Dos medios pasos para no atravesar paredes finas */
     for (int k = 0; k < 2; k++) {
         mi->x += mi->vx * 0.5f;
@@ -385,26 +634,37 @@ static int dcc_dir(float vx, float vy, int dirs)
     return sector % 2 ? 16 + sector / 2 : k_dir16[sector / 2];
 }
 
-void missiles_draw(int i, int sx, int sy)
+/* Un dibujo de missiles.txt en (sx, sy), en el cuadro de su animación que toca a esa edad */
+static void draw_def(const Missile *mi, const MissileDef *def, int sx, int sy)
 {
-    Missile *mi = &s_missiles[i];
-    const Sprite *sp = def_sprite((MissileDef *)mi->def);
+    const Sprite *sp = def_sprite((MissileDef *)def);
     if (!sp || sp->frames_per_dir <= 0)
         return;
     int dir = dcc_dir(mi->vx, mi->vy, sp->directions);
     if (dir >= sp->directions)
         dir = 0;
     int frame = mi->age;
-    if (mi->def->loop)
+    if (def->loop)
         frame %= sp->frames_per_dir;
     else if (frame >= sp->frames_per_dir)
         frame = sp->frames_per_dir - 1;
     const SpriteFrame *f = sprite_frame(sp, dir, frame);
     if (!f->pixels)
         return;
-    sy -= (int)mi->z;
-    if (mi->def->trans)
+    if (def->trans)
         fb_blit_blend_spans(f->pixels, f->spans, f->width, f->height, sx + f->off_x, sy + f->off_y, BLEND_ADD);
     else
         fb_blit_spans(f->pixels, f->spans, f->width, f->height, sx + f->off_x, sy + f->off_y);
+}
+
+void missiles_draw(int i, int sx, int sy)
+{
+    Missile *mi = &s_missiles[i];
+    if (mi->fall > 0 && mi->life >= mi->fall) /* el Meteoro todavía no se ve */
+        return;
+    sx += (int)mi->zx;
+    sy -= (int)mi->z;
+    if (mi->also) /* la cola, detrás de la piedra */
+        draw_def(mi, mi->also, sx, sy);
+    draw_def(mi, mi->def, sx, sy);
 }

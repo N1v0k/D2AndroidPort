@@ -15,12 +15,19 @@ void game_start(int num_players); /* pruebas: Bárbaro en la partida 1 y Amazona
 /* Arranca con la partida `slots[i]` (1..6) de cada jugador; si está vacía,
    crea un personaje nuevo de la clase `classes[i]` (0 = Bárbaro, 1 = Amazona) */
 void game_start_slots(int num_players, const int *slots, const int *classes);
+/* La dificultad de la partida que sigue (0 Normal, 1 Pesadilla, 2 Infierno),
+   antes de game_start_slots */
+void game_set_difficulty(int diff);
+int  game_difficulty(void);
 int  game_tick(const InputState *in);
 void game_render(float alpha);
 void game_bench_parts(char *out, size_t cap); /* el desglose del dibujo desde la última vez (y lo reinicia) */
 /* Rendimiento medido por main (cada segundo), para la opción VER RENDIMIENTO */
 void game_set_perf(float fps, float logic_ms, float worst_ms, float draw_ms, float upload_ms, float present_ms);
 int  game_wants_rgb565(void); /* la opción COLOR 16 BITS de la pausa */
+/* La cinemática de fin de acto que toca pasar ("act02start"...) o NULL;
+   la deja en NULL. Las pasa main.c (cinema.c), no los bots ni las pruebas. */
+const char *game_take_movie(void);
 void game_print_status(void); /* depuración */
 
 /* Prueba automática ("act1"): un bot juega el acto con los controles.
@@ -30,6 +37,7 @@ int  game_autotest_start(const char *name, int players);
 int  game_autotest_input(InputState *in, double last_tick_ms);
 void game_autotest_render_time(double ms);
 int  game_debug_fx(int *kind); /* depuración: cuánto lleva el efecto de un jefe (-1 = ninguno) */
+int  game_debug_obj(int *kind); /* depuración: hace cuánto el J1 usó un cofre, barril... (-1 = nada); kind = su OperateFn */
 int  game_debug_round_tick(void); /* depuración: el tick de la ronda de la prueba de habilidades (-1 = no hay) */
 void game_autotest_report(void);
 
@@ -40,6 +48,7 @@ void game_autotest_report(void);
 void game_demo_start(int cls);
 void game_demo_start_pair(int cls1, int cls2); /* con esas dos clases (la segunda acompaña) */
 void game_demo_stop(void);
+int  game_demo_acts(void); /* los actos que juega (la campaña: 15; con D2_DEMO_ACT, 1) */
 /* La rotación de la demostración del menú: la pareja número `i` (vuelve a
    empezar sola): primero el Brujo y el Paladín, después cada clase con la que sigue */
 void game_demo_rotation(int i, int *cls1, int *cls2);
@@ -55,6 +64,7 @@ typedef struct {
     int level;
     int gold;
     int den_done;
+    int diff_max; /* la dificultad más alta abierta (0 Normal, 1 Pesadilla, 2 Infierno) */
 } SlotInfo;
 
 void        game_set_save_dir(const char *dir);

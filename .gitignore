@@ -12,15 +12,24 @@ data/
 *.dt1
 *.ds1
 *.sprite
-# Los dibujos editados que carga el port en lugar del DCC (tools/sprites_import.py)
+# Las cinemáticas (las del juego y las convertidas por el importador)
+*.webm
+*.mpg
+# Los dibujos editados que carga el port en lugar del DCC (la skin personal del
+# Brujo y sus herramientas no se publican: quedan solo en la copia local)
 *.d2rw
+/docs/publicar/README-warlock.md
+/docs/publicar/instalar-brujo.*
+/tools/sprites_export.py
+/tools/sprites_import.py
+/tools/hd_icons.py
+/herramientas-sprites/
 
 *.bmp
 *.png
 
-# Los dibujos exportados para editar (tools/sprites_export.py, herramientas-sprites/)
+# Los dibujos exportados para editar y los .sprite editados (solo locales)
 editar/
-# Los .sprite editados para probar en D2R (herramientas-sprites/d2rsprite.py)
 mod/
 
 # Partidas guardadas en la PC

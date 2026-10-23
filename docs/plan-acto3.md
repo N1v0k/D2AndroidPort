@@ -208,6 +208,7 @@ Además, los diálogos de `A3Q0` (Hratli) y `A3Q7` (el Vagabundo Oscuro), las fr
 **Estado (19/10/2026): hecha, salvo subirlo a la Pi** (eso, cuando lo pida el usuario):
 - **`--autotest act3`** (74 pasos): 8 de 8 corridas bien (semillas 1, 2, 5, 7 y 9 con 1 jugador; 3, 4 y 7 con 2), sin ticks de más de 50 ms. Lo que hubo que arreglar:
   - el bot en la selva: con las dos zonas armadas busca el camino al destino final en las dos (de a poco, como cualquier búsqueda); el camino puede cruzar el borde por otro lado que el pasillo, y por el pasillo quedaba yendo y viniendo. Si no se llega así, va por el pasillo un rato;
+  - (2026-10-23, la demostración en la Pi trabada en "Ir al Flayer Jungle", en (300, 2931) y en la semilla 56 en (360, 2931)) si el camino que sigue para el mismo destino final pasa por una tercera zona, se sigue (`bot.c`, `plan_zone`): en el Spider Forest el camino más corto hacia la unión con el Flayer Jungle daba la vuelta por el Great Marsh, y al pisarlo la ruta por zonas mandaba de vuelta al Spider Forest; el bot quedaba una hora sobre el borde;
   - lo que suelta un monstruo en cualquier paso (la estatuilla, el Mangual) se levanta al verlo, y si quedó lejos se lo va a buscar;
   - con la mochila llena suelta lo que sobra del otro lado del objeto de misión y fuera del alcance de A (si no, A levantaba otra vez lo que soltó);
   - si el NPC contó otra cosa primero (Caín, la estatuilla antes que la Voluntad), se le vuelve a hablar.

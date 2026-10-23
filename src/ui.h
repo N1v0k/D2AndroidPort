@@ -5,7 +5,12 @@
 
 /* Gráficos de la interfaz del juego original (data/global/ui/...). Los
    fondos y paneles grandes vienen partidos en pedazos de 256x256 que se
-   arman en grilla (como los arma el juego). Todo se carga la primera vez. */
+   arman en grilla (como los arma el juego). Se leen en el hilo de trabajos
+   la primera vez que se dibujan (mientras tanto no se dibujan) o antes, con
+   ui_preload. */
+
+/* Que se vaya leyendo (en el hilo de trabajos, en su turno) */
+void ui_preload(const char *path);
 
 /* Dibuja el cuadro `frame` de ui/<path>.dc6 con su esquina en (x, y) */
 void ui_frame(const char *path, int frame, int x, int y);

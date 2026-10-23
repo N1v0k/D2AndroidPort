@@ -111,7 +111,7 @@ def main():
             if spec.startswith('vokey:'):
                 pattern = re.compile('^%s$' % re.escape(name))
             else:
-                pattern = re.compile(r'^(A[12]Q[1-6]\w*%s(Main|Alt|2\w*)?|%s(Act1|Act)?Intro\w*|%sGossip\d+)$' % (name, name, name))
+                pattern = re.compile(r'^(A[1-5]Q[0-6]\w*%s(Main|Alt|2\w*)?|%s(Act1|Act5|Act)?Intro\w*|%sGossip\d+)$' % (name, name, name))
             for e in vo:
                 m = by_id.get(e.get('id'))
                 if not m or not pattern.match(e.get('Key', '')):
@@ -121,7 +121,8 @@ def main():
                 speaker = m['Speaker'].lower()
                 # Algunas carpetas no se llaman como el que habla (igual que en strings.c)
                 speaker = {'deckardcain': 'cain', 'greiz': 'griez', 'andariel': 'monster', 'bloodraven': 'monster',
-                           'the countess': 'monster', 'the smith': 'monster'}.get(speaker, speaker)
+                           'the countess': 'monster', 'the smith': 'monster', 'tyrael': 'tyreal', 'drehya': 'anya',
+                           'baal': 'monster'}.get(speaker, speaker)
                 files.add('data/local/sfx/%s/%s/%s' % (act, speaker, audio))
         elif spec.startswith('env:'):
             for r in read_table(root, 'soundenviron'):

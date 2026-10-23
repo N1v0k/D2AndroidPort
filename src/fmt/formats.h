@@ -35,8 +35,8 @@ typedef struct {
 
 int  dc6_load(const uint8_t *data, size_t size, Sprite *out);
 int  dcc_load(const uint8_t *data, size_t size, Sprite *out);
-/* Un .d2rw: el formato de `d2fmt raw`, el que arma tools/sprites_import.py
-   con las hojas PNG editadas (ver editar/<personaje>/INSTRUCCIONES.md) */
+/* Un .d2rw: los cuadros en crudo, el formato de `d2fmt raw` (un dibujo
+   editado que se carga en lugar del DCC) */
 int  raw_load(const uint8_t *data, size_t size, Sprite *out);
 void sprite_free(Sprite *s);
 
@@ -161,6 +161,10 @@ typedef struct {
     size_t         raw_size;
     int32_t        blocks_ptr, nblocks;
     uint8_t        pending; /* 1 = todavía sin decodificar */
+
+    /* dt1_volume, calculado la primera vez que se pide */
+    uint8_t        volume_done;
+    uint64_t       volume;
 } Dt1Tile;
 
 typedef struct {
@@ -179,6 +183,13 @@ int  dt1_load(const uint8_t *data, size_t size, Dt1 *out);
 int  dt1_load_lazy(uint8_t *data, size_t size, Dt1 *out);
 /* La baldosa con su imagen (la decodifica si hace falta) */
 const Dt1Tile *dt1_tile_ready(const Dt1Tile *t);
+/* El grosor de la pared sobre el piso: los subtiles libres pegados por
+   delante (x o y más grandes) a los que bloquea la baldosa y que su dibujo
+   tapa en más de la mitad. Bit sy * 6 + sx, con sx y sy de 0 a 5 (la fila o
+   columna 5 es de la baldosa de delante). En las cloacas del Acto 3 la base
+   de los bloques y las puntas de las esquinas se dibujan un subtile más allá
+   de lo que bloquean, y el personaje se paraba encima del dibujo. */
+uint64_t dt1_volume(const Dt1Tile *t);
 void dt1_free(Dt1 *t);
 
 /* ---- DS1: mapas prearmados (el campamento, entradas de cuevas, etc.) ---- */
@@ -201,6 +212,12 @@ typedef struct {
     int32_t type, id, x, y, flags;
 } Ds1Object;
 
+/* Un grupo de sustitución (los archivos de reglas de lvlsub.txt): el
+   rectángulo con el patrón y cuántas alternativas siguen a su derecha */
+typedef struct {
+    int32_t x, y, w, h, alts;
+} Ds1Group;
+
 typedef struct {
     int        version;
     int        width, height; /* en tiles */
@@ -215,6 +232,8 @@ typedef struct {
     Ds1Cell   *shadows;       /* [y][x] */
     int        num_objects;
     Ds1Object *objects;
+    int        num_groups;
+    Ds1Group  *groups;        /* (los que tienen subst_type 1 o 2, desde la versión 12) */
 } Ds1;
 
 int  ds1_load(const uint8_t *data, size_t size, Ds1 *out);

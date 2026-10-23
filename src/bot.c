@@ -18,6 +18,9 @@
 #define LOOKAHEAD     12     /* hasta cuántos subtiles del camino se mira en línea recta */
 #define BOX_PAD       10     /* margen de la caja de búsqueda alrededor de las zonas */
 #define AVOID_PAD     0.6f   /* más allá de donde salta: el cuerpo y un paso (si no, roza el borde y salta) */
+#define MAX_JUMPS     128    /* almohadillas por búsqueda (el Santuario Arcano tiene unas 50) */
+#define JUMP_COST     4.0f   /* usar una almohadilla, en subtiles de caminar */
+#define JUMP_MARGIN   0.5f   /* el subtile desde donde se usa, así de adentro del alcance (el bot no para justo en el centro) */
 
 typedef struct {
     float r[MAX_AVOID][4]; /* x0, y0, x1, y1 */
@@ -35,6 +38,8 @@ struct BotNav {
     AvoidList path_avoid; /* lo que esquiva el camino (para seguirlo en línea recta) */
     uint32_t  planned_tick;
     uint64_t  zones;   /* zonas armadas cuando se buscó */
+    int       plan_zone, plan_dest; /* la zona donde se buscó y el destino final de ese pedido */
+    float     plan_x, plan_y;
     /* El destino final y si se llega directo (sin rodear por otras zonas) */
     float     fx, fy;
     int       fzone, direct_ok;
@@ -49,6 +54,8 @@ struct BotNav {
     float    *heap_f;
     int       heap_n, heap_cap;
     AvoidList avoid; /* lo que esquiva la búsqueda en curso */
+    BotJump   jumps[MAX_JUMPS]; /* y las almohadillas que puede usar */
+    int       njumps;
     /* La búsqueda en curso (puede llevar varios ticks) */
     int       searching;
     float     sg[4];  /* el destino pedido */
@@ -59,6 +66,9 @@ struct BotNav {
     /* Destrabarse */
     float     last_x, last_y, jx, jy;
     int       still, jitter;
+    float     osc_x, osc_y; /* dónde estaba hace un rato, caminando (para ver si va y viene) */
+    uint32_t  osc_tick;
+    int       moving;     /* el último paso fue caminar */
     uint32_t  rng, tick;
     /* Para medir */
     int       plans;
@@ -122,17 +132,46 @@ static uint32_t nav_rnd(BotNav *n)
     return n->rng >> 8;
 }
 
+static int (*s_breakable)(int sx, int sy);
+
+void bot_nav_set_breakable(int (*fn)(int sx, int sy))
+{
+    s_breakable = fn;
+}
+
+static int (*s_jumps)(int x0, int y0, int x1, int y1, BotJump *out, int max);
+
+void bot_nav_set_jumps(int (*fn)(int x0, int y0, int x1, int y1, BotJump *out, int max))
+{
+    s_jumps = fn;
+}
+
+/* ¿Del subtile k del camino al k + 1 se salta (una almohadilla)? */
+static int path_jump(const BotNav *n, int W, int k)
+{
+    int a = n->path[k], b = n->path[k + 1];
+    return abs(a % W - b % W) > 1 || abs(a / W - b / W) > 1;
+}
+
+/* Tapado, salvo por algo que se rompe o se abre para pasar */
+static int sub_blocked(const Map *m, int sx, int sy)
+{
+    return map_blocked(m, sx, sy) && !(s_breakable && s_breakable(sx, sy));
+}
+
 /* ¿El cuerpo de un jugador choca en el subtile (sx, sy)? Como en el juego
    (y en el original): ocupa su subtile y los cuatro de al lado, en cruz */
 static int foot_blocked(const Map *m, int sx, int sy)
 {
-    return map_blocked(m, sx, sy) || map_blocked(m, sx - 1, sy) || map_blocked(m, sx + 1, sy) ||
-           map_blocked(m, sx, sy - 1) || map_blocked(m, sx, sy + 1);
+    return sub_blocked(m, sx, sy) || sub_blocked(m, sx - 1, sy) || sub_blocked(m, sx + 1, sy) ||
+           sub_blocked(m, sx, sy - 1) || sub_blocked(m, sx, sy + 1);
 }
 
+/* Y medio subtile de aire con las paredes y su grosor dibujado, como
+   blocked_body del juego */
 static int body_blocked(const Map *m, float x, float y)
 {
-    return foot_blocked(m, (int)floorf(x), (int)floorf(y));
+    return foot_blocked(m, (int)floorf(x), (int)floorf(y)) || map_too_close(m, x, y);
 }
 
 static int avoided(const AvoidList *a, float x, float y)
@@ -143,10 +182,11 @@ static int avoided(const AvoidList *a, float x, float y)
     return 0;
 }
 
-/* ¿Entra el cuerpo parado en ese subtile? (su cruz libre) */
+/* ¿Entra el cuerpo parado en ese subtile? (su cruz libre, y en su centro
+   lejos del grosor de las paredes) */
 static int cell_ok(const BotNav *n, const Map *m, int x, int y)
 {
-    return !foot_blocked(m, x, y) && !avoided(&n->avoid, x + 0.5f, y + 0.5f);
+    return !body_blocked(m, x + 0.5f, y + 0.5f) && !avoided(&n->avoid, x + 0.5f, y + 0.5f);
 }
 
 /* Lo mismo, guardado durante la búsqueda (A* mira cada subtile hasta 16 veces) */
@@ -158,6 +198,54 @@ static int cell_ok_box(BotNav *n, const Map *m, int x, int y)
     if (!n->okc[i])
         n->okc[i] = cell_ok(n, m, x, y) ? 1 : 2;
     return n->okc[i] == 1;
+}
+
+/* ¿Se da el paso en diagonal de (cx, cy) a (cx + ddx, cy + ddy)? Sin cortar
+   esquinas; con los dos costados tapados sí (la escalera angosta del
+   Santuario: el jugador da el paso entero) si el cuerpo llega a la esquina:
+   con el grosor de una pared en un costado no se acerca (player_blocked) y
+   quedaba trabado entre una pared y un cadáver del Kurast Bazaar */
+static int diag_ok(BotNav *n, const Map *m, int cx, int cy, int ddx, int ddy)
+{
+    int side = cell_ok_box(n, m, cx + ddx, cy);
+    return side == cell_ok_box(n, m, cx, cy + ddy) &&
+           (side || !map_too_close(m, (float)(cx + (ddx > 0)), (float)(cy + (ddy > 0))));
+}
+
+int bot_selftest(void)
+{
+    Map m;
+    BotNav *n = bot_nav_new(1);
+    if (!n || map_create(&m, 8, 8) != 0 || map_begin_zone(&m, 0, 0, 0, 8, 8) != 0) {
+        bot_nav_free(n);
+        return 1;
+    }
+    for (int y = 0; y < 20; y++) /* un piso libre */
+        for (int x = 0; x < 20; x++)
+            map_clear_coll(&m, x, y, 0xFFFF);
+    /* De (10, 11) a (9, 10): en el costado (9, 11) no entra la cruz (pared en
+       (8, 11)) y en el (10, 10) tampoco (pared en (10, 9)) */
+    map_set_coll(&m, 8, 11, COLL_WALL);
+    map_set_coll(&m, 10, 9, COLL_WALL);
+    int ok[3];
+    ok[0] = diag_ok(n, &m, 10, 11, -1, -1);
+    map_set_coll(&m, 10, 10, COLL_VOLUME); /* el grosor de la pared en un costado: no llega a la esquina */
+    ok[1] = !diag_ok(n, &m, 10, 11, -1, -1);
+    map_clear_coll(&m, 10, 10, COLL_VOLUME);
+    map_clear_coll(&m, 10, 9, COLL_WALL); /* un costado libre: se va por él, sin cortar la esquina */
+    ok[2] = !diag_ok(n, &m, 10, 11, -1, -1);
+    static const char *const k_what[3] = { "entre dos costados tapados, el paso en diagonal",
+                                           "con el grosor de una pared en un costado, sin paso en diagonal",
+                                           "con un costado libre, sin cortar la esquina" };
+    int fails = 0;
+    for (int k = 0; k < 3; k++)
+        if (!ok[k]) {
+            printf("  FALLA: %s\n", k_what[k]);
+            fails++;
+        }
+    bot_nav_free(n);
+    map_free(&m);
+    return fails;
 }
 
 static uint64_t loaded_zones(void)
@@ -298,6 +386,7 @@ static int search_start(BotNav *n, const Map *m, float px, float py, float gx0, 
     memset(n->state, 0, cells);
     memset(n->okc, 0, cells);
     collect_avoid(&n->avoid, px, py, gx0, gy0, gx1, gy1);
+    n->njumps = s_jumps ? s_jumps(bx0, by0, bx1, by1, n->jumps, MAX_JUMPS) : 0;
 
     /* Destino: los subtiles con el centro adentro del rectángulo (la misma
        cuenta que "llegó"). Si en ninguno entra el cuerpo (un árbol, una
@@ -363,9 +452,7 @@ static int search_run(BotNav *n, const Map *m, long budget)
             int i = (ny - by0) * bw + (nx - bx0);
             if (n->state[i] == 2 || !cell_ok_box(n, m, nx, ny))
                 continue;
-            /* en diagonal, sin cortar esquinas; con los dos costados tapados sí
-               (la escalera angosta del Santuario: el jugador da el paso entero) */
-            if (d >= 4 && cell_ok_box(n, m, cx + dx[d], cy) != cell_ok_box(n, m, cx, cy + dy[d]))
+            if (d >= 4 && !diag_ok(n, m, cx, cy, dx[d], dy[d]))
                 continue;
             float ng = n->g[c] + (d >= 4 ? 1.4142f : 1.0f);
             if (n->state[i] == 1 && ng >= n->g[i])
@@ -375,6 +462,24 @@ static int search_run(BotNav *n, const Map *m, long budget)
             n->state[i] = 1;
             if (heap_push(n, i, ng + to_rect(nx + 0.5f, ny + 0.5f, G0x, G0y, G1x, G1y)) != 0)
                 n->heap_n = 0; /* sin memoria: hasta lo más cerca que llegó */
+        }
+        for (int k = 0; k < n->njumps; k++) { /* al alcance de una almohadilla: adonde lleva */
+            const BotJump *j = &n->jumps[k];
+            float ox = cx + 0.5f < j->x0 ? j->x0 - cx - 0.5f : cx + 0.5f > j->x1 ? cx + 0.5f - j->x1 : 0.0f;
+            float oy = cy + 0.5f < j->y0 ? j->y0 - cy - 0.5f : cy + 0.5f > j->y1 ? cy + 0.5f - j->y1 : 0.0f;
+            float r = j->reach - JUMP_MARGIN;
+            int nx = (int)floorf(j->lx), ny = (int)floorf(j->ly);
+            if (ox * ox + oy * oy > r * r || nx < bx0 || ny < by0 || nx >= bx1 || ny >= by1)
+                continue;
+            int i = (ny - by0) * bw + (nx - bx0);
+            float ng = n->g[c] + JUMP_COST;
+            if (n->state[i] == 2 || !cell_ok_box(n, m, nx, ny) || (n->state[i] == 1 && ng >= n->g[i]))
+                continue;
+            n->g[i] = ng;
+            n->came[i] = c;
+            n->state[i] = 1;
+            if (heap_push(n, i, ng + to_rect(nx + 0.5f, ny + 0.5f, G0x, G0y, G1x, G1y)) != 0)
+                n->heap_n = 0;
         }
     }
     if (found < 0 && n->heap_n > 0 && n->s_expanded < MAX_EXPAND)
@@ -439,18 +544,22 @@ static int clear_line(const BotNav *n, const Map *m, float x0, float y0, float x
     return 1;
 }
 
-/* Sigue el camino: lo más lejos que se vea en línea recta */
+/* Sigue el camino: lo más lejos que se vea en línea recta. 2 = está donde
+   el camino salta por una almohadilla: usarla */
 static int follow(BotNav *n, const Map *m, float px, float py, float *dx, float *dy)
 {
     int W = m->width * TILE_SUB;
     if (n->path_len == 0)
         return 0;
-    /* Avanzar hasta el subtile del camino más cerca (de los próximos) */
+    /* Avanzar hasta el subtile del camino más cerca (de los próximos; más
+       allá de una almohadilla solo si ya saltó: al lado de donde lleva) */
     int best = n->path_pos;
     float best_d = 1e30f;
     for (int i = n->path_pos; i < n->path_len && i < n->path_pos + LOOKAHEAD; i++) {
         float cx = n->path[i] % W + 0.5f, cy = n->path[i] / W + 0.5f;
         float d = (cx - px) * (cx - px) + (cy - py) * (cy - py);
+        if (i > n->path_pos && path_jump(n, W, i - 1) && d > 2.0f * 2.0f)
+            break;
         if (d < best_d) {
             best_d = d;
             best = i;
@@ -460,7 +569,12 @@ static int follow(BotNav *n, const Map *m, float px, float py, float *dx, float 
         return 0; /* se desvió: hay que buscar de nuevo */
     n->path_pos = best;
     int target = n->path_pos;
-    for (int i = n->path_pos + 1; i < n->path_len && i <= n->path_pos + LOOKAHEAD; i++)
+    if (target + 1 < n->path_len && path_jump(n, W, target)) { /* desde acá, la almohadilla */
+        *dx = n->path[target] % W + 0.5f - px;
+        *dy = n->path[target] / W + 0.5f - py;
+        return fabsf(*dx) < 0.45f && fabsf(*dy) < 0.45f ? 2 : 1;
+    }
+    for (int i = n->path_pos + 1; i < n->path_len && i <= n->path_pos + LOOKAHEAD && !path_jump(n, W, i - 1); i++)
         if (clear_line(n, m, px, py, n->path[i] % W + 0.5f, n->path[i] / W + 0.5f))
             target = i;
     /* Si no se ve más allá del subtile en el que ya está (en una escalera
@@ -529,8 +643,81 @@ static void take_path(BotNav *n, uint32_t tick)
     n->zones = loaded_zones();
 }
 
+/* ¿Yendo de (px, py) hacia (jx, jy) unos subtiles (lo que dura el rato para
+   un costado) pisa un salto de pisar que ahora no toca? Al pie de la escalera
+   del River of Flame (recién llegado, encima de la subida) el costado al azar
+   salía de ella y la volvía a pisar: subía al City of the Damned, bajaba de
+   nuevo y así para siempre. */
+static int jitter_warps(float px, float py, float jx, float jy)
+{
+    for (int i = 0; i < world_warp_count(); i++) {
+        const Warp *w = world_warp(i);
+        if (w->portal || w->margin > 0 || !world_zone_loaded(w->from))
+            continue;
+        float x0 = w->x0 - WARP_TOUCH, y0 = w->y0 - WARP_TOUCH, x1 = w->x1 + WARP_TOUCH, y1 = w->y1 + WARP_TOUCH;
+        if (px >= x0 && px < x1 && py >= y0 && py < y1)
+            continue; /* el de llegada: salir de él está bien */
+        for (float d = 0.5f; d <= 3.5f; d += 0.5f)
+            if (px + jx * d >= x0 && px + jx * d < x1 && py + jy * d >= y0 && py + jy * d < y1)
+                return 1;
+    }
+    return 0;
+}
+
+/* Un rato para un costado (al azar, sin pisar saltos) y después se busca el
+   camino de nuevo */
+static void start_jitter(BotNav *n, float px, float py, float *dx, float *dy)
+{
+    for (int k = 0; k < 8; k++) {
+        float a = (float)(nav_rnd(n) % 628) / 100.0f;
+        n->jx = cosf(a);
+        n->jy = sinf(a);
+        if (!jitter_warps(px, py, n->jx, n->jy))
+            break;
+    }
+    n->jitter = 8;
+    n->still = 0;
+    n->have_goal = 0;
+    *dx = n->jx;
+    *dy = n->jy;
+}
+
+static int nav_step(BotNav *n, const Map *m, uint32_t tick, float px, float py, int zone, float x, float y, float reach,
+                    float *dx, float *dy);
+
+#define OSC_TICKS 50 /* 2 segundos */
+
 int bot_nav_step(BotNav *n, const Map *m, uint32_t tick, float px, float py, int zone, float x, float y, float reach,
                  float *dx, float *dy)
+{
+    /* Va y viene sin avanzar: dos puntos del camino que se turnan, con algo
+       que no lo deja pasar (el demonio del Brujo pegado al costado, en el
+       Spider Forest). No está quieto, así que `still` no lo ve: si caminando
+       en 2 segundos no se alejó medio subtile, se destraba igual. */
+    if (!n->moving || n->jitter > 0 || n->searching) {
+        n->osc_x = px;
+        n->osc_y = py;
+        n->osc_tick = tick;
+    } else if (tick - n->osc_tick >= OSC_TICKS) {
+        float ox = px - n->osc_x, oy = py - n->osc_y;
+        n->osc_x = px;
+        n->osc_y = py;
+        n->osc_tick = tick;
+        if (ox * ox + oy * oy < 0.5f * 0.5f) {
+            n->tick = tick;
+            n->last_x = px;
+            n->last_y = py;
+            start_jitter(n, px, py, dx, dy);
+            return BOT_MOVING;
+        }
+    }
+    int r = nav_step(n, m, tick, px, py, zone, x, y, reach, dx, dy);
+    n->moving = r == BOT_MOVING;
+    return r;
+}
+
+static int nav_step(BotNav *n, const Map *m, uint32_t tick, float px, float py, int zone, float x, float y, float reach,
+                    float *dx, float *dy)
 {
     *dx = *dy = 0.0f;
     n->tick = tick;
@@ -547,19 +734,28 @@ int bot_nav_step(BotNav *n, const Map *m, uint32_t tick, float px, float py, int
         return BOT_MOVING;
     }
     if (n->still > 15) {
-        float a = (float)(nav_rnd(n) % 628) / 100.0f;
-        n->jx = cosf(a);
-        n->jy = sinf(a);
-        n->jitter = 8;
-        n->still = 0;
-        n->have_goal = 0;
-        *dx = n->jx;
-        *dy = n->jy;
+        start_jitter(n, px, py, dx, dy);
         return BOT_MOVING;
     }
 
     long budget = SEARCH_BUDGET;
     int cur = world_zone_at(m, px, py), dest = zone >= 0 ? zone : world_zone_at(m, x, y);
+    /* Si el camino que sigue (para este mismo destino final) pasa por otra
+       zona, se sigue sin rehacer la ruta por zonas al cruzar el borde: en la
+       selva del Acto 3 el camino más corto entre dos puntos del Spider Forest
+       puede dar la vuelta por el Great Marsh, y al pisarlo la ruta mandaba de
+       vuelta al Spider Forest; el bot quedaba yendo y viniendo sobre el borde
+       (semilla 56, la demostración del Acto 3) */
+    if (n->have_goal && !n->searching && !n->partial && cur != n->plan_zone && n->plan_dest == dest &&
+        fabsf(n->plan_x - x) < 2.0f && fabsf(n->plan_y - y) < 2.0f && n->path_pos < n->path_len - 1 &&
+        n->zones == loaded_zones() && tick - n->planned_tick <= REPLAN_TICKS) {
+        int f = follow(n, m, px, py, dx, dy);
+        if (f == 2)
+            return BOT_USE;
+        if (f == 1)
+            return BOT_MOVING;
+        n->have_goal = 0; /* se desvió: se busca de nuevo desde acá */
+    }
     float g0x = x - reach, g0y = y - reach, g1x = x + reach, g1y = y + reach;
     int box_a = cur, box_b = dest, box_c = -1, use = 0, walk_in = 0;
     const Warp *use_warp = NULL;
@@ -676,6 +872,10 @@ int bot_nav_step(BotNav *n, const Map *m, uint32_t tick, float px, float py, int
         }
         if (search_step(n, m, budget > 500 ? budget : 500)) {
             take_path(n, tick);
+            n->plan_zone = cur;
+            n->plan_dest = dest;
+            n->plan_x = x;
+            n->plan_y = y;
             if (n->partial && n->direct_ok) { /* directo no se llega: por el pasillo */
                 n->fzone = dest;
                 n->fx = x;
@@ -686,7 +886,10 @@ int bot_nav_step(BotNav *n, const Map *m, uint32_t tick, float px, float py, int
         } else if (goal_changed(n, g0x, g0y, g1x, g1y))
             return BOT_MOVING; /* buscando (con dx = dy = 0: quieto) */
     }
-    if (!follow(n, m, px, py, dx, dy)) {
+    int f = follow(n, m, px, py, dx, dy);
+    if (f == 2)
+        return BOT_USE; /* la almohadilla */
+    if (!f) {
         n->have_goal = 0; /* se desvió: la próxima vez se busca de nuevo */
         *dx = (g0x + g1x) / 2 - px;
         *dy = (g0y + g1y) / 2 - py;

@@ -64,8 +64,8 @@ typedef struct ItemType {
     int         str_bonus, dex_bonus;     /* % de daño por punto de fuerza y de destreza (x100) */
     int         ammo;           /* carcaj: 1 = flechas, 2 = saetas */
     int         gender;         /* género del nombre, para los adjetivos de los mágicos */
-    int8_t      vendor_min[11]; /* cuántos venden Akara, Charsi, Gheed, Fara, Lysander, Drognan, Elzix, Ormus, Alkor, Asheara y Hratli (VENDOR_*) */
-    int8_t      vendor_max[11];
+    int8_t      vendor_min[16]; /* cuántos venden Akara, Charsi, Gheed, Fara, Lysander, Drognan, Elzix, Ormus, Alkor, Asheara, Hratli, Halbu, Jamella, Malah, Larzuk y Anya (VENDOR_*) */
+    int8_t      vendor_max[16];
     /* Sonidos (sounds.txt): al caer o guardarlo, al usarlo (tomar la poción)
        y en qué cuadro de la caída suena */
     int         drop_sound, use_sound, drop_frame;
@@ -79,15 +79,19 @@ typedef struct ItemType {
     int         uber;           /* excepcional o de élite (para ItemRatio.txt) */
     int         tier;           /* 0 normal, 1 excepcional, 2 élite */
     char        ubercode[5], ultracode[5]; /* la versión excepcional y la de élite */
+    char        nm_upgrade[5], hell_upgrade[5]; /* lo que venden en su lugar en Pesadilla e Infierno ("" = lo mismo) */
     int         class_only;     /* de una sola clase (Class de itemtypes.txt) */
     int         var_inv;        /* cuántos dibujos tiene (anillos, amuletos, joyas, talismanes) */
     char        invgfx[6][16];  /* InvGfx1..6 de su tipo */
     int         socket_filler;  /* gema, runa o joya: se engarza */
+    char        better_gem[5];  /* la gema de la calidad que sigue (BetterGem de misc.txt; "" = ninguna) */
     int         charm;          /* talismán: sirve en la mochila */
 } ItemType;
 
 enum { VENDOR_AKARA, VENDOR_CHARSI, VENDOR_GHEED, VENDOR_FARA, VENDOR_LYSANDER, VENDOR_DROGNAN, VENDOR_ELZIX,
-       VENDOR_ORMUS, VENDOR_ALKOR, VENDOR_ASHEARA, VENDOR_HRATLI, VENDOR_COUNT }; /* (los arreglos de ItemType son de 11) */
+       VENDOR_ORMUS, VENDOR_ALKOR, VENDOR_ASHEARA, VENDOR_HRATLI, VENDOR_HALBU, VENDOR_JAMELLA,
+       VENDOR_MALAH, VENDOR_LARZUK, VENDOR_ANYA, /* (la de Anya la usa también Nihlathak, hasta que se va) */
+       VENDOR_COUNT }; /* (los arreglos de ItemType son de 16) */
 
 /* Las propiedades que usa el motor (los *ID de ItemStatCost.txt) */
 enum {
@@ -210,6 +214,14 @@ enum { QUALITY_NORMAL, QUALITY_MAGIC, QUALITY_RARE, QUALITY_SET, QUALITY_UNIQUE,
 #define ITEM_MAX_STATS   32
 #define ITEM_MAX_SOCKETS 6
 #define POTION_CHARGES   3 /* tragos de cada poción (amount = los que le quedan) */
+/* Pilas en la mochila (pedido del usuario; el original no apila pociones y
+   las llaves van de a 12): en una pila de pociones amount son los tragos de
+   todas (la de arriba es la empezada) */
+#define POTION_STACK     10
+#define KEY_STACK        20
+/* Los Pergaminos de Portal también (pedido del usuario: no hay Tomo de
+   Portal); en uno, amount es cuántos hay */
+#define TP_STACK         20
 
 typedef struct {
     const ItemType *type; /* NULL = vacío */
@@ -263,6 +275,10 @@ int             items_level_req(const Item *it); /* nivel que pide (el del objet
    calidad de cada uno se tira como en el original (ItemRatio.txt y lo que
    suma la clase de tesoro), con la búsqueda de magia `mf` (%). */
 int items_roll_drop(const char *treasure_class, int monster_level, int mf, Item *out, int max);
+/* Lo mismo con la calidad pedida (QUALITY_MAGIC, QUALITY_SUPERIOR...) en lo
+   que la puede tener, como el nQuality de OBJMODE_DropFromChestTCWithQuality
+   y el ITEMDROPFLAG_SUPERIOR de los estantes; el resto (oro, pociones) sale normal */
+int items_roll_drop_quality(const char *treasure_class, int item_level, int mf, int quality, Item *out, int max);
 
 /* Vuelve mágico un arma o armadura con prefijo y/o sufijo de nivel <= item_level */
 int items_make_magic(Item *it, int item_level);
@@ -275,8 +291,10 @@ int items_make_unique(Item *it, int item_level);
    únicos (uniqueitems.txt): con su nombre y sus propiedades. 1 si lo era. */
 int items_quest_unique(Item *it);
 int items_make_set(Item *it, int item_level);
+void items_drop_from_bovine(int on); /* lo que se tira ahora es de una vaca (el conjunto del Rey Vaca) */
 /* Le pone engarces al azar (los blancos que caen con agujeros) */
 void items_add_sockets(Item *it, int item_level);
+int  items_larzuk_sockets(Item *it); /* la recompensa de Larzuk: los engarces que admite (o uno); 0 = no admite */
 
 /* Para el Cubo Horádrico (cube.c): mágico con un prefijo y/o sufijo fijo
    (su fila de magicprefix.txt / magicsuffix.txt; 0 = al azar), una

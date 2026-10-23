@@ -39,6 +39,7 @@ enum {
     COLL_DOOR = 0x0800,            /* puertas cerradas */
     COLL_NO_PATH = 0x1000,
     COLL_PET = 0x2000,
+    COLL_VOLUME = 0x4000,          /* nuestro: el grosor que se dibuja delante de una pared (dt1_volume) */
     COLL_CORPSE = 0x8000,          /* cadáveres y portales */
     COLL_MASK_INVALID = COLL_BLANK | COLL_MISSILE_BARRIER | COLL_VISIBLE | COLL_WALL,
     /* Por dónde camina cada uno (Path.cpp y D2Collision.h) */
@@ -50,7 +51,7 @@ enum {
 
 /* Un monstruo u objeto que un DS1 trae ubicado, ya en coordenadas del mapa */
 typedef struct {
-    int   type; /* 1 = monstruo/NPC, 2 = objeto */
+    int   type; /* 1 = monstruo/NPC, 2 = objeto, 3 = baldosa de puerta (id: estilo << 8 | secuencia << 1 | derecha, oculta << 16) */
     int   id;
     int   act;
     float x, y; /* en subtiles */
@@ -78,6 +79,9 @@ typedef struct {
     uint8_t        floor_coll[MAP_FLOORS][MAP_CHUNK_TILES];
     uint8_t        wall_coll[MAP_WALLS][MAP_CHUNK_TILES];
     const Dt1Tile *shadow[MAP_CHUNK_TILES];
+    /* El piso en blanco de FillBlanks (Blank.dt1, oculto): aparte, porque en
+       el original se suma a lo que traiga el borde de la pieza vecina */
+    const Dt1Tile *blank[MAP_CHUNK_TILES];
     uint16_t       coll[MAP_CHUNK_SUB * MAP_CHUNK_SUB]; /* colisión por subtile (COLL_*) */
 } MapChunk;
 
@@ -104,7 +108,25 @@ typedef struct {
     MapObject      *objects;
     int             num_specials;
     MapSpecial     *specials;
+
+    /* El armado en partes (world_zone_build_step): cada pieza (un DS1 o un
+       relleno de piso) cuenta, y en esta pasada se estampan las que van
+       desde piece_from; con piece_until (la hora de map_now_ms), hasta que
+       se pase (la que sigue queda en piece_to para la próxima pasada) */
+    int             piece, piece_from, piece_to, pieces_skipped;
+    double          piece_until;
+    int             piece_cap; /* y como mucho tantas por pasada (0 = sin tope; las pruebas: siempre igual) */
+    /* En esas pasadas, la pieza que pide un DT1 que no está (ni preparado)
+       no lo lee: lo pide al hilo de trabajos y queda para la próxima */
+    int             dt1_defer;
 } Map;
+
+/* Cómo se estampa cada pieza de lvlprest.txt (DRLGROOMTILE_LoadInitRoomTiles):
+   fn(ds1, &kill, &blank) devuelve 1 si el DS1 es una pieza, con su KillEdge
+   (sin la última fila y columna) y su FillBlanks (blank > 0: las celdas sin
+   piso de la pieza llevan oculto el piso en blanco 30.(blank - 1) de
+   Blank.dt1, que no se camina). Sin regla, o si devuelve 0, el DS1 entero. */
+void map_set_stamp_rules(int (*fn)(const char *ds1_path, int *kill, int *blank));
 
 /* Cambia cada vez que se arma, estampa o suelta algo del mapa (de cualquier
    mapa): lo guardado de un dibujo anterior del piso ya no vale */
@@ -124,17 +146,41 @@ int  map_stamp(Map *m, const char *ds1_path, int ox, int oy);
 /* Igual, pero con los tiles de esos DT1 en vez de los que lista el DS1 (como
    el original: los de lvltypes.txt que pide el Dt1Mask de la pieza) */
 int  map_stamp_lib(Map *m, const char *ds1_path, int ox, int oy, const char *const *dt1_paths, int num_dt1);
+/* Cuenta una pieza: 1 si se estampa en esta pasada (ver piece_from en Map).
+   map_stamp, map_stamp_lib y map_fill_floor la cuentan solos; el que ya la
+   contó (para no buscar sus DT1 si no va) estampa con map_stamp_lib_now. */
+int  map_piece_now(Map *m);
+int  map_stamp_lib_now(Map *m, const char *ds1_path, int ox, int oy, const char *const *dt1_paths, int num_dt1);
+/* Solo el rectángulo (sx, sy, w, h) de un DS1 ya leído, con su esquina en el
+   tile (ox, oy) y los tiles de esos DT1 (la decoración de lvlsub.txt: un grupo
+   de su DS1 de reglas); no cuenta una pieza */
+int  map_stamp_part_now(Map *m, const Ds1 *ds1, int sx, int sy, int w, int h, int ox, int oy, const char *const *dt1_paths,
+                        int num_dt1);
+/* ¿El tile es piso liso (el estilo 0 y la secuencia 0, o esos) sin otra capa
+   ni paredes? (donde puede ir la decoración: sub_6FD8B010) */
+int  map_plain_floor(const Map *m, int x, int y, int style, int seq);
+double map_now_ms(void);   /* reloj en ms (para piece_until) */
+int    map_prep_busy(void); /* DT1 que el hilo de trabajos todavía está leyendo */
 
 /* Lee ese DT1 en el hilo de trabajos para la zona que se va a armar pronto
    (sin hilo, nada: lo carga la zona al armarse, como siempre) */
 void map_prepare_dt1(const Map *m, const char *path);
-void map_dt1_loads(int *ready, int *loaded); /* desde la última vez: los que llegaron preparados y los leídos al armar */
+void map_dt1_loads(int *ready, int *loaded, int *deferred); /* desde la última vez: los que llegaron preparados, los leídos al armar y las piezas que esperaron los suyos */
 
 /* Rellena un rectángulo con un piso (de un DT1 y un estilo/secuencia) */
 void map_fill_floor(Map *m, const char *dt1_path, int style, int seq, int x0, int y0, int w, int h);
+/* Igual, con las marcas de la celda para sus 25 subtiles (COLL_*: el
+   bUnwalkable de la baldosa es COLL_WALL) */
+void map_fill_floor_coll(Map *m, const char *dt1_path, int style, int seq, uint8_t coll, int x0, int y0, int w, int h);
 
 /* Calcula las colisiones de los pedazos de la zona; va después de estampar */
 void map_build_collision(Map *m, int zone);
+/* Lo mismo en dos partes (para armar la zona en dos ticks): 0 las marcas
+   de las baldosas, 1 el grosor de las paredes y su recorte */
+void map_build_collision_part(Map *m, int zone, int part);
+/* Lo que tardó la última (ms): las marcas de las baldosas, el grosor de las paredes y su recorte */
+void map_collision_times(double *tiles, double *volume, double *cuts);
+void map_stamp_times(double *stamp, double *ds1, double *dt1); /* D2_ZONES: lo que tardó estampar desde la última vez (y de eso leer los DS1 y los DT1) */
 
 /* Atajo: un mapa de un solo DS1 */
 int  map_load(Map *m, const char *ds1_path);
@@ -142,6 +188,12 @@ int  map_load(Map *m, const char *ds1_path);
 void map_free(Map *m);
 uint16_t map_coll(const Map *m, int sx, int sy);        /* los COLL_* del subtile (fuera del mapa: COLL_MASK_INVALID) */
 int  map_blocked(const Map *m, int sx, int sy);          /* para caminar (COLL_MASK_PLAYER_PATH) */
+/* El cuadrado de la distancia del punto (x, y) al subtile más cercano que
+   no se camina o que tapa el grosor de una pared (COLL_VOLUME), hasta
+   MAP_BODY_CLEAR² (más lejos devuelve eso) */
+#define MAP_BODY_CLEAR 0.5f
+float map_clearance2(const Map *m, float x, float y);
+int  map_too_close(const Map *m, float x, float y);      /* map_clearance2 menor que MAP_BODY_CLEAR² */
 void map_set_coll(Map *m, int sx, int sy, uint16_t bits); /* lo que ocupan los objetos y las puertas */
 void map_clear_coll(Map *m, int sx, int sy, uint16_t bits);
 /* El trazado de una línea por subtiles, como COLLISION_RayTrace (Bresenham):

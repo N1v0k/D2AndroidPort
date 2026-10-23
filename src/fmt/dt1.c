@@ -65,7 +65,13 @@ static void decode_rle_block(Dt1Tile *t, const Block *b, const uint8_t *d)
 }
 
 /* Con `pixels` en 0 solo calcula el tamaño de la imagen (img_y, img_h) */
-static int decode_tile(const uint8_t *data, size_t size, Dt1Tile *t, int32_t blocks_ptr, int32_t nblocks, int pixels)
+/* `pixels`: 0 solo el tamaño, 1 la imagen y sus spans, DECODE_BAND solo los
+   bloques que tocan las filas [band_lo, band_hi) (contadas desde el borde de
+   arriba del tile, como Block.y) y sin spans: lo que mira dt1_volume */
+#define DECODE_BAND 2
+
+static int decode_tile(const uint8_t *data, size_t size, Dt1Tile *t, int32_t blocks_ptr, int32_t nblocks, int pixels,
+                       int band_lo, int band_hi)
 {
     if (nblocks <= 0)
         return 0;
@@ -114,13 +120,16 @@ static int decode_tile(const uint8_t *data, size_t size, Dt1Tile *t, int32_t blo
         size_t start = (size_t)blocks_ptr + (size_t)b->offset;
         if (b->length <= 0 || start + (size_t)b->length > size)
             continue;
+        if (pixels == DECODE_BAND && (b->y + 32 <= band_lo || b->y >= band_hi))
+            continue; /* (un bloque ocupa a lo sumo 32 filas desde su y) */
         if (b->format == 1)
             decode_iso_block(t, b, data + start);
         else
             decode_rle_block(t, b, data + start);
     }
     free(blocks);
-    t->spans = spans_build(t->pixels, t->img_w, t->img_h);
+    if (pixels != DECODE_BAND)
+        t->spans = spans_build(t->pixels, t->img_w, t->img_h);
     return 0;
 }
 
@@ -160,7 +169,7 @@ static int load(const uint8_t *data, size_t size, Dt1 *out, int lazy)
         int32_t blocks_ptr = rb_i32(&r);
         rb_skip(&r, 4); /* largo total de los bloques */
         int32_t nblocks = rb_i32(&r);
-        if (r.err || decode_tile(data, size, t, blocks_ptr, nblocks, !lazy) != 0) {
+        if (r.err || decode_tile(data, size, t, blocks_ptr, nblocks, !lazy, 0, 0) != 0) {
             dt1_free(out);
             return -1;
         }
@@ -193,10 +202,75 @@ const Dt1Tile *dt1_tile_ready(const Dt1Tile *t)
     if (t && t->pending) {
         Dt1Tile *w = (Dt1Tile *)t;
         w->pending = 0;
-        if (decode_tile(w->raw, w->raw_size, w, w->blocks_ptr, w->nblocks, 1) != 0)
+        if (decode_tile(w->raw, w->raw_size, w, w->blocks_ptr, w->nblocks, 1, 0, 0) != 0)
             w->pixels = NULL; /* (sin imagen: no se dibuja) */
     }
     return t;
+}
+
+/* Solo las paredes de verdad: las que frenan el paso y los proyectiles (bits
+   0 y 2). Las cosas bajas que solo frenan el paso (las lápidas del
+   cementerio, las plantas del pantano) se dibujan más altas que anchas, y
+   con su "grosor" el cementerio quedaba un laberinto para los bots. */
+static int blocks_sub(const Dt1Tile *t, int sx, int sy)
+{
+    return sx >= 0 && sy >= 0 && sx < 5 && sy < 5 && (t->subtile_flags[(4 - sy) * 5 + sx] & 5) == 5;
+}
+
+uint64_t dt1_volume(const Dt1Tile *t)
+{
+    Dt1Tile *w = (Dt1Tile *)t;
+    if (w->volume_done)
+        return w->volume;
+    w->volume_done = 1;
+    /* Los subtiles que pueden tener grosor (libres, con una pared al lado):
+       sale de las marcas, sin mirar la imagen. Si no hay ninguno, no se
+       decodifica nada (en la Pi era casi todo el armado de Lut Gholein). */
+    uint64_t cand = 0;
+    for (int sy = 0; sy <= 5; sy++)
+        for (int sx = 0; sx <= 5; sx++)
+            if (!blocks_sub(t, sx, sy) &&
+                (blocks_sub(t, sx - 1, sy) || blocks_sub(t, sx, sy - 1) || blocks_sub(t, sx - 1, sy - 1)))
+                cand |= 1ull << (sy * 6 + sx);
+    w->volume = 0;
+    if (!cand)
+        return 0;
+    /* Con la imagen sin decodificar (dt1_load_lazy), una copia que se suelta
+       enseguida: solo los bloques de las filas que se miran (y = -79..15
+       desde el tile) y sin spans */
+    Dt1Tile tmp = *t;
+    const Dt1Tile *img = t;
+    if (t->pending) {
+        tmp.pixels = NULL;
+        tmp.spans = NULL;
+        if (decode_tile(t->raw, t->raw_size, &tmp, t->blocks_ptr, t->nblocks, DECODE_BAND, -79, 16) != 0)
+            return 0;
+        img = &tmp;
+    }
+    uint64_t v = 0;
+    for (int sy = 0; sy <= 5 && img->pixels; sy++)
+        for (int sx = 0; sx <= 5; sx++) {
+            if (!(cand >> (sy * 6 + sx) & 1))
+                continue;
+            /* El rombo del subtile: el dibujo de las paredes arranca en la
+               esquina de abajo del tile (y = 80 desde la de arriba) */
+            int cx = 80 + (sx - sy) * 16, cy = (sx + sy + 1) * 8, tot = 0, hit = 0;
+            for (int dy = -7; dy <= 7; dy++) {
+                int r = cy + dy - 80 - img->img_y, hw = 16 - 2 * (dy < 0 ? -dy : dy);
+                for (int x = cx - hw; x < cx + hw; x++) {
+                    tot++;
+                    hit += r >= 0 && r < img->img_h && x >= 0 && x < img->img_w && img->pixels[r * img->img_w + x];
+                }
+            }
+            if (hit * 2 > tot)
+                v |= 1ull << (sy * 6 + sx);
+        }
+    if (img == &tmp) {
+        free(tmp.pixels);
+        free(tmp.spans);
+    }
+    w->volume = v;
+    return v;
 }
 
 void dt1_free(Dt1 *t)

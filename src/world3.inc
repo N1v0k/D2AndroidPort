@@ -61,6 +61,16 @@ static Jungle   s_jungle[3]; /* de sur a norte: Spider Forest, Great Marsh y Fla
 static int      s_jungle_interlink; /* bJungleInterlink: de qué lado quedan las puertas de Kurast */
 static int      z_jungle[3], z_kurast[3], z_causeway, z_travincal;
 static TxtTable s_lvlprest_txt, s_lvltypes_txt;
+/* La fila de lvlprest.txt de cada Def (0 = no está): al armar una zona en
+   partes se busca cada pieza en cada pasada, y buscarla entre las ~1100
+   filas costaba más que estamparla */
+#define PREST_DEFS 2048
+static int s_prest_row[PREST_DEFS];
+
+static int prest_row(int def)
+{
+    return def >= 0 && def < PREST_DEFS && s_prest_row[def] > 0 ? s_prest_row[def] : -1;
+}
 /* Los pasos entre selvas vecinas (las selvas por su número y el medio del borde, en tiles) */
 static int s_jlinks[8][2], s_jlink_xy[8][2], s_njlinks;
 
@@ -82,9 +92,7 @@ static void jlink_add(int a, int b, int x, int y)
 static int prest_file(int def, int variant, char *out, size_t cap, int *w, int *h)
 {
     const TxtTable *t = &s_lvlprest_txt;
-    char id[12];
-    snprintf(id, sizeof id, "%d", def);
-    int row = t->rows ? txt_find_row(t, txt_col(t, "Def"), id) : -1;
+    int row = prest_row(def);
     if (row < 0)
         return -1;
     const char *files[6];
@@ -117,11 +125,19 @@ static int prest_lib_mask(uint32_t mask, int z, char paths[34][96])
 {
     const TxtTable *lt = &s_lvltypes_txt;
     const Level *lv = zone_level(z);
-    char id[12];
-    snprintf(id, sizeof id, "%d", lv ? lv->id : -1);
-    int lrow = s_levels_txt.rows ? txt_find_row(&s_levels_txt, txt_col(&s_levels_txt, "Id"), id) : -1, n = 0;
-    snprintf(id, sizeof id, "%d", lrow >= 0 ? txt_get_int(&s_levels_txt, lrow, "LevelType", -1) : -1);
-    int trow = lt->rows ? txt_find_row(lt, txt_col(lt, "Id"), id) : -1;
+    static int s_type_row[256]; /* la fila de lvltypes.txt de cada nivel (más 1; 0 = sin buscar) */
+    int lid = lv ? lv->id : -1, n = 0, trow;
+    if (lid >= 0 && lid < 256 && s_type_row[lid]) {
+        trow = s_type_row[lid] - 1;
+    } else {
+        char id[12];
+        snprintf(id, sizeof id, "%d", lid);
+        int lrow = s_levels_txt.rows ? txt_find_row(&s_levels_txt, txt_col(&s_levels_txt, "Id"), id) : -1;
+        snprintf(id, sizeof id, "%d", lrow >= 0 ? txt_get_int(&s_levels_txt, lrow, "LevelType", -1) : -1);
+        trow = lt->rows ? txt_find_row(lt, txt_col(lt, "Id"), id) : -1;
+        if (lid >= 0 && lid < 256 && lt->rows)
+            s_type_row[lid] = trow + 1;
+    }
     if (trow < 0)
         return 0;
     for (int k = 0; k < 32; k++) {
@@ -139,11 +155,11 @@ static int prest_lib_mask(uint32_t mask, int z, char paths[34][96])
 static int prest_lib(int def, int z, char paths[34][96])
 {
     const TxtTable *t = &s_lvlprest_txt;
-    char id[12];
-    snprintf(id, sizeof id, "%d", def);
-    int row = t->rows ? txt_find_row(t, txt_col(t, "Def"), id) : -1;
+    int row = prest_row(def);
     return row < 0 ? 0 : prest_lib_mask((uint32_t)txt_get_int(t, row, "Dt1Mask", 0), z, paths);
 }
+
+static void prest_tables_load(void);
 
 int world_zone_dt1(int zone, char paths[34][96])
 {
@@ -151,9 +167,15 @@ int world_zone_dt1(int zone, char paths[34][96])
         return 0;
     switch (s_zones[zone].kind) {
     case ZK_DOCK: case ZK_JUNGLE: case ZK_KURAST: case ZK_CAUSEWAY: case ZK_TRAVINCAL: case ZK_A3MAZE: case ZK_A3PRESET:
+    case ZK_FORTRESS: case ZK_MESA: case ZK_RIVER: case ZK_SANCTUM: case ZK_HARROGATH: case ZK_SIEGE: case ZK_BARRICADE:
         return prest_lib_mask(0xFFFFFFFFu, zone, paths); /* (todas sus piezas: todo el Dt1Mask) */
+    case ZK_TOWN: case ZK_LUT:
+        return 0; /* (se arman al llegar al acto, con la pantalla de carga) */
     default:
-        return 0;
+        /* Los de los Actos 1 y 2 estampan con los DT1 que lista cada DS1,
+           que salen de los del tipo del nivel en lvltypes.txt */
+        prest_tables_load();
+        return prest_lib_mask(0xFFFFFFFFu, zone, paths);
     }
 }
 
@@ -162,15 +184,18 @@ static void prest_stamp(Map *m, int z, int def, int variant, int x, int y)
 {
     char path[160], lib[34][96];
     const char *libp[34];
-    int w = 0, h = 0, n = prest_lib(def, z, lib);
+    int w = 0, h = 0;
     if (prest_file(def, variant, path, sizeof path, &w, &h) != 0) {
         fprintf(stderr, "lvlprest.txt no tiene la pieza %d\n", def);
         return;
     }
+    if (!map_piece_now(m)) /* (va en otra pasada del armado en partes) */
+        return;
+    int n = prest_lib(def, z, lib);
     for (int k = 0; k < n; k++)
         libp[k] = lib[k];
     int first = m->num_specials;
-    map_stamp_lib(m, path, x, y, n ? libp : NULL, n);
+    map_stamp_lib_now(m, path, x, y, n ? libp : NULL, n);
     if (w <= 0) { /* las que son un nivel entero (el muelle, los templos): toda la zona */
         w = s_zones[z].x1 - x;
         h = s_zones[z].y1 - y;
@@ -401,16 +426,23 @@ static int jungle_generate(int town_x, int town_y)
         jungle_attach(gw, p0, p1, p2, lp);
         jungle_connect(gw, gh, p0, p1, p2, lp);
     } while (!jungle_attach_dirs(gw, gh, p0, p2, lp));
-    /* Las uniones entre selvas: los pasos para buscar caminos (a mitad del borde de las dos piezas) */
+    /* Las uniones entre selvas: los pasos para buscar caminos, en el borde de
+       las dos piezas. Entre dos claros, a 13 tiles del lado de arriba o de la
+       izquierda (por ahí cruza su camino: en el medio es selva); si no, en el
+       medio (el río, que se cruza por las dos orillas) */
     for (int y = 1; y < gh - 1; y++)
         for (int x = 1; x < gw - 1; x++) {
             int k = y * gw + x;
             if (!p0[k])
                 continue;
-            if (p0[k + 1] && p0[k + 1] != p0[k] && (lp[k] & (JF_E | JF_E << 4)) && (lp[k + 1] & (JF_W | JF_W << 4)))
-                jlink_add(p0[k] - 1, p0[k + 1] - 1, minx + (x - 1 + 1) * JB, miny + (y - 1) * JB + JB / 2);
-            if (p0[k + gw] && p0[k + gw] != p0[k] && (lp[k] & (JF_S | JF_S << 4)) && (lp[k + gw] & (JF_N | JF_N << 4)))
-                jlink_add(p0[k] - 1, p0[k + gw] - 1, minx + (x - 1) * JB + JB / 2, miny + (y - 1 + 1) * JB);
+            if (p0[k + 1] && p0[k + 1] != p0[k] && (lp[k] & (JF_E | JF_E << 4)) && (lp[k + 1] & (JF_W | JF_W << 4))) {
+                int at = !(lp[k] & JF_E) && !(lp[k + 1] & JF_W) ? 13 : JB / 2;
+                jlink_add(p0[k] - 1, p0[k + 1] - 1, minx + (x - 1 + 1) * JB, miny + (y - 1) * JB + at);
+            }
+            if (p0[k + gw] && p0[k + gw] != p0[k] && (lp[k] & (JF_S | JF_S << 4)) && (lp[k + gw] & (JF_N | JF_N << 4))) {
+                int at = !(lp[k] & JF_S) && !(lp[k + gw] & JF_N) ? 13 : JB / 2;
+                jlink_add(p0[k] - 1, p0[k + gw] - 1, minx + (x - 1) * JB + at, miny + (y - 1 + 1) * JB);
+            }
         }
     for (int i = 0; i < 3; i++) {
         Jungle *jg = &s_jungle[i];
@@ -454,8 +486,12 @@ static void build_jungle(Map *m, int z)
             }
             if (def)
                 prest_stamp(m, z, def, variant, zone->x0 + x * JB, zone->y0 + y * JB);
-            else /* sin camino: barro (DRLGOUTPLACE_CreateOutdoorRoomEx con el tercer DT1 de lvltypes, DarkMud) */
-                map_fill_floor(m, TILES3 "ground/darkmud.dt1", 0, 0, zone->x0 + x * JB, zone->y0 + y * JB, JB, JB);
+            else /* sin camino: barro (DRLGOUTPLACE_CreateOutdoorRoomEx con el tercer DT1 de lvltypes, DarkMud)
+                    que no se camina: en la selva su piso lleva 0x120000 (DRLGOUTPLACE_InitOutdoorRoomGrids), el
+                    bit 17 es bUnwalkable -> MAPTILE_UNWALKABLE -> COLLIDE_WALL. Caminable, ahí caían
+                    monstruos y jefes (el de la estatuilla) encerrados entre los bordes de las vecinas */
+                map_fill_floor_coll(m, TILES3 "ground/darkmud.dt1", 0, 0, COLL_WALL, zone->x0 + x * JB, zone->y0 + y * JB, JB,
+                                    JB);
         }
     }
 }
@@ -646,12 +682,18 @@ static void build_travincal(Map *m, int z)
    arrancan en ronda (DRLGMAZE_InitBasicMazeLayout: 2x2, o 5x5 en las
    cloacas, con las cuatro bocas en las esquinas) y crecen al azar
    (DRLGMAZE_BuildBasicMaze); después, las salas especiales
-   (DRLGMAZE_PlaceAct3DungeonStuff, ...SewerStuff, ...MephistoStuff): cada
-   una con una sola salida, del lado que toque, en una sala que ya la
-   tenga o en una nueva pegada. Cada sala es la pieza de lvlprest.txt de
-   sus salidas (base + O 1, E 2, S 4, N 8; las temáticas, 15 más). */
+   (DRLGMAZE_PlaceAct3DungeonStuff, ...SewerStuff, ...MephistoStuff y, en
+   el Acto 5, ...Act5IceStuff y ...Act5BaalStuff): cada una con una sola
+   salida, del lado que toque, en una sala que ya la tenga o en una nueva
+   pegada. Cada sala es la pieza de lvlprest.txt de sus salidas (base + O 1,
+   E 2, S 4, N 8; las temáticas, 15 más). Del Acto 5 también: el templo de
+   Nihlathak (la ronda de 2x2 salas de 40x40, sin crecer:
+   DRLGMAZE_PlaceAct5TempleStuff), la Fortaleza de la Piedra del Mundo (la
+   sala de la subida con tres salidas en el medio:
+   DRLGMAZE_PlaceAct2TombPrev_Act5BaalPrev) y los infiernos de los portales
+   rojos (DRLGMAZE_PlaceAct5LavaPresets). */
 
-enum { A3M_SPIDER, A3M_DUNGEON, A3M_SEWER, A3M_MEPH };
+enum { A3M_SPIDER, A3M_DUNGEON, A3M_SEWER, A3M_MEPH, A3M_ICE, A3M_TEMPLE, A3M_BAAL, A3M_LAVA };
 
 static const struct {
     int         id, type;
@@ -667,6 +709,19 @@ static const struct {
     { 92, A3M_SEWER, "#92", 12, 32, 5, 8, 28 }, /* (por el Id: las cloacas del Acto 2 se llaman igual) */
     { 100, A3M_MEPH, "Durance of Hate Level 1", 12, 10, 2, 6, 12 },
     { 101, A3M_MEPH, "Durance of Hate Level 2", 12, 12, 2, 7, 14 },
+    /* las cuevas de hielo del Acto 5 (Crystalline Passage, Glacial Trail y Ancients' Way) */
+    { 113, A3M_ICE, "Crystalized Cavern Level 1", 16, 10, 2, 7, 14 },
+    { 115, A3M_ICE, "Crystalized Cavern Level 2", 16, 10, 2, 7, 14 },
+    { 118, A3M_ICE, "Glacial Caves Level 1", 16, 15, 2, 8, 20 },
+    /* el templo de Nihlathak (Halls of Anguish y of Pain), los infiernos y la Fortaleza */
+    { 122, A3M_TEMPLE, "Halls of Anguish", 40, 4, 2, 2, 12 },
+    { 123, A3M_TEMPLE, "Halls of Death's Calling", 40, 4, 2, 2, 12 },
+    { 125, A3M_LAVA, "Hell1", 24, 3, 0, 5, 12 },
+    { 126, A3M_LAVA, "Hell2", 24, 3, 0, 5, 12 },
+    { 127, A3M_LAVA, "Hell3", 24, 3, 0, 5, 12 },
+    { 128, A3M_BAAL, "The Worldstone Keep Level 1", 16, 9, 0, 6, 14 },
+    { 129, A3M_BAAL, "The Worldstone Keep Level 2", 16, 9, 0, 6, 14 },
+    { 130, A3M_BAAL, "The Worldstone Keep Level 3", 16, 9, 0, 6, 14 },
 };
 
 /* Los de una sola pieza (DrlgType 2 en levels.txt): su Def y el tamaño del DS1 */
@@ -685,7 +740,40 @@ static const struct {
     { 98, 752, "Ruined Fane", 25, 25, 3 },
     { 99, 753, "Disused Reliquary", 25, 25, 3 },
     { 102, 796, "Durance of Hate Level 3", 42, 30, 4 },
+    /* los del Acto 5: el Frozen River (River A o B, como el original), el
+       Drifter Cavern, el Icy Cellar, la cumbre del Arreat y la entrada del
+       templo de Nihlathak (sin monstruos al azar: MonDen 0) */
+    { 114, 1038, "Cellar of Pity", 65, 65, 12 },
+    { 116, 1040, "Echo Chamber", 33, 33, 5 },
+    { 119, 1041, "Glacial Caves Level 2", 33, 33, 5 },
+    { 120, 1089, "Rocky Summit", 21, 29, 0 },
+    { 121, 1088, "Nihlathaks Temple", 23, 28, 0 },
+    /* los Halls of Vaught (uno de los cuatro NihlE/N/S/W), el Trono y la Cámara */
+    { 124, 864, "Halls of Vaught", 85, 85, 12 },
+    { 131, 1086, "Throne of Destruction", 41, 53, 6 },
+    { 132, 1087, "The Worldstone Chamber", 56, 56, 0 },
 };
+
+/* Los calabozos de un acto (3 o 5) en las filas de abajo: sus zonas y niveles */
+static void a3_add_dungeons(int act)
+{
+    for (int k = 0; k < (int)COUNT(k_act3_mazes); k++) {
+        if ((k_act3_mazes[k].id > 102 ? 5 : 3) != act)
+            continue;
+        int x, y, w = k_act3_mazes[k].grid * k_act3_mazes[k].room + 1;
+        pack(w, w, &x, &y);
+        int z = add_zone(ZK_A3MAZE, k_act3_mazes[k].id, x, y, x + w, y + w);
+        add_level(k_act3_mazes[k].name, z, x, y, x + w, y + w, k_act3_mazes[k].groups, 1);
+    }
+    for (int k = 0; k < (int)COUNT(k_act3_presets); k++) {
+        if ((k_act3_presets[k].id > 102 ? 5 : 3) != act)
+            continue;
+        int x, y, w = k_act3_presets[k].w, h = k_act3_presets[k].h;
+        pack(w, h, &x, &y);
+        int z = add_zone(ZK_A3PRESET, k_act3_presets[k].id, x, y, x + w, y + h);
+        add_level(k_act3_presets[k].name, z, x, y, x + w, y + h, k_act3_presets[k].groups, 1);
+    }
+}
 
 static int act3_preset(int id)
 {
@@ -716,46 +804,105 @@ static int a3_special(Maze *mz, uint8_t *fixed, int d)
     return -1;
 }
 
-static void build_act3_maze(Map *m, int z)
+/* Un infierno de los portales rojos (DRLGMAZE_PlaceAct5LavaPresets): la sala
+   del medio (NS o EW), dos puntas pegadas (N y S, o E y O, con el archivo
+   que dice la tabla del original) y la Lava X del Acto 4 alrededor de las
+   tres (DRLGMAZE_FillBlankMazeSpaces) */
+static void build_lava(Map *m, int z, int room, int g)
+{
+    static const struct { int dx, dy, def, pick; } k_sets[4][2] = {
+        { { 0, -1, 1054, 0 }, { 0, 1, 1053, 1 } }, { { 0, -1, 1054, 1 }, { 0, 1, 1053, 0 } },
+        { { -1, 0, 1055, 1 }, { 1, 0, 1056, 0 } }, { { -1, 0, 1055, 0 }, { 1, 0, 1056, 1 } },
+    };
+    const Zone *zone = &s_zones[z];
+    int set = (int)(rnd() & 3u), c = g / 2, rx[3] = { c, c + k_sets[set][0].dx, c + k_sets[set][1].dx };
+    int ry[3] = { c, c + k_sets[set][0].dy, c + k_sets[set][1].dy };
+    uint8_t used[MAZE_MAX][MAZE_MAX] = { { 0 } };
+    for (int i = 0; i < 3; i++) {
+        int def = i == 0 ? (set < 2 ? 1058 : 1057) : k_sets[set][i - 1].def, pick = i == 0 ? -1 : k_sets[set][i - 1].pick;
+        prest_stamp(m, z, def, pick, zone->x0 + rx[i] * room, zone->y0 + ry[i] * room);
+        room_add(zone->x0 + rx[i] * room, zone->y0 + ry[i] * room, room, room);
+        used[ry[i]][rx[i]] = 1;
+    }
+    for (int i = 0; i < 3; i++)
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++) {
+                int x = rx[i] + dx, y = ry[i] + dy;
+                if (x < 0 || y < 0 || x >= g || y >= g || used[y][x])
+                    continue;
+                used[y][x] = 1;
+                prest_stamp(m, z, 836, 0, zone->x0 + x * room, zone->y0 + y * room);
+            }
+}
+
+/* La grilla de un calabozo: la ronda (o la sala del medio de la
+   Fortaleza), las salas al azar y las especiales, con su pieza en def.
+   Devuelve cuántas especiales no entraron */
+static int a3_layout(Maze *mz, uint8_t *fixed, int *def, int k, const Zone *zone)
 {
     /* el orden de las tablas del original (N, E, S, O) en k_dirs */
     static const int k_od[4] = { 0, 2, 1, 3 };
-    const Zone *zone = &s_zones[z];
-    int k = 0;
-    while (k < (int)COUNT(k_act3_mazes) - 1 && k_act3_mazes[k].id != zone->floor)
-        k++;
-    int type = k_act3_mazes[k].type, ring = k_act3_mazes[k].ring, g = k_act3_mazes[k].grid;
-    Maze mz;
-    uint8_t fixed[MAZE_ROOMS] = { 0 }, theme[MAZE_ROOMS] = { 0 };
-    int def[MAZE_ROOMS] = { 0 };
-    memset(&mz, 0, sizeof mz);
-    memset(mz.room, -1, sizeof mz.room);
-    mz.gw = mz.gh = g;
-    /* la ronda: desde la esquina de abajo a la derecha, al norte, al oeste, al sur y al este */
-    int ox = (g - ring) / 2, oy = (g - ring) / 2, last = 0;
-    mz.cx[0] = ox + ring - 1;
-    mz.cy[0] = oy + ring - 1;
-    mz.room[mz.cy[0]][mz.cx[0]] = 0;
-    mz.count = 1;
-    static const int k_walk[4] = { 0, 3, 1, 2 };
-    for (int side = 0; side < 4; side++)
-        for (int i = 0; i < ring - 1 - (side == 3); i++)
-            last = maze_add(&mz, last, k_walk[side]);
-    mz.exits[mz.cy[last]][mz.cx[last]] |= EX_E;
-    mz.exits[mz.cy[0]][mz.cx[0]] |= EX_W;
+    int type = k_act3_mazes[k].type, ring = k_act3_mazes[k].ring, g = k_act3_mazes[k].grid, missing = 0;
+    memset(mz, 0, sizeof *mz);
+    memset(mz->room, -1, sizeof mz->room);
+    memset(fixed, 0, MAZE_ROOMS);
+    memset(def, 0, MAZE_ROOMS * sizeof *def);
+    mz->gw = mz->gh = g;
+    if (type == A3M_BAAL) {
+        /* la sala de la subida en el medio, con tres salidas (falta la de
+           después de las tres al azar, en el orden O, N, E, S del original) */
+        static const int k_orig[4] = { 3, 0, 2, 1 };              /* O, N, E, S en k_dirs */
+        static const int k_prev[4] = { 1075, 1077, 1076, 1074 }; /* sin O: NSE; sin N: SEW; sin E: NSW; sin S: NEW */
+        int start = (int)(rnd() % 4u);
+        mz->cx[0] = mz->cy[0] = g / 2;
+        mz->room[g / 2][g / 2] = 0;
+        mz->count = 1;
+        for (int i = 0; i < 3; i++)
+            maze_add(mz, 0, k_orig[(start + i) % 4]);
+        def[0] = k_prev[(start + 3) % 4];
+        fixed[0] = 1;
+    } else {
+        /* la ronda: desde la esquina de abajo a la derecha, al norte, al oeste, al sur y al este */
+        int ox = (g - ring) / 2, oy = (g - ring) / 2, last = 0;
+        mz->cx[0] = ox + ring - 1;
+        mz->cy[0] = oy + ring - 1;
+        mz->room[mz->cy[0]][mz->cx[0]] = 0;
+        mz->count = 1;
+        static const int k_walk[4] = { 0, 3, 1, 2 };
+        for (int side = 0; side < 4; side++)
+            for (int i = 0; i < ring - 1 - (side == 3); i++)
+                last = maze_add(mz, last, k_walk[side]);
+        mz->exits[mz->cy[last]][mz->cx[last]] |= EX_E;
+        mz->exits[mz->cy[0]][mz->cx[0]] |= EX_W;
+    }
+    if (type == A3M_TEMPLE) {
+        /* la bajada en la NE, la NW o la SW (al azar) y, en los Halls of
+           Death's Calling, el waypoint en la que sigue (NW, SW o la SE de la subida) */
+        static const int k_tf[4] = { JF_N | JF_E, JF_N | JF_W, JF_S | JF_W, JF_S | JF_E };
+        static const int k_tdown[3] = { 1046, 1047, 1048 }, k_twp[4] = { 1049, 1050, 1052, 1051 };
+        int start = (int)(rnd() % 3u);
+        for (int i = 0; i < mz->count; i++) {
+            int f = a3_flags(mz->exits[mz->cy[i]][mz->cx[i]]);
+            if (f == k_tf[start])
+                def[i] = k_tdown[start];
+            else if (zone->floor == 123 && f == k_tf[start + 1])
+                def[i] = k_twp[start + 1];
+            fixed[i] = def[i] != 0;
+        }
+    }
     if (type == A3M_SEWER) /* las cuatro bocas en las esquinas de la ronda */
-        for (int i = 0; i < mz.count; i++) {
-            int f = a3_flags(mz.exits[mz.cy[i]][mz.cx[i]]);
+        for (int i = 0; i < mz->count; i++) {
+            int f = a3_flags(mz->exits[mz->cy[i]][mz->cx[i]]);
             def[i] = f == (JF_S | JF_W) ? 735 : f == (JF_S | JF_E) ? 736 : f == (JF_N | JF_W) ? 737 : f == (JF_N | JF_E) ? 738 : 0;
             fixed[i] = def[i] != 0;
         }
-    for (int tries = 0; type != A3M_SPIDER && mz.count < k_act3_mazes[k].rooms && tries < 4000; tries++) {
-        int from = (int)(rnd() % (uint32_t)mz.count), d = (int)(rnd() % 4u);
+    for (int tries = 0; type != A3M_SPIDER && mz->count < k_act3_mazes[k].rooms && tries < 4000; tries++) {
+        int from = (int)(rnd() % (uint32_t)mz->count), d = (int)(rnd() % 4u);
         if (!fixed[from])
-            maze_add(&mz, from, d);
+            maze_add(mz, from, d);
     }
     /* las especiales: la dirección de la primera es al azar y las demás siguen la ronda N, E, S, O */
-    int dir = (int)(rnd() % 4u), sp[3], nsp = 0;
+    int dir = (int)(rnd() % 4u), sp[5], nsp = 0;
     if (type == A3M_DUNGEON) { /* la subida y la bajada */
         sp[nsp++] = 695;
         sp[nsp++] = 699;
@@ -767,18 +914,57 @@ static void build_act3_maze(Map *m, int z)
         if (zone->floor == 101)
             sp[nsp++] = 792;
         sp[nsp++] = 788;
+    } else if (type == A3M_ICE) { /* la subida, la siguiente, la bajada; el tema (en el Glacial Trail) y el waypoint */
+        sp[nsp++] = 1018;
+        sp[nsp++] = 1022;
+        sp[nsp++] = 1026;
+        if (zone->floor == 115)
+            sp[nsp++] = 1030;
+        sp[nsp++] = 1034;
+    } else if (type == A3M_BAAL) { /* la bajada y, en el nivel 2, el waypoint */
+        sp[nsp++] = 1078;
+        if (zone->floor == 129)
+            sp[nsp++] = 1082;
     }
     for (int s = 0; s < nsp; s++) {
-        int od = (dir + s) % 4, r = a3_special(&mz, fixed, k_od[od]);
-        /* el orden de las piezas especiales en lvlprest.txt: O, E, S, N */
-        static const int k_slot[4] = { 3, 1, 2, 0 };
+        int od = (dir + s) % 4, r = a3_special(mz, fixed, k_od[od]);
+        /* el orden de las piezas especiales en lvlprest.txt: O, E, S, N
+           (los waypoints de hielo y las de la Fortaleza: N, S, E, O) */
+        static const int k_slot[4] = { 3, 1, 2, 0 }, k_nsew[4] = { 0, 2, 1, 3 };
         if (r >= 0)
-            def[r] = sp[s] + k_slot[od];
+            def[r] = sp[s] + (sp[s] == 1034 || sp[s] == 1078 || sp[s] == 1082 ? k_nsew[od] : k_slot[od]);
         else
-            fprintf(stderr, "%s: no entró una sala especial\n", zone->name);
+            missing++;
     }
-    /* las temáticas: un quinto de las salas, por lo menos dos (DRLGMAZE_RollAct_1_2_3_BasicPresets) */
-    for (int n = type == A3M_SPIDER ? 0 : (mz.count / 5 + 1 > 2 ? mz.count / 5 + 1 : 2), tries = 0; n > 0 && tries < 40; tries++) {
+    return missing;
+}
+
+static void build_act3_maze(Map *m, int z)
+{
+    const Zone *zone = &s_zones[z];
+    int k = 0;
+    while (k < (int)COUNT(k_act3_mazes) - 1 && k_act3_mazes[k].id != zone->floor)
+        k++;
+    int type = k_act3_mazes[k].type;
+    if (type == A3M_LAVA) {
+        build_lava(m, z, k_act3_mazes[k].room, k_act3_mazes[k].grid);
+        return;
+    }
+    /* Si una especial no entra (las salas libres tienen ocupado ese lado),
+       el original (DRLGMAZE_AddSpecialPreset) no la pone y el nivel queda
+       sin su waypoint o su salida: con la semilla 29, el Glacial Trail sin
+       waypoint. Se arma de nuevo con los números al azar que siguen, como
+       maze_build (la primera vuelta es la de siempre) */
+    Maze mz;
+    uint8_t fixed[MAZE_ROOMS], theme[MAZE_ROOMS] = { 0 };
+    int def[MAZE_ROOMS], missing = 0;
+    for (int attempt = 0; attempt < 60 && (attempt == 0 || missing); attempt++)
+        missing = a3_layout(&mz, fixed, def, k, zone);
+    if (missing)
+        fprintf(stderr, "%s: no entraron %d salas especiales\n", zone->name, missing);
+    /* las temáticas: un quinto de las salas, por lo menos dos (DRLGMAZE_RollAct_1_2_3_BasicPresets; en el Acto 5 no hay) */
+    for (int n = type == A3M_SPIDER || type >= A3M_ICE ? 0 : (mz.count / 5 + 1 > 2 ? mz.count / 5 + 1 : 2), tries = 0;
+         n > 0 && tries < 40; tries++) {
         int i = (int)(rnd() % (uint32_t)mz.count);
         if (!fixed[i] && !theme[i])
             theme[i] = 1, n--;
@@ -791,29 +977,102 @@ static void build_act3_maze(Map *m, int z)
                 d = 664;
             if (zone->floor == 85 && d == 661)
                 d = 663;
+        } else if (!d && type == A3M_TEMPLE) { /* NE, NW, SE (la de la subida) y SW */
+            d = f == (JF_N | JF_E) ? 1042 : f == (JF_N | JF_W) ? 1043 : f == (JF_S | JF_E) ? 1044 : 1045;
         } else if (!d) {
-            d = (type == A3M_DUNGEON ? 664 : type == A3M_SEWER ? 704 : 753) + f + (theme[i] ? 15 : 0);
+            d = (type == A3M_DUNGEON ? 664 : type == A3M_SEWER ? 704 : type == A3M_ICE ? 1002 : type == A3M_BAAL ? 1058 : 753) +
+                f + (theme[i] ? 15 : 0);
         }
         int room = k_act3_mazes[k].room;
+        if (getenv("D2_MAZEDUMP"))
+            printf("  %s sala %d (%d, %d) pieza %d salidas %d\n", zone->name, i, mz.cx[i], mz.cy[i], d, f);
         prest_stamp(m, z, d, -1, zone->x0 + mz.cx[i] * room, zone->y0 + mz.cy[i] * room);
+        room_add(zone->x0 + mz.cx[i] * room, zone->y0 + mz.cy[i] * room, room, room);
     }
 }
 
 /* ---- El mundo del Acto 3 ---- */
 
+/* lvlprest.txt y lvltypes.txt (las piezas de los Actos 3 y 4) */
+static void prest_tables_load(void)
+{
+    if (s_lvlprest_txt.rows)
+        return;
+    size_t n;
+    uint8_t *d = fs_read("data/global/excel/lvlprest.txt", &n);
+    if (!d || txt_load(d, n, &s_lvlprest_txt) != 0)
+        fprintf(stderr, "falta data/global/excel/lvlprest.txt\n");
+    free(d);
+    int col = txt_col(&s_lvlprest_txt, "Def");
+    for (int r = s_lvlprest_txt.rows - 1; r >= 1; r--) { /* (de abajo para arriba: queda la primera, como txt_find_row) */
+        const char *v = txt_get(&s_lvlprest_txt, r, col);
+        int def = v[0] ? atoi(v) : -1;
+        if (def >= 0 && def < PREST_DEFS)
+            s_prest_row[def] = r;
+    }
+    d = fs_read("data/global/excel/lvltypes.txt", &n);
+    if (!d || txt_load(d, n, &s_lvltypes_txt) != 0)
+        fprintf(stderr, "falta data/global/excel/lvltypes.txt\n");
+    free(d);
+}
+
+/* KillEdge y FillBlanks de cada archivo de lvlprest.txt (ninguno está en dos
+   filas con distintos), por el hash de su nombre desde "tiles/" */
+typedef struct {
+    uint32_t hash;
+    uint8_t  kill, fill;
+} PrestFile;
+static PrestFile *s_pfiles;
+static int        s_npfiles;
+
+static uint32_t pfile_hash(const char *p)
+{
+    uint32_t h = 2166136261u;
+    for (; *p; p++)
+        h = (h ^ (uint8_t)(*p == '\\' ? '/' : tolower((unsigned char)*p))) * 16777619u;
+    return h;
+}
+
+static int pfile_cmp(const void *a, const void *b)
+{
+    uint32_t x = ((const PrestFile *)a)->hash, y = ((const PrestFile *)b)->hash;
+    return x < y ? -1 : x > y;
+}
+
+/* map_set_stamp_rules: cómo se estampa cada pieza (DRLGPRESET_AddPresetRoomMapTiles).
+   El piso en blanco es el 30.1 en el Santuario Arcano y el 30.0 en los demás
+   (DRLGROOMTILE_LoadInitRoomTiles: nTileSequence = nivel == Santuario) */
+static int stamp_rules(const char *ds1_path, int *kill, int *blank)
+{
+    prest_tables_load();
+    const TxtTable *t = &s_lvlprest_txt;
+    if (!s_pfiles && t->rows > 1 && (s_pfiles = malloc((size_t)(t->rows * 6) * sizeof *s_pfiles)) != NULL) {
+        int ck = txt_col(t, "KillEdge"), cf = txt_col(t, "FillBlanks");
+        for (int r = 1; r < t->rows; r++)
+            for (int k = 0; k < 6; k++) {
+                char col[8];
+                snprintf(col, sizeof col, "File%d", k + 1);
+                const char *f = txt_get(t, r, txt_col(t, col));
+                if (f && f[0] && strcmp(f, "0") != 0)
+                    s_pfiles[s_npfiles++] = (PrestFile){ pfile_hash(f), (uint8_t)(atoi(txt_get(t, r, ck)) != 0),
+                                                         (uint8_t)(atoi(txt_get(t, r, cf)) != 0) };
+            }
+        qsort(s_pfiles, (size_t)s_npfiles, sizeof *s_pfiles, pfile_cmp);
+    }
+    const char *name = strstr(ds1_path, "tiles/");
+    name = name ? name + 6 : ds1_path;
+    PrestFile key = { pfile_hash(name), 0, 0 };
+    const PrestFile *e = s_pfiles ? bsearch(&key, s_pfiles, (size_t)s_npfiles, sizeof *s_pfiles, pfile_cmp) : NULL;
+    if (!e)
+        return 0;
+    *kill = e->kill;
+    *blank = e->fill ? 1 + (strncmp(name, "act2/arcane/", 12) == 0) : 0;
+    return 1;
+}
+
 static int layout_act3(Map *m)
 {
-    if (!s_lvlprest_txt.rows) {
-        size_t n;
-        uint8_t *d = fs_read("data/global/excel/lvlprest.txt", &n);
-        if (!d || txt_load(d, n, &s_lvlprest_txt) != 0)
-            fprintf(stderr, "falta data/global/excel/lvlprest.txt\n");
-        free(d);
-        d = fs_read("data/global/excel/lvltypes.txt", &n);
-        if (!d || txt_load(d, n, &s_lvltypes_txt) != 0)
-            fprintf(stderr, "falta data/global/excel/lvltypes.txt\n");
-        free(d);
-    }
+    prest_tables_load();
     s_jungle_interlink = (int)((rnd() >> 5) & 1u);
     s_njlinks = 0;
     /* En coordenadas del original (y hacia el sur): el muelle en (0, 0), la
@@ -897,18 +1156,7 @@ static int layout_act3(Map *m)
     s_pack_x = 0;
     s_pack_y = maxy - miny + 2 * CELL + PACK_GAP;
     s_pack_h = 0;
-    for (int k = 0; k < (int)COUNT(k_act3_mazes); k++) {
-        int x, y, w = k_act3_mazes[k].grid * k_act3_mazes[k].room + 1;
-        pack(w, w, &x, &y);
-        int z = add_zone(ZK_A3MAZE, k_act3_mazes[k].id, x, y, x + w, y + w);
-        add_level(k_act3_mazes[k].name, z, x, y, x + w, y + w, k_act3_mazes[k].groups, 1);
-    }
-    for (int k = 0; k < (int)COUNT(k_act3_presets); k++) {
-        int x, y, w = k_act3_presets[k].w, h = k_act3_presets[k].h;
-        pack(w, h, &x, &y);
-        int z = add_zone(ZK_A3PRESET, k_act3_presets[k].id, x, y, x + w, y + h);
-        add_level(k_act3_presets[k].name, z, x, y, x + w, y + h, k_act3_presets[k].groups, 1);
-    }
+    a3_add_dungeons(3);
     for (int i = 0; i < s_num_levels; i++) /* los saltos de las Vis de levels.txt (para buscar caminos) */
         for (int k = 0; k < 8; k++)
             add_jump(s_levels[i].zone, zone_of_level_id(s_levels[i].vis[k]));

@@ -260,7 +260,7 @@ int strings_load(const char *lang)
 {
     static const char *const files[] = { "levels",     "monsters",         "npcs",           "objects",
                                          "ui",         "item-names",       "item-nameaffixes", "item-modifiers", "item-runes", "item-gems", "skills",
-                                         "quests",     "vo",               "mercenaries" };
+                                         "quests",     "vo",               "mercenaries",    "shrines" };
     int loaded = 0;
     for (unsigned i = 0; i < sizeof files / sizeof files[0]; i++) {
         char path[128];
@@ -314,8 +314,12 @@ int str_voice_path(const char *key, char *out, size_t cap)
         snprintf(speaker, sizeof speaker, "cain");
     else if (strcmp(speaker, "greiz") == 0) /* la carpeta es "griez", como sus claves */
         snprintf(speaker, sizeof speaker, "griez");
+    else if (strcmp(speaker, "tyrael") == 0) /* la carpeta de D2R es "tyreal" (Actos 2 y 4) */
+        snprintf(speaker, sizeof speaker, "tyreal");
+    else if (strcmp(speaker, "drehya") == 0) /* Anya: su carpeta (Acto 5) */
+        snprintf(speaker, sizeof speaker, "anya");
     else if (!strcmp(speaker, "andariel") || !strcmp(speaker, "bloodraven") || !strcmp(speaker, "the countess") ||
-             !strcmp(speaker, "the smith"))
+             !strcmp(speaker, "the smith") || !strcmp(speaker, "baal"))
         snprintf(speaker, sizeof speaker, "monster");
     lower_into(file, sizeof file, v->file);
     lower_into(act, sizeof act, v->act ? v->act : "act1");

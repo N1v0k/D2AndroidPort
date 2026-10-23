@@ -327,6 +327,8 @@ static int nec_curse(Player *p, const SkillDef *s, int lvl)
     memset(&nc, 0, sizeof nc);
     nc.kind = look->nc;
     nc.ticks = skill_calc(s, SC_AURALEN, lvl, &c);
+    if (look->nc == NC_DIM || look->nc == NC_TERROR) /* (AiCurseDivisor: la mitad en Pesadilla, un cuarto en Infierno) */
+        nc.ticks /= s_dl_curse_div;
     nc.owner = (int)(p - s_pl);
     switch (s->kind) {
     case SK_AMPLIFY_DAMAGE:

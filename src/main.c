@@ -1,4 +1,6 @@
 #include "audio.h"
+#include "bot.h"
+#include "cinema.h"
 #include "fmt/fs.h"
 #include "charanim.h"
 #include "font.h"
@@ -95,7 +97,7 @@ static int parse_args(int argc, char **argv, Options *o)
     o->demo_angle = 20.0f;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--selftest")) {
-            int fails = map_selftest();
+            int fails = map_selftest() + bot_selftest();
             printf("prueba de la colisión: %s\n", fails ? "FALLA" : "BIEN");
             exit(fails ? 1 : 0);
         }
@@ -201,8 +203,8 @@ static int save_screenshot(const char *path)
 /* Dibuja al Bárbaro y a la Amazona en las 16 direcciones (en orden de
    giro, 0 = mirando hacia abajo) para revisar el orden de las capas.
    D2_SPRITE_TOKENS="wk" (o "wk,ne") y D2_SPRITE_MODE="sc,1ht,8" eligen los
-   personajes, la animación, la clase de arma y el cuadro: así se ven los
-   dibujos editados del Brujo (los .d2rw de tools/sprites_import.py).
+   personajes, la animación, la clase de arma y el cuadro (con un .d2rw al
+   lado del DCC, el dibujo editado).
    D2_SPRITE_ARMOR="med" o "hvy": el cuerpo con esa armadura (la cabeza, sin casco) */
 static int run_sprite_test(const Options *o)
 {
@@ -396,6 +398,7 @@ static int run_headless(const Options *o)
             MenuResult r = menu_tick(&in);
             dump_tick();
             if (r == MENU_START) {
+                game_set_difficulty(menu_difficulty());
                 game_start_slots(menu_players(), menu_slots(), menu_classes());
                 game_render(1.0f);
                 dump_close();
@@ -421,9 +424,10 @@ static int run_headless(const Options *o)
         }
         int r = 1;
         double last = 0.0;
-        /* Tope de tiempo de juego: 3 horas (la demostración pelea de verdad: 6);
-           con --frames N, a los N ticks (para perfilar un tramo y salir normal) */
-        int hours = getenv("D2_AUTOTEST_DEMO") ? 6 : 3;
+        /* Tope de tiempo de juego: 3 horas (la demostración pelea de verdad: 6
+           por acto, y la campaña son 15); con --frames N, a los N ticks (para
+           perfilar un tramo y salir normal) */
+        int hours = getenv("D2_AUTOTEST_DEMO") ? 6 * game_demo_acts() : 3;
         int cap = o->frames > 0 ? o->frames : hours * 3600 * TICK_RATE;
         for (int t = 0; r == 1 && t < cap; t++) {
             r = game_autotest_input(&in, last);
@@ -441,6 +445,14 @@ static int run_headless(const Options *o)
                               : (fx_age == 5 || fx_age == 30 || fx_age == 61 || fx_age == 100))) {
                 char shot[256];
                 snprintf(shot, sizeof shot, "%s_%d_%d.bmp", getenv("D2_FX_SHOTS"), fx_kind, fx_age);
+                game_render(1.0f);
+                save_screenshot(shot);
+            }
+            /* D2_OBJ_SHOTS=prefijo: el J1 abriendo un cofre, un barril... (a 1, 15 y 40 ticks) */
+            int ob_kind, ob_age = game_debug_obj(&ob_kind);
+            if (getenv("D2_OBJ_SHOTS") && (ob_age == 1 || ob_age == 15 || ob_age == 40)) {
+                char shot[256];
+                snprintf(shot, sizeof shot, "%s_%07d_%d_%d.bmp", getenv("D2_OBJ_SHOTS"), t - ob_age, ob_kind, ob_age);
                 game_render(1.0f);
                 save_screenshot(shot);
             }
@@ -485,6 +497,18 @@ static int run_headless(const Options *o)
                 demo_input(&in, o, t);
             game_tick(&in);
             dump_tick();
+            /* D2_SHOTS=prefijo,desde,hasta,cada: también acá (los proyectiles de un D2_SPAWN) */
+            if (getenv("D2_SHOTS")) {
+                char prefix[200] = "";
+                int from = 0, to = 0, step = 1;
+                if (sscanf(getenv("D2_SHOTS"), "%199[^,],%d,%d,%d", prefix, &from, &to, &step) >= 3 && t >= from &&
+                    t <= to && (t - from) % (step > 0 ? step : 1) == 0) {
+                    char shot[256];
+                    snprintf(shot, sizeof shot, "%s_%06d.bmp", prefix, t);
+                    game_render(1.0f);
+                    save_screenshot(shot);
+                }
+            }
             int every = getenv("D2_EVERY") ? atoi(getenv("D2_EVERY")) : 250;
             if (verbose && every > 0 && (t + 1) % every == 0) {
                 printf("tick %d (%.0f s):\n", t + 1, (t + 1) / (float)TICK_RATE);
@@ -534,11 +558,6 @@ static int run_window(const Options *o)
     double s_time = 0.0, s_logic = 0.0, s_draw = 0.0, s_upload = 0.0, s_present = 0.0, s_worst = 0.0;
     int s_frames = 0, s_ticks = 0;
 
-    /* Los gráficos de los monstruos de una zona nueva se decodifican en otro
-       hilo para que el juego no se trabe (las pruebas sin ventana cargan
-       todo en el momento, para que den siempre igual; D2_ASYNC=1 lo prueba) */
-    jobs_start();
-
     AppState state = ST_MENU;
     if (o->players > 0) {
         game_start(o->players);
@@ -551,6 +570,7 @@ static int run_window(const Options *o)
     memset(&in, 0, sizeof in);
     memset(&demo_in, 0, sizeof demo_in);
     int idle = 0, demo_next = 0; /* ticks con el menú quieto; la próxima pareja de la rotación */
+    int movie = 0;                /* se pasó una cinemática en este tick */
     double demo_ms = 0.0;
 
     while (!in.quit) {
@@ -568,8 +588,12 @@ static int run_window(const Options *o)
                 if (r == MENU_QUIT) {
                     in.quit = 1;
                 } else if (r == MENU_START) {
+                    game_set_difficulty(menu_difficulty());
                     game_start_slots(menu_players(), menu_slots(), menu_classes());
                     state = ST_GAME;
+                } else if (r == MENU_MOVIE) {
+                    in.quit = cinema_play(menu_movie()) == 1;
+                    movie = 1;
                 }
                 /* Quieto en el menú principal: el bot se pone a jugar solo */
                 idle = menu_is_main() && !input_any(&in) ? idle + 1 : 0;
@@ -588,6 +612,7 @@ static int run_window(const Options *o)
                     state = ST_MENU;
                 } else {
                     Uint64 l0 = SDL_GetPerformanceCounter();
+                    game_take_movie(); /* los bots no paran a ver cinemáticas */
                     if (game_autotest_input(&demo_in, demo_ms) != 1) {
                         /* Terminó el acto (o se trabó): otra, con las clases que siguen */
                         game_demo_stop();
@@ -609,6 +634,12 @@ static int run_window(const Options *o)
                     menu_open();
                     state = ST_MENU;
                 }
+                /* Fin de un acto: su cinemática, antes de seguir */
+                const char *mv = state == ST_GAME && !o->demo ? game_take_movie() : NULL;
+                if (mv) {
+                    in.quit = cinema_play(mv) == 1;
+                    movie = 1;
+                }
                 double lt = (double)(SDL_GetPerformanceCounter() - l0) / (double)freq * 1000.0;
                 t_logic += lt;
                 if (lt > t_worst)
@@ -623,6 +654,11 @@ static int run_window(const Options *o)
             input_clear_events(&in);
             acc -= tick_s;
             tick++;
+            if (movie) { /* el tiempo que duró la cinemática no se juega */
+                movie = 0;
+                acc = 0.0;
+                last = SDL_GetPerformanceCounter();
+            }
         }
 
         /* COLOR 16 BITS de la pausa (o D2_RGB565 si nunca se tocó) */
@@ -702,14 +738,43 @@ int main(int argc, char **argv)
        ventana solo si se pide con D2_SAVE_DIR. */
     const char *save_dir = getenv("D2_SAVE_DIR");
     game_set_save_dir(save_dir ? save_dir : o.headless ? NULL : "save");
+    cinema_set_dir(save_dir ? save_dir : o.headless ? NULL : "save");
 
-    int rc = 1;
-    ui_loading(0, 6); /* el original muestra la puerta mientras carga */
-    if (game_init() == 0) {
-        if (o.headless && getenv("D2_ASYNC"))
-            jobs_start();
-        rc = o.headless ? run_headless(&o) : run_window(&o);
+    /* D2_CINEMA_BENCH=nombre: cuánto tarda en decodificarse (sin pantalla);
+       D2_CINEMA=nombre: pasa esa y sale */
+    if (getenv("D2_CINEMA_BENCH") || (getenv("D2_CINEMA") && !o.headless)) {
+        int r = getenv("D2_CINEMA_BENCH") ? cinema_bench(getenv("D2_CINEMA_BENCH")) : cinema_play(getenv("D2_CINEMA"));
+        audio_shutdown();
+        input_shutdown();
+        video_shutdown();
+        SDL_Quit();
+        return r < 0 ? 1 : 0;
     }
+    /* Al arrancar, como el original: los logos de Blizzard y la presentación
+       (cada una se saltea con A, B, Start o Esc). No en las pruebas ni si se
+       entra directo a jugar (--players). */
+    int quit = 0;
+    if (!o.headless && !o.players && !o.demo && !getenv("D2_NO_CINEMA")) {
+        static const char *const k_start[] = { "new_bliz", "bliznorth", "d2intro" };
+        for (int i = 0; i < 3 && !quit; i++)
+            quit = cinema_play(k_start[i]) == 1;
+    }
+
+    int rc = quit ? 0 : 1;
+    if (!quit)
+        ui_loading(0, 6); /* el original muestra la puerta mientras carga */
+    /* Los gráficos de los monstruos de una zona nueva, los sonidos y los
+       paneles se cargan en otro hilo para que el juego no se trabe. Arranca
+       antes de game_init: lo que pide la carga (los sonidos de las
+       habilidades, las baldosas y los gráficos del pueblo) se hace ahí
+       mientras sigue. Las pruebas sin ventana cargan todo en el momento,
+       para que den siempre igual (D2_ASYNC=1 las hace como el juego). */
+    if (!quit && (!o.headless || getenv("D2_ASYNC")))
+        jobs_start();
+    if (!quit && !o.headless)
+        menu_preload(); /* (lo primero que se ve después de cargar) */
+    if (!quit && game_init() == 0)
+        rc = o.headless ? run_headless(&o) : run_window(&o);
 
     jobs_wait(3000); /* que nadie esté decodificando lo que se libera */
     audio_shutdown();

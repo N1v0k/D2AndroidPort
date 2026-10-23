@@ -22,6 +22,7 @@
 #define LIMIT          30000.0f /* el limitador no deja pasar de acá */
 #define SAMPLE_CACHE   (24u << 20) /* sonidos decodificados que se guardan (bytes) */
 #define SAMPLE_IDLE    (30 * TICK_RATE) /* uno sin sonar hace menos que esto no se suelta */
+#define SOUND_LATE     (TICK_RATE / 3)  /* uno suelto que tarda más en decodificarse ya no suena */
 
 typedef struct {
     int16_t *data;
@@ -39,7 +40,7 @@ typedef struct {
 typedef struct {
     /* Lo usa el mezclador (se cambia con el dispositivo bloqueado) */
     int           active;
-    const Sample *s;
+    const Sample *s;         /* NULL: espera que se decodifique (audio_tick lo pone) */
     uint64_t      pos, step; /* cuadro en 32.32 */
     int           loop;
     float         gl, gr;    /* ganancia actual */
@@ -49,6 +50,8 @@ typedef struct {
     int      group, def, handle;
     float    x, y, vol, env, env_step;
     unsigned age;
+    int      pitch;  /* (para el paso, si espera su sonido) */
+    uint32_t asked;  /* s_clock cuando se pidió */
 } Voice;
 
 static int        s_mode;
@@ -56,7 +59,7 @@ static TxtTable   s_table, s_envs;
 static SoundDef  *s_defs;
 static int        s_num_defs;
 static Sample   **s_samples;
-static uint8_t   *s_sample_busy; /* decodificándose en el hilo de trabajos */
+static uint8_t   *s_sample_busy; /* 1 decodificándose, 2 pedido al hilo de trabajos, 3 precarga pedida (puede no hacerse) */
 static uint32_t  *s_sample_used; /* tick de audio en que sonó por última vez */
 static uint32_t   s_clock;       /* ticks de audio_tick */
 static SDL_mutex *s_sample_mx;
@@ -95,6 +98,14 @@ static size_t  s_loaded_bytes;
 
 static int16_t s_music_buf[MIX_MAX * 2];
 static float   s_acc[MIX_MAX * 2];
+
+/* El sonido de una cinemática: cinema.c lo decodifica y lo deja en este
+   anillo (estéreo, AUDIO_RATE); mientras está abierto, lo demás queda en
+   pausa (la música sigue después desde donde estaba) */
+#define MOVIE_RING (AUDIO_RATE * 2) /* 2 segundos */
+static int16_t      s_movie_ring[MOVIE_RING * 2];
+static volatile int s_movie_on;
+static int          s_movie_read, s_movie_write; /* cuadros (el anillo nunca se llena del todo) */
 
 static uint32_t rnd(void)
 {
@@ -185,16 +196,30 @@ static void mix_stream(Stream *st, float *acc, int frames)
     st->gain = st->target;
 }
 
+static void mix_movie(float *acc, int frames)
+{
+    float g = (float)s_sfx_volume / 10.0f;
+    for (int i = 0; i < frames && s_movie_read != s_movie_write; i++) {
+        acc[2 * i] += s_movie_ring[2 * s_movie_read] * g;
+        acc[2 * i + 1] += s_movie_ring[2 * s_movie_read + 1] * g;
+        s_movie_read = (s_movie_read + 1) % MOVIE_RING;
+    }
+}
+
 static void mix(int16_t *out, int frames)
 {
     while (frames > 0) {
         int n = frames > MIX_MAX ? MIX_MAX : frames;
         memset(s_acc, 0, sizeof(float) * 2 * (size_t)n);
-        for (int i = 0; i < MAX_VOICES; i++)
-            if (s_voices[i].active)
-                mix_voice(&s_voices[i], s_acc, n);
-        mix_stream(&s_music_st, s_acc, n);
-        mix_stream(&s_voice_st, s_acc, n);
+        if (s_movie_on) {
+            mix_movie(s_acc, n);
+        } else {
+            for (int i = 0; i < MAX_VOICES; i++)
+                if (s_voices[i].active && s_voices[i].s)
+                    mix_voice(&s_voices[i], s_acc, n);
+            mix_stream(&s_music_st, s_acc, n);
+            mix_stream(&s_voice_st, s_acc, n);
+        }
 
         /* Limitador: si muchos sonidos juntos se pasarían del máximo, baja el
            volumen de todo (de golpe, mirando el pedazo entero) y lo vuelve a
@@ -225,6 +250,50 @@ static void callback(void *ud, Uint8 *stream, int len)
 {
     (void)ud;
     mix((int16_t *)stream, len / 4);
+}
+
+int audio_movie_begin(void)
+{
+    lock();
+    s_movie_read = s_movie_write = 0;
+    s_movie_on = 1;
+    unlock();
+    return s_dev != 0;
+}
+
+int audio_movie_push(const float *lr, int frames)
+{
+    if (!s_dev)
+        return frames; /* sin sonido: como si sonara */
+    lock();
+    int room = (s_movie_read - s_movie_write - 1 + MOVIE_RING) % MOVIE_RING, n = frames < room ? frames : room;
+    for (int i = 0; i < n; i++) {
+        for (int c = 0; c < 2; c++) {
+            float x = lr[2 * i + c] * 32767.0f;
+            s_movie_ring[2 * s_movie_write + c] = (int16_t)(x > 32767.0f ? 32767 : x < -32768.0f ? -32768 : (int)x);
+        }
+        s_movie_write = (s_movie_write + 1) % MOVIE_RING;
+    }
+    unlock();
+    return n;
+}
+
+int audio_movie_queued(void)
+{
+    if (!s_dev)
+        return 0;
+    lock();
+    int n = (s_movie_write - s_movie_read + MOVIE_RING) % MOVIE_RING;
+    unlock();
+    return n;
+}
+
+void audio_movie_end(void)
+{
+    lock();
+    s_movie_on = 0;
+    s_movie_read = s_movie_write = 0;
+    unlock();
 }
 
 void audio_render(int16_t *out, int frames)
@@ -324,14 +393,13 @@ static int load_sounds(void)
     return 0;
 }
 
-/* El sonido decodificado (la primera vez lo decodifica). Lo puede llamar
-   también el hilo de trabajos: si el otro lo está decodificando, devuelve
-   NULL (esa vez no suena) en vez de esperarlo. */
+/* El sonido decodificado (la primera vez lo decodifica), en el hilo de
+   trabajos: si otro lo está decodificando, devuelve NULL en vez de esperarlo */
 static Sample *get_sample(int i)
 {
     SDL_LockMutex(s_sample_mx);
     Sample *have = s_samples[i];
-    if (have || s_sample_busy[i]) {
+    if (have || s_sample_busy[i] == 1) {
         SDL_UnlockMutex(s_sample_mx);
         return have == &s_missing ? NULL : have;
     }
@@ -373,6 +441,34 @@ static void preload_job(void *ptr, int i)
     get_sample(i);
 }
 
+/* El sonido para hacerlo sonar ya, sin decodificarlo en el hilo del juego
+   (en la Pi tardaba de 5 a 40 ms cada uno la primera vez, y el ambiente de
+   una zona 300): si no está, lo pide al hilo de trabajos, adelante de lo que
+   espera, y devuelve NULL. *missing: no existe (no va a sonar) */
+static const Sample *sample_ready(int i, int *missing)
+{
+    SDL_LockMutex(s_sample_mx);
+    Sample *have = s_samples[i];
+    int ask = !have && (s_sample_busy[i] == 0 || s_sample_busy[i] == 3);
+    if (ask)
+        s_sample_busy[i] = 2;
+    SDL_UnlockMutex(s_sample_mx);
+    if (ask) {
+        if (!jobs_push_first(preload_job, NULL, i))
+            jobs_push(preload_job, NULL, i); /* sin el otro hilo: ahora */
+        SDL_LockMutex(s_sample_mx);
+        have = s_samples[i];
+        SDL_UnlockMutex(s_sample_mx);
+    }
+    *missing = have == &s_missing;
+    return *missing ? NULL : have;
+}
+
+static uint64_t voice_step(const Sample *s, int pitch)
+{
+    return (((uint64_t)s->rate << 32) / AUDIO_RATE) * (uint64_t)(pitch > 0 ? pitch : 100) / 100;
+}
+
 void audio_preload(int sound)
 {
     if (s_mode == AUDIO_OFF || sound < 0 || sound >= s_num_defs)
@@ -380,8 +476,15 @@ void audio_preload(int sound)
     int n = s_defs[sound].group > 1 ? s_defs[sound].group : 1;
     for (int i = sound; i < sound + n && i < s_num_defs; i++) {
         s_sample_used[i] = s_clock; /* recién pedido: que el tope no lo suelte enseguida */
-        if (!s_samples[i])
-            jobs_push(preload_job, NULL, i); /* en otro hilo si anda (jobs.h) */
+        /* Una vez cada uno (los objetos comparten el sonido de caída): en
+           otro hilo si anda, después de los gráficos (jobs.h); si no, ahora */
+        SDL_LockMutex(s_sample_mx);
+        int ask = !s_samples[i] && !s_sample_busy[i];
+        if (ask)
+            s_sample_busy[i] = 3;
+        SDL_UnlockMutex(s_sample_mx);
+        if (ask)
+            jobs_push_idle(preload_job, NULL, i);
     }
 }
 
@@ -511,9 +614,12 @@ int audio_play_vol(int sound, float x, float y, int volume)
         pick = sound + (int)(rnd() % (uint32_t)n);
     }
     const SoundDef *d = &s_defs[pick];
-    const Sample *smp = get_sample(pick);
-    if (!smp)
+    int missing;
+    const Sample *smp = sample_ready(pick, &missing); /* NULL: arranca cuando esté (audio_tick) */
+    if (missing)
         return 0;
+    if (!smp && first->group > 1)
+        audio_preload(sound); /* las otras versiones también, para la próxima */
     s_sample_used[pick] = s_clock;
 
     /* Cuántos de este mismo sonido están sonando */
@@ -544,7 +650,9 @@ int audio_play_vol(int sound, float x, float y, int volume)
     nv.env = d->fade_in ? 0.0f : 1.0f;
     nv.env_step = d->fade_in ? 1.0f / d->fade_in : 0.0f;
     int pitch = d->pitch_min + (d->pitch_max > d->pitch_min ? (int)(rnd() % (uint32_t)(d->pitch_max - d->pitch_min + 1)) : 0);
-    nv.step = (((uint64_t)smp->rate << 32) / AUDIO_RATE) * (uint64_t)(pitch > 0 ? pitch : 100) / 100;
+    nv.pitch = pitch;
+    nv.asked = s_clock;
+    nv.step = smp ? voice_step(smp, pitch) : 0;
     spatial(&nv, &nv.tl, &nv.tr);
     if (!nv.loop && nv.tl <= 0.0f && nv.tr <= 0.0f)
         return 0; /* muy lejos: no se oye */
@@ -697,9 +805,7 @@ void audio_environment(int env)
     audio_music(song[0] ? song : NULL);
     s_scene_handle = audio_play_name(env_get(env, "Day Ambience"), AUDIO_NOPOS, AUDIO_NOPOS);
     s_event_sound = audio_find(env_get(env, "Day Event"));
-    /* El del pueblo solo está en alta definición: van los pájaros del campo */
-    if (s_event_sound >= 0 && !get_sample(s_event_sound))
-        s_event_sound = audio_find("event_wild_day_1");
+    audio_preload(s_event_sound); /* (si no está, audio_tick pone otro) */
     s_event_delay = atoi(env_get(env, "Event Delay"));
     if (s_event_delay < 25)
         s_event_delay = 25;
@@ -854,10 +960,33 @@ void audio_tick(void)
 
     /* Ruidos sueltos del ambiente (pájaros, viento, goteras) cerca de un jugador */
     if (s_event_sound >= 0 && s_num_listeners > 0 && --s_event_timer <= 0) {
+        int missing;
+        sample_ready(s_event_sound, &missing);
+        if (missing) /* el del pueblo solo está en alta definición: van los pájaros del campo */
+            s_event_sound = audio_find("event_wild_day_1");
         int who = (int)(rnd() % (uint32_t)s_num_listeners);
         float a = (float)(rnd() % 628) / 100.0f, r = 4.0f + (float)(rnd() % 1000) / 100.0f;
         audio_play(s_event_sound, s_lx[who] + cosf(a) * r, s_ly[who] + sinf(a) * r);
         s_event_timer = s_event_delay / 2 + (int)(rnd() % (uint32_t)s_event_delay);
+    }
+
+    /* Los que esperan su sonido arrancan apenas está decodificado; uno suelto
+       que tarda más de SOUND_LATE ya no (sonaría tarde) */
+    for (int i = 0; i < MAX_VOICES; i++) {
+        Voice *v = &s_voices[i];
+        if (!v->active || v->s)
+            continue;
+        int missing = 0;
+        const Sample *smp = v->kill ? NULL : sample_ready(v->def, &missing);
+        if (!smp && !v->kill && !missing && (v->loop || s_clock - v->asked <= SOUND_LATE))
+            continue;
+        if (smp)
+            s_sample_used[v->def] = s_clock;
+        lock();
+        v->step = smp ? voice_step(smp, v->pitch) : 0;
+        v->s = smp;
+        v->active = smp != NULL;
+        unlock();
     }
 
     /* Fundidos y volumen según dónde está cada uno */

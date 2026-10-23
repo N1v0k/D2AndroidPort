@@ -24,7 +24,7 @@ typedef struct BotNav BotNav;
 enum {
     BOT_ARRIVED, /* ya llegó (a menos de `reach` del destino) */
     BOT_MOVING,  /* caminar hacia *dx, *dy (dirección del mundo, sin normalizar) */
-    BOT_USE,     /* está al lado de una escalera o un portal: apretar el botón de acción */
+    BOT_USE,     /* está al lado de una escalera, un portal o una almohadilla: apretar el botón de acción */
     BOT_NO_PATH, /* no hay camino (ni por otras zonas) */
 };
 
@@ -42,5 +42,22 @@ int bot_nav_step(BotNav *n, const Map *m, uint32_t tick, float px, float py, int
    cuánto tardaron (en total y lo más que tardó en un solo tick, en ms) */
 void bot_nav_stats(const BotNav *n, int *plans, long *expanded);
 void bot_nav_timing(const BotNav *n, double *total_ms, double *worst_ms);
+
+int bot_selftest(void); /* --selftest: el paso en diagonal del A*; cuántas fallaron */
+
+/* Lo que se rompe o se abre para pasar (una urna o un barril en un
+   pasillo): fn(sx, sy) = 1 si ese subtile lo tapa uno de esos. El camino
+   pasa por ahí y el que lo sigue lo usa al llegar (game.c) */
+void bot_nav_set_breakable(int (*fn)(int sx, int sy));
+
+/* Lo que lleva de un lugar a otro de la misma zona sin caminar (las
+   almohadillas del Santuario Arcano): se usa con A a menos de `reach` de
+   su rectángulo (x0, y0)-(x1, y1) y se llega a (lx, ly). fn llena `out` con
+   los que hay en el rectángulo (en subtiles) y devuelve cuántos; el camino
+   pasa por ellos y bot_nav_step devuelve BOT_USE al lado del que toca. */
+typedef struct {
+    float x0, y0, x1, y1, reach, lx, ly;
+} BotJump;
+void bot_nav_set_jumps(int (*fn)(int x0, int y0, int x1, int y1, BotJump *out, int max));
 
 #endif

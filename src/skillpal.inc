@@ -121,6 +121,7 @@ static void aura_reset(Player *o)
     o->au_mana_regen = o->au_stam_regen = o->au_stam_pct = o->au_thorns = o->au_thorns_flat = 0;
     o->au_undead_dmg = o->au_undead_ar = 0;
     o->au_life_pct = 0;
+    o->au_got_n = 0;
     memset(o->au_res, 0, sizeof o->au_res);
     memset(o->au_res_max, 0, sizeof o->au_res_max);
     memset(o->au_elem_min, 0, sizeof o->au_elem_min);
@@ -181,6 +182,10 @@ static void aura_give(Player *o, const Player *c, const SkillDef *s, int lvl)
 {
     SkillCtx x = pctx(c);
     int self = o == c, own = self && !s->passive_always;
+    if (o->au_got_n < 4) { /* (su ícono arriba de la barra) */
+        o->au_got_cls[o->au_got_n] = (int8_t)c->cls;
+        o->au_got_skill[o->au_got_n++] = (int16_t)(s - skills_get(c->cls, 0));
+    }
     if (party_aura(s->kind))
         for (int k = 0; k < 3; k++) {
             const char *stat = s->aurastat[k];
@@ -966,7 +971,7 @@ static void pal_tick(Player *p)
 /* El Martillo: la próxima posición en la espiral (el centro queda donde lo tiró) */
 static void hammer_tick(Missile *mi)
 {
-    float v = (18.0f + (float)(mi->age < 12 ? mi->age : 12)) * (5.0f / 6.0f / TICK_RATE); /* Vel 18 -> 30 */
+    float v = missiles_speed(mi); /* Vel 18 que acelera (Accel 250) hasta MaxVel 30 */
     float r = HAMMER_PITCH * mi->ang;
     mi->ang += v / sqrtf(r * r + HAMMER_PITCH * HAMMER_PITCH);
     if (mi->ang >= HAMMER_END) { /* terminó el camino */
@@ -978,16 +983,17 @@ static void hammer_tick(Missile *mi)
     mi->vy = mi->my + r * sinf(mi->ang) - mi->y;
 }
 
-/* Rayo sagrado: cura a los otros jugadores que toca (una vez a cada uno) */
-static void holy_heal(Missile *mi)
+/* Rayo sagrado: cura a los otros jugadores que toca en su camino (una vez a cada uno) */
+static void holy_heal(Missile *mi, const int (*cells)[2], int nc)
 {
     if (mi->burn_max <= 0)
         return;
     for (int k = 0; k < s_num_players; k++) {
         Player *o = &s_pl[k];
-        float dx = o->x - mi->x, dy = o->y - mi->y;
-        if (k == mi->owner || o->state >= PS_DYING || dx * dx + dy * dy > MISSILE_HIT_RADIUS * MISSILE_HIT_RADIUS ||
-            already_hit(mi, -1 - k))
+        int c = 0;
+        while (c < nc && !missiles_touches(missiles_size(mi), cells[c][0], cells[c][1], o->x, o->y, PLAYER_FOOT))
+            c++;
+        if (k == mi->owner || o->state >= PS_DYING || c == nc || already_hit(mi, -1 - k))
             continue;
         o->hp += roll(mi->burn_min, mi->burn_max);
         if (o->hp > o->hp_max)

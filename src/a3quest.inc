@@ -27,14 +27,7 @@
      morir Mefisto sube el puente de sangre y se abre el portal rojo.
    Más la palanca de las cloacas, que abre la escalera al nivel 2.
 
-   shortcut: el portal rojo no lleva a ningún lado (el Acto 4 no está). */
-
-enum {
-    A3F_LK = 2, A3F_GM = 4, A3F_FJ = 8, A3F_CAUSEWAY = 16, /* el grupo llegó ahí: ya se puede pedir la misión */
-    A3F_SEEN_EYE = 32, A3F_SEEN_BRAIN = 64, A3F_SEEN_HEART = 128, A3F_SEEN_FLAIL = 256, /* las que Caín comentó */
-    A3F_LIFE = 512,     /* ya tomó la Poción de la vida */
-    A3F_HIRED = 1024,   /* ya usó el mercenario gratis de Asheara */
-};
+   El portal rojo lleva al Acto 4 (las marcas A3F_* están en game.c). */
 
 static int s_a3_lever;        /* la palanca de las cloacas, en esta partida */
 static int s_a3_opened;       /* los que ya se abrieron en esta partida (bit por k_a3_once) */
@@ -311,7 +304,7 @@ static const char *a3_action(const Player *p, const char *cls)
         }
         return tr("Hace falta la Voluntad de Khalim en la mano");
     }
-    if (strcmp(cls, "HellGate") == 0 && s_a3_meph_dead)
+    if (strcmp(cls, "HellGate") == 0 && (s_a3_meph_dead || party_max(offsetof(Player, meph_q)) >= 2))
         return tr("A: Entrar al portal");
     return NULL;
 }
@@ -397,7 +390,15 @@ static int a3_interact(Player *p, const char *cls, int u, float ux, float uy)
         return 1;
     }
     if (strcmp(cls, "HellGate") == 0) {
-        show_message(p, "El Acto 4 todavía no está");
+        /* Al Acto 4, los dos; la primera vez, con su cinemática
+           (QUESTS_HellPortalActChange) */
+        if (!s_a3_meph_dead && party_max(offsetof(Player, meph_q)) < 2)
+            return 1;
+        if (party_lacks(offsetof(Player, a3_flags), A3F_HELLGATE))
+            queue_movie("act04start");
+        for (int i = 0; i < s_num_players; i++)
+            s_pl[i].a3_flags |= A3F_HELLGATE;
+        act_switch(4);
         return 1;
     }
     return 0;
@@ -453,6 +454,8 @@ static void a3_zone_loaded(int z)
    la del nivel 2 de las cloacas, hasta tirar de la palanca) */
 static const char *a3_warp_closed(const Warp *w)
 {
+    if (s_act == 5) /* (los del Acto 5: a5quest.inc) */
+        return a5_warp_closed(w);
     if (s_act != 3)
         return NULL;
     if (w->to == world_level_zone(100) && w->from == world_level_zone(83) && !a3_orb_smashed())
@@ -560,6 +563,12 @@ static void a3_quest_tick(void)
         }
         if (units_find_all("HellGate", &obj, 1) == 1)
             units_object_mode(obj, "op", "on");
+        /* y la Piedra de Mefisto (ACT3Q6_Callback08: la de la Forja Infernal del Acto 4), para los que no la tienen */
+        float mx, my;
+        units_position(id, 1.0f, &mx, &my);
+        for (int i = 0, n = 0; i < s_num_players; i++)
+            if (!player_has(&s_pl[i], "mss") && s_pl[i].forge_q < 4 && !(s_pl[i].a4_flags & A4F_STONE))
+                drop_at("mss", 0, mx + 0.8f * (float)n++, my);
         quest_done("qstsa3q6", "music_quest_andariel");
         for (int i = 0; i < s_num_players; i++)
             player_say(&s_pl[i], "act3_complete_guardian");

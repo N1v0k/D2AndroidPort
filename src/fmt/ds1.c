@@ -157,6 +157,25 @@ int ds1_load(const uint8_t *data, size_t size, Ds1 *out)
             }
         }
     }
+    /* Los grupos de sustitución (DRLGPRESET_ParseDS1File) */
+    if (out->version >= 12 && has_subst && !r.err) {
+        if (out->version >= 18)
+            rb_skip(&r, 4);
+        int32_t n = rb_i32(&r);
+        if (!r.err && n > 0 && n < 4096) {
+            out->groups = calloc((size_t)n, sizeof *out->groups);
+            for (int i = 0; out->groups && i < n && !r.err; i++) {
+                Ds1Group *g = &out->groups[i];
+                g->x = rb_i32(&r);
+                g->y = rb_i32(&r);
+                g->w = rb_i32(&r);
+                g->h = rb_i32(&r);
+                g->alts = out->version >= 13 ? rb_i32(&r) : 0;
+                if (!r.err)
+                    out->num_groups = i + 1;
+            }
+        }
+    }
     return 0;
 }
 
@@ -170,5 +189,6 @@ void ds1_free(Ds1 *m)
     free(m->floors);
     free(m->shadows);
     free(m->objects);
+    free(m->groups);
     memset(m, 0, sizeof *m);
 }

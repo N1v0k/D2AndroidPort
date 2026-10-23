@@ -19,7 +19,9 @@
 #include <string.h>
 
 #define MAX_UNITS   4096 /* con todo el Acto 2 armado (las pruebas) pasa de 2048 */
-#define MAX_GFX     128
+#define MON_SKILLS  8    /* Skill1..Skill8 de monstats.txt */
+#define RIDE_DY     48   /* el diablillo montado: cuántos píxeles más arriba (el lomo de la bestia de asedio) */
+#define MAX_GFX     192 /* el Acto 5 entero armado (D2_ZONETEST) pasaba de 128 y los últimos objetos no salían */
 /* Gráficos que ya no usa nadie: se guardan hasta este total por si se
    vuelve a la zona (más allá se libera el que hace más que no se usa) */
 #define GFX_CACHE_BYTES (24u << 20)
@@ -30,8 +32,14 @@
 /* Velocidad de monstats.txt -> subtiles por segundo (misma escala que los jugadores) */
 #define SPEED_PER_VELOCITY (5.0f / 6.0f)
 
-#define AGGRO_RANGE 9.0f  /* a esta distancia (en subtiles) un monstruo te ve */
-#define CHASE_RANGE 18.0f /* y te sigue hasta esta */
+/* Un monstruo te ve apenas está en tu pantalla (el rectángulo de 800x600
+   centrado en el jugador) y te sigue hasta que salís un cuarto más allá del
+   borde. En el original no hay una distancia única (aidist está vacía en
+   monstats: cada IA mira la suya) y los monstruos piensan cuando su sala
+   está activa, más o menos lo que entra en pantalla. Antes eran 9 subtiles
+   para verte y 18 para seguirte. */
+#define CHASE_SCREEN 1.25f
+#define CHASE_RANGE  18.0f /* (lo mínimo para seguir: los que vuelven a su lugar) */
 #define MELEE_REACH 1.4f  /* distancia entre centros para poder pegar (los de tamaño 1) */
 
 /* Modificadores de los jefes (Mod1..Mod3 de superuniques.txt, números de
@@ -45,7 +53,7 @@ enum {
 #define SURROUND_NEAR 6.0f /* a esta distancia del jugador busca un lugar a su alrededor */
 
 enum { ANIM_IDLE, ANIM_WALK, ANIM_ATTACK, ANIM_HIT, ANIM_DEATH, ANIM_DEAD, ANIM_ATTACK2, ANIM_SKILL, ANIM_RUN,
-       ANIM_CAST, ANIM_COUNT };
+       ANIM_CAST, ANIM_SKILL2, ANIM_SKILL3, ANIM_SKILL4, ANIM_COUNT };
 
 #define RANGED_MAX   9.0f /* a esta distancia los que tiran proyectiles empiezan a disparar */
 #define MAX_KILLS    32
@@ -85,6 +93,36 @@ typedef struct {
     uint32_t     idle_since;        /* cuándo dejó de usarlo la última unidad */
 } UnitGfx;
 
+/* Una de las tablas de colores de palshift.dat de un tipo de monstruo
+   (mon_palshift), leída en el hilo de trabajos */
+#define PALSHIFT_MAX 512
+enum { PS_LOADING, PS_SAME, PS_READY }; /* PS_SAME: no está o no cambia nada */
+typedef struct {
+    char    token[8];
+    int     idx;      /* cuál de las 8 */
+    int     state;    /* PS_* (job_flag_get/set) */
+    uint8_t tab[256];
+} PalShift;
+
+static void palshift_job(void *ptr, int arg)
+{
+    (void)arg;
+    PalShift *p = ptr;
+    char path[96];
+    snprintf(path, sizeof path, "data/global/monsters/%s/cof/palshift.dat", p->token);
+    size_t n;
+    uint8_t *d = fs_read(path, &n);
+    int state = PS_SAME;
+    if (d && n >= 8 * 256) {
+        memcpy(p->tab, d + p->idx * 256, 256);
+        for (int c = 0; c < 256 && state == PS_SAME; c++)
+            if (p->tab[c] != c)
+                state = PS_READY;
+    }
+    free(d);
+    job_flag_set(&p->state, state);
+}
+
 /* Sonidos de un tipo de monstruo (monsounds.txt). Las demoras están en
    cuadros de 25 por segundo, como los ticks. */
 typedef struct {
@@ -117,6 +155,8 @@ typedef struct {
     int         anim_acc;
     int         shadow;
     int         solid; /* no se lo puede atravesar */
+    int         killable; /* killable de monstats.txt: con 0 no le llega daño ni es enemigo para los
+                             jugadores (SUNITDMG_ApplyDamage): Baal en su trono, los vigías de las catapultas */
     float       radius; /* tamaño (SizeX de monstats2.txt): 0.5, 0.75 o 1 subtile */
     int         foot;   /* lo que ocupa contra las paredes: 1 subtile, 2 cruz, 3 cuadrado de 3x3 */
     uint16_t    move_mask; /* los COLL_* con los que choca al moverse (Path.cpp: caminando o volando) */
@@ -145,10 +185,10 @@ typedef struct {
     const struct MonSeq *seq; /* su secuencia de ataque (la Estocada) o la de la habilidad que está usando */
     int jab;           /* este ataque es la secuencia */
     int merc_spell;    /* el Lobo de Hierro: qué hechizo lanza ahora (0 o 1) */
-    const struct MonSeq *seqs[4]; /* las de sus habilidades (Sk1mode..Sk4mode de monstats.txt) */
-    char skill[4][24];            /* Skill1..Skill4 */
-    int8_t  sk_anim[4];           /* el modo de cada una (ANIM_*, -1 = una secuencia o ninguno) */
-    int16_t sk_lvl[4];            /* y su nivel (Sk1lvl..Sk4lvl) */
+    const struct MonSeq *seqs[MON_SKILLS]; /* las de sus habilidades (Sk1mode..Sk8mode de monstats.txt) */
+    char skill[MON_SKILLS][24];            /* Skill1..Skill8 (Diablo tiene 7) */
+    int8_t  sk_anim[MON_SKILLS];           /* el modo de cada una (ANIM_*, -1 = una secuencia o ninguno) */
+    int16_t sk_lvl[MON_SKILLS];            /* y su nivel (Sk1lvl..Sk8lvl) */
     int  seq_skill;               /* cuál está usando */
     char base[24];                /* BaseId de monstats.txt (la manada) */
     int  s1_min, s1_max;          /* el daño de su habilidad (S1MinD, S1MaxD) */
@@ -169,6 +209,17 @@ typedef struct {
     char    display_buf[48]; /* el nombre del campeón ("Caído campeador") */
     int     heal_target, heal_pct; /* el sacerdote cura a ese aliado en el cuadro del lanzamiento */
     float   leap_x0, leap_y0, leap_x1, leap_y1; /* el salto: de dónde a dónde */
+    /* Los hechizos del Acto 4 (monai4.inc) */
+    int8_t  a4_hit;         /* A4H_*: lo que hace en el cuadro de golpe de la animación en curso */
+    int8_t  a4_k;           /* con su habilidad k (Skill1 = 0) */
+    float   a4_x, a4_y;     /* dónde (el nido de la madre, la comida del Corpulento) */
+    int     a4_corpse;      /* el cadáver que come */
+    int     inferno_end;    /* el aliento sostenido (MonInferno, DiabLight): hasta ese tick (s_unit_ticks) */
+    int     inferno_frame;  /* en ese cuadro de la animación (monstats2.txt InfernoAnim) */
+    int     inferno_len;    /* y lo que dura cada llama (cuadros) */
+    int     bone_armor;     /* lo que le queda a la Armadura de hueso (MonBoneArmor) */
+    int8_t  a4_curse;       /* A4C_*: la maldición que tira en el cuadro de golpe */
+    uint8_t soft;           /* su cadáver se come (monstats2.txt soft: el Corpulento) */
 
     /* Efectos de las habilidades de los jugadores */
     int flee_ticks;  /* Aullido: escapa de los jugadores */
@@ -190,6 +241,12 @@ typedef struct {
     int war_goat, berserk_ticks;   /* el hombre cabra: su nivel; Furia (sin defensa mientras dura) */
     int buff_ticks, buff_pdr, buff_def, buff_regen, buff_steal; /* Atiborrarse */
     int enrage_ticks, enrage_dmg;  /* Sigilo de rencor: enfurecido */
+    int lust_ticks;                /* el látigo del capataz (bloodlust): +50 % de defensa (lo demás, con haste y enrage) */
+    int pregnant;                  /* preñado por una madre pútrida (Impregnate): al morir sale un gusano */
+    int ride, rider;               /* el diablillo montado: su bestia de asedio + 1; la bestia: su diablillo + 1 */
+    int shout_ticks, shout_pct;    /* el Grito de Madawc: más defensa (skill_armor_percent) */
+    int goal;                      /* un neutral que va hacia (goal_x, goal_y): los presos del Acto 5 a su portal */
+    float goal_x, goal_y;
     int no_bind;                   /* jefe de misión o de nombre propio: no se lo vincula */
     float buff_regen_acc;
     int conv_ticks, conv_def_pct, conv_res; /* Convicción: menos defensa y resistencias */
@@ -198,6 +255,7 @@ typedef struct {
     /* Los esbirros del Nigromante */
     int   pet_ticks;          /* le queda (Revivir, los muros de hueso); 0 = siempre */
     int   pet_static;         /* el Muro y la Prisión de hueso: no se mueve ni pelea */
+    int   barb;               /* aliado sin dueño: los bárbaros del Acto 5 (barb_spawn) */
     int   pet_slow;           /* gólem de arcilla: % que frena al que golpea */
     int   pet_steal, pet_steal_owner; /* gólem de sangre */
     int   pet_thorns;         /* gólem de hierro */
@@ -207,7 +265,7 @@ typedef struct {
     int   revivable;          /* revive de monstats2.txt */
     int   cloak_ticks, cloak_def, cloak_blind; /* Manto de sombras: defensa que les baja y si los ciega */
     int   dark;               /* el Guerrero de las sombras: se dibuja oscuro */
-    const uint8_t *pshift;    /* sus colores (palshift.dat de su carpeta); NULL = los de siempre */
+    const PalShift *pshift;   /* sus colores (palshift.dat de su carpeta, unit_palshift); NULL = los de siempre */
     int   light;              /* radio de su luz (monstats2.txt Light): Duriel, el Invocador, los magos... */
     /* Las maldiciones del Nigromante */
     int   nc_kind, nc_ticks, nc_owner;
@@ -249,6 +307,8 @@ typedef struct {
        CycleAnim de objects.txt): las Piedras Cairn traen apagada, prendiéndose
        y prendida en los mismos 4 cuadros, y sin esto titilaban */
     int      obj_first, obj_frames, obj_cycle;
+    int      obj_mode;         /* el modo de ahora (0 nu, 1 op, 2 on...: k_obj_modes) */
+    int      obj_state;        /* lo que guarda objects.inc: trampa, cerrado, santuario, cargas del pozo */
 
     /* Mercenaria de un jugador (y la Valquiria, `pet`: pelea cuerpo a cuerpo) */
     int       merc, pet, owner, hidden;
@@ -270,7 +330,67 @@ static struct { int unit, owner, exp; } s_kills[MAX_KILLS];
 static int s_num_kills;
 
 static TxtTable   s_objpreset, s_monpreset, s_objects, s_monstats, s_monstats2, s_monlvl, s_superuniques;
-static TxtTable   s_monsounds, s_monequip, s_skilltab;
+static TxtTable   s_monsounds, s_monequip, s_skilltab, s_monumod, s_difflv;
+
+/* La dificultad (docs/plan-dificultades.md): las columnas de monstats.txt
+   y superuniques.txt con "(N)" o "(H)", las de la expansión de monlvl.txt
+   ("L-HP(N)") y la fila de difficultylevels.txt */
+static int s_diff;
+static int s_cold_div = 1, s_freeze_div = 1; /* MonsterColdDivisor y MonsterFreezeDivisor */
+
+static int diff_int(const char *col, int def);
+
+void units_set_difficulty(int diff)
+{
+    s_diff = diff < 0 ? 0 : diff > 2 ? 2 : diff;
+    s_cold_div = diff_int("MonsterColdDivisor", 1);
+    s_freeze_div = diff_int("MonsterFreezeDivisor", 1);
+    s_cold_div = s_cold_div > 0 ? s_cold_div : 1;
+    s_freeze_div = s_freeze_div > 0 ? s_freeze_div : 1;
+}
+
+int units_difficulty_int(const char *col, int def)
+{
+    return diff_int(col, def);
+}
+
+/* El nombre de la columna en esta dificultad ("minHP" -> "minHP(N)"), si
+   la tabla la tiene; si no, la de siempre */
+static const char *dcol(const TxtTable *t, const char *col)
+{
+    static char ring[8][40];
+    static unsigned next;
+    if (s_diff == 0)
+        return col;
+    char *b = ring[next++ & 7];
+    snprintf(b, sizeof ring[0], "%s(%c)", col, s_diff == 1 ? 'N' : 'H');
+    return txt_col(t, b) >= 0 ? b : col;
+}
+
+/* La columna de monlvl.txt: en Normal la de siempre (igual a la de la
+   expansión); en las otras, la de la expansión ("L-DM(H)") */
+static const char *lvcol(const char *col)
+{
+    static char ring[8][16];
+    static unsigned next;
+    if (s_diff == 0)
+        return col;
+    char *b = ring[next++ & 7];
+    snprintf(b, sizeof ring[0], "L-%s(%c)", col, s_diff == 1 ? 'N' : 'H');
+    return b;
+}
+
+/* Una columna de difficultylevels.txt en esta dificultad */
+static int diff_int(const char *col, int def)
+{
+    return s_difflv.rows > s_diff + 1 ? txt_get_int(&s_difflv, s_diff + 1, col, def) : def;
+}
+
+/* "constants" de la fila `id` de monumod.txt (la vida de más de los jefes, por dificultad) */
+static int umod_const(int id, int def)
+{
+    return s_monumod.rows > id + 1 ? txt_get_int(&s_monumod, id + 1, "constants", def) : def;
+}
 static MonSounds  s_mon_sounds[MAX_MON_SOUNDS];
 static uint8_t    s_mon_sounds_ready[MAX_MON_SOUNDS];
 static UnitGfx    s_gfx[MAX_GFX];
@@ -278,7 +398,10 @@ static int        s_num_gfx;
 static uint32_t   s_gfx_clock;
 
 
-static Unit       s_units[MAX_UNITS];
+/* Alineado a 64 (una línea de caché; Unit mide 25): si no, queda donde caiga
+   según lo que haya antes y en la Pi la lógica por tick variaba un 11 % (al
+   agregar 24 bytes de otra variable en map.c pasó de 0,93 a 1,04 ms) */
+static Unit       s_units[MAX_UNITS] __attribute__((aligned(64)));
 /* Antes de este lugar no hay ninguno libre: buscar desde el principio
    recorría miles de unidades por cada una nueva (al armar una zona, en la Pi,
    decenas de ms) */
@@ -295,6 +418,7 @@ void units_set_level_query(int (*level_id_at)(float x, float y))
 }
 static int        s_spawn_zone = -1; /* zona de las unidades que se crean ahora */
 static float dist_to(const Unit *u, float x, float y);
+static void  set_state(Unit *u, int state);
 static int   in_radius(const Unit *u, float x, float y, float radius);
 static const char *(*s_picker)(float x, float y); /* un monstruo de la zona para los grupos de los DS1 */
 
@@ -323,33 +447,33 @@ typedef struct MonSeq {
 } MonSeq;
 static MonSeq s_seqs[32];
 static int    s_num_seqs;
+static TxtTable s_monseq; /* monseq.txt, leída en units_init */
 
 static const MonSeq *monseq_get(const char *name)
 {
-    static const char *const k_modes[] = { "NU", "WL", "A1", "GH", "DT", "DD", "A2", "S1", "RN", "SC" }; /* ANIM_* */
+    static const char *const k_modes[] = { "NU", "WL", "A1", "GH", "DT", "DD", "A2", "S1", "RN", "SC", "S2", "S3", "S4" }; /* ANIM_* */
     for (int i = 0; i < s_num_seqs; i++)
         if (strcmp(s_seqs[i].name, name) == 0)
             return s_seqs[i].n > 0 ? &s_seqs[i] : NULL;
-    TxtTable t = { 0 };
-    if (s_num_seqs >= (int)(sizeof s_seqs / sizeof s_seqs[0]) || load_table(&t, "monseq") != 0)
+    const TxtTable *t = &s_monseq;
+    if (s_num_seqs >= (int)(sizeof s_seqs / sizeof s_seqs[0]) || !t->rows)
         return NULL;
     MonSeq *q = &s_seqs[s_num_seqs++]; /* también las que no están (n = 0): no se vuelve a buscar */
     memset(q, 0, sizeof *q);
     snprintf(q->name, sizeof q->name, "%s", name);
-    int cs = txt_col(&t, "sequence"), cm = txt_col(&t, "mode");
-    for (int r = 1; r < t.rows && q->n < SEQ_STEPS; r++) {
-        if (strcmp(txt_get(&t, r, cs), name) != 0)
+    int cs = txt_col(t, "sequence"), cm = txt_col(t, "mode");
+    for (int r = 1; r < t->rows && q->n < SEQ_STEPS; r++) {
+        if (strcmp(txt_get(t, r, cs), name) != 0)
             continue;
-        const char *mode = txt_get(&t, r, cm);
-        int a = ANIM_ATTACK; /* shortcut: los modos que el motor no carga (S2..S4) se ven con el primer ataque */
+        const char *mode = txt_get(t, r, cm);
+        int a = ANIM_ATTACK; /* (un modo que no está: con el primer ataque) */
         for (int k = 0; k < (int)(sizeof k_modes / sizeof k_modes[0]); k++)
             if (strcmp(k_modes[k], mode) == 0)
                 a = k;
         q->anim[q->n] = (int8_t)a;
-        q->frame[q->n] = (uint8_t)txt_get_int(&t, r, "frame", 0);
-        q->hit[q->n++] = txt_get_int(&t, r, "event", 0) == 1;
+        q->frame[q->n] = (uint8_t)txt_get_int(t, r, "frame", 0);
+        q->hit[q->n++] = txt_get_int(t, r, "event", 0) == 1;
     }
-    txt_free(&t);
     return q->n > 0 ? q : NULL;
 }
 
@@ -369,6 +493,12 @@ enum {
     AI_FETISH, AI_FETISHBLOW, AI_FETISHSHAMAN, AI_BABOON, AI_THORNHULK, AI_MOSQUITO, AI_WISP, AI_ARACH, AI_FROG,
     AI_ZEALOT, AI_PRIEST, AI_VAMPIRE, AI_HIGHPRIEST, AI_MEPHISTO, AI_TENTACLE, AI_TENTHEAD, /* el Acto 3 (monai3.inc) */
     AI_SKELETON, AI_ZOMBIE, AI_BLOODHAWK, AI_BRUTE, AI_WRAITH, AI_CROGUE, AI_CARCHER, /* del Acto 1 (monai1.inc) */
+    AI_VILEMOTHER, AI_VILEDOG, AI_FINGERMAGE, AI_REGURG, AI_DOOMKNIGHT, AI_ABYSSKNIGHT, AI_OBLIVKNIGHT,
+    AI_MEGADEMON, AI_BIGHEAD, AI_IZUAL, AI_SMITH, AI_HELLMETEOR, AI_TRAPPEDSOUL, AI_DIABLO, /* el Acto 4 (monai4.inc) */
+    AI_MINION, AI_SUICIDEMINION, AI_SUCCUBUS, AI_SUCCWITCH, AI_IMP, AI_BLOODLORD, AI_REANIMATED, AI_OVERSEER,
+    AI_DEATHMAULER, AI_SIEGEBEAST, AI_PUTRID, AI_FROZENHORROR, AI_CATAPULT, AI_SPOTTER, AI_MINIONSPAWNER,
+    AI_EVILHOLE, AI_GENSPAWNER, AI_NIHLATHAK, AI_ANCIENT, AI_ANCSTATUE, AI_BAAL, AI_BAALCLONE, AI_BAALTHRONE,
+    AI_BAALTENTACLE, AI_BAALMINION, AI_BAALSTAIRS, AI_BAALTAUNT, AI_SIEGETOWER, AI_NPCBARB, AI_WUSSIE, /* el Acto 5 (monai5.inc) */
 };
 
 static int ai_kind(const char *name)
@@ -388,6 +518,21 @@ static int ai_kind(const char *name)
         { "TentacleHead", AI_TENTHEAD },   { "Skeleton", AI_SKELETON },     { "Zombie", AI_ZOMBIE },
         { "BloodHawk", AI_BLOODHAWK },     { "Brute", AI_BRUTE },           { "Wraith", AI_WRAITH },
         { "CorruptRogue", AI_CROGUE },     { "CorruptArcher", AI_CARCHER },
+        { "VileMother", AI_VILEMOTHER },  { "VileDog", AI_VILEDOG },      { "FingerMage", AI_FINGERMAGE },
+        { "Regurgitator", AI_REGURG },    { "DoomKnight", AI_DOOMKNIGHT }, { "AbyssKnight", AI_ABYSSKNIGHT },
+        { "OblivionKnight", AI_OBLIVKNIGHT }, { "Megademon", AI_MEGADEMON }, { "Bighead", AI_BIGHEAD },
+        { "Izual", AI_IZUAL },            { "Smith", AI_SMITH },          { "HellMeteor", AI_HELLMETEOR },
+        { "TrappedSoul", AI_TRAPPEDSOUL }, { "Diablo", AI_DIABLO },
+        { "Minion", AI_MINION },          { "SuicideMinion", AI_SUICIDEMINION }, { "Succubus", AI_SUCCUBUS },
+        { "SuccubusWitch", AI_SUCCWITCH }, { "Imp", AI_IMP },             { "BloodLord", AI_BLOODLORD },
+        { "ReanimatedHorde", AI_REANIMATED }, { "Overseer", AI_OVERSEER }, { "DeathMauler", AI_DEATHMAULER },
+        { "SiegeBeast", AI_SIEGEBEAST },  { "PutridDefiler", AI_PUTRID }, { "FrozenHorror", AI_FROZENHORROR },
+        { "Catapult", AI_CATAPULT },      { "CatapultSpotter", AI_SPOTTER }, { "MinionSpawner", AI_MINIONSPAWNER },
+        { "EvilHole", AI_EVILHOLE },      { "GenericSpawner", AI_GENSPAWNER }, { "Nihlathak", AI_NIHLATHAK },
+        { "Ancient", AI_ANCIENT },        { "AncientStatue", AI_ANCSTATUE }, { "BaalCrab", AI_BAAL },
+        { "BaalCrabClone", AI_BAALCLONE }, { "BaalThrone", AI_BAALTHRONE }, { "BaalTentacle", AI_BAALTENTACLE },
+        { "BaalMinion", AI_BAALMINION },  { "BaalToStairs", AI_BAALSTAIRS }, { "BaalTaunt", AI_BAALTAUNT },
+        { "SiegeTower", AI_SIEGETOWER },  { "NpcBarb", AI_NPCBARB },     { "Wussie", AI_WUSSIE },
     };
     for (unsigned i = 0; i < sizeof k_ai / sizeof k_ai[0]; i++)
         if (strcmp(k_ai[i].name, name) == 0)
@@ -408,6 +553,12 @@ int units_init(void)
     r |= load_table(&s_superuniques, "superuniques");
     load_table(&s_monsounds, "monsounds"); /* sin ella, los monstruos no suenan */
     load_table(&s_monequip, "monequip");   /* sin ella, la Valquiria va sin equipo */
+    /* Las que antes se leían al usarse por primera vez, en medio del juego
+       (en la Pi, skills.txt eran unos 20 ms en un tick) */
+    load_table(&s_monseq, "monseq");
+    load_table(&s_skilltab, "skills");
+    load_table(&s_monumod, "monumod");          /* sin ella, los jefes con la vida de Normal */
+    load_table(&s_difflv, "difficultylevels"); /* sin ella, todo como en Normal */
     return r;
 }
 
@@ -731,10 +882,105 @@ static int mon_row(const TxtTable *t, const char *id)
     return row;
 }
 
+/* La grilla de las búsquedas de monstruos (units_enemies_near, a quién le
+   pega cada proyectil): cada unidad en la lista de la celda de 4x4 subtiles
+   donde está, en un toro de 64x64 celdas (las que están a 256 subtiles
+   comparten lista y se descartan por el lugar). El fuego del piso y las nubes
+   miraban las ~2000 unidades del acto por proyectil y por tick: en la Pi, un
+   fallo de caché por unidad, 45 ms con 250 fuegos. El original también busca
+   cerca y no en todas (las salas y las máscaras de colisión:
+   MISSMODE_HandleMissileCollision, D2Common_10407).
+   Se arma en la primera búsqueda y después cada lugar que cambia u->x o u->y
+   llama a grid_moved. D2_GRID_CHECK=1 compara cada búsqueda con todas las
+   unidades y corta si difiere. */
+#define GRID_SHIFT      2    /* celdas de 4 subtiles */
+#define GRID_SIDE       64
+#define GRID_CANDS      256  /* más que esto en el recuadro: se miran todas */
+#define GRID_SLACK      0.05f /* lo que puede correrse units_position(i, 1) del lugar, y el redondeo */
+#define UNIT_RADIUS_MAX 1.0f /* el de los grandes (SizeX 3: 0.25 + 0.25 * 3) */
+static int   s_grid_ok;
+static int   s_grid_head[GRID_SIDE * GRID_SIDE];
+static int   s_grid_next[MAX_UNITS], s_grid_cell[MAX_UNITS]; /* -1: no está (libre) */
+static float s_grid_x[MAX_UNITS], s_grid_y[MAX_UNITS];
+
+static int grid_cell_of(float x, float y)
+{
+    return (((int)floorf(x) >> GRID_SHIFT) & (GRID_SIDE - 1)) + (((int)floorf(y) >> GRID_SHIFT) & (GRID_SIDE - 1)) * GRID_SIDE;
+}
+
+/* Después de cambiarle el lugar a una unidad (o de liberarla) */
+static void grid_moved(const Unit *u)
+{
+    if (!s_grid_ok)
+        return;
+    int i = (int)(u - s_units), c = u->zone == ZONE_FREE ? -1 : grid_cell_of(u->x, u->y);
+    s_grid_x[i] = u->x;
+    s_grid_y[i] = u->y;
+    if (c == s_grid_cell[i])
+        return;
+    if (s_grid_cell[i] >= 0) {
+        int *p = &s_grid_head[s_grid_cell[i]];
+        while (*p != i)
+            p = &s_grid_next[*p];
+        *p = s_grid_next[i];
+    }
+    s_grid_cell[i] = c;
+    if (c >= 0) {
+        s_grid_next[i] = s_grid_head[c];
+        s_grid_head[c] = i;
+    }
+}
+
+/* Las unidades (no libres) cuyo lugar cae en el recuadro, con los bordes, de
+   menor a mayor (como las recorría el resto); -1 si son más de GRID_CANDS o
+   el recuadro es muy grande: ahí el que llama mira todas */
+static int grid_box(float x0, float y0, float x1, float y1, int *out)
+{
+    if (!(x1 - x0 < 64.0f && y1 - y0 < 64.0f)) /* (y si viene un NaN) */
+        return -1;
+    if (!s_grid_ok) {
+        memset(s_grid_head, -1, sizeof s_grid_head);
+        memset(s_grid_cell, -1, sizeof s_grid_cell);
+        s_grid_ok = 1;
+        for (int i = 0; i < s_num_units; i++)
+            grid_moved(&s_units[i]);
+    }
+    int n = 0, cx0 = (int)floorf(x0) >> GRID_SHIFT, cx1 = (int)floorf(x1) >> GRID_SHIFT;
+    int cy0 = (int)floorf(y0) >> GRID_SHIFT, cy1 = (int)floorf(y1) >> GRID_SHIFT;
+    for (int cy = cy0; cy <= cy1; cy++)
+        for (int cx = cx0; cx <= cx1; cx++)
+            for (int i = s_grid_head[(cx & (GRID_SIDE - 1)) + (cy & (GRID_SIDE - 1)) * GRID_SIDE]; i >= 0; i = s_grid_next[i]) {
+                if (s_grid_x[i] < x0 || s_grid_x[i] > x1 || s_grid_y[i] < y0 || s_grid_y[i] > y1)
+                    continue;
+                if (n == GRID_CANDS)
+                    return -1;
+                int k = n++;
+                for (; k > 0 && out[k - 1] > i; k--)
+                    out[k] = out[k - 1];
+                out[k] = i;
+            }
+    static int check = -1;
+    if (check < 0)
+        check = getenv("D2_GRID_CHECK") != NULL;
+    for (int i = 0, m = 0; check && i <= s_num_units; i++) {
+        const Unit *u = &s_units[i];
+        if (i < s_num_units && (u->zone == ZONE_FREE || u->x < x0 || u->x > x1 || u->y < y0 || u->y > y1))
+            continue;
+        if (i == s_num_units ? m != n : m >= n || out[m] != i) {
+            fprintf(stderr, "D2_GRID_CHECK: la grilla difiere en (%.2f, %.2f)-(%.2f, %.2f): unidad %d (%s)\n", x0, y0, x1, y1,
+                    i, i < s_num_units ? u->name : "-");
+            abort();
+        }
+        m++;
+    }
+    return n;
+}
+
 static void unit_freed(int i)
 {
     if (i < s_free_from)
         s_free_from = i;
+    grid_moved(&s_units[i]);
 }
 
 static Unit *new_unit(float x, float y)
@@ -752,6 +998,7 @@ static Unit *new_unit(float x, float y)
     u->zone = s_spawn_zone;
     u->x = u->prev_x = u->home_x = x;
     u->y = u->prev_y = u->home_y = y;
+    grid_moved(u);
     u->rng = 0x9E3779B9u * (uint32_t)s_num_units + spawn_rnd();
     u->sector = (int)(rnd(u) % 16);
     u->timer = 25 + (int)(rnd(u) % 75);
@@ -765,68 +1012,74 @@ static Unit *new_unit(float x, float y)
     return u;
 }
 
-/* Vida, daño y experiencia: porcentajes de monstats.txt sobre monlvl.txt */
+/* Vida, daño y experiencia: porcentajes de monstats.txt sobre monlvl.txt
+   (DATATBLS_CalculateMonsterStatsByLevel), los de la dificultad. En
+   Pesadilla e Infierno los jefes de misión (boss) y los noRatio tienen el
+   nivel de monstats ("Level(N)"); los demás, el de la zona (MONSTER_InitMonster) */
 static void monster_stats(Unit *u, int ms, int level)
 {
-    if (level <= 0)
-        level = txt_get_int(&s_monstats, ms, "Level", 1);
+    const TxtTable *t = &s_monstats;
+    int no_ratio = txt_get_int(t, ms, "noRatio", 0);
+    if (level <= 0 || (s_diff > 0 && (no_ratio || txt_get_int(t, ms, "boss", 0) == 1)))
+        level = txt_get_int(t, ms, dcol(t, "Level"), 1);
     char lv[8];
     snprintf(lv, sizeof lv, "%d", level);
     int ml = txt_find_row(&s_monlvl, txt_col(&s_monlvl, "Level"), lv);
-    int base_hp = txt_get_int(&s_monlvl, ml, "HP", 7);
-    int base_dm = txt_get_int(&s_monlvl, ml, "DM", 2);
-    int base_xp = txt_get_int(&s_monlvl, ml, "XP", 30);
-    int base_ac = txt_get_int(&s_monlvl, ml, "AC", 6), base_th = txt_get_int(&s_monlvl, ml, "TH", 8);
-    if (txt_get_int(&s_monstats, ms, "noRatio", 0)) /* los esbirros: lo de monstats.txt tal cual (sin monlvl.txt) */
+    int base_hp = txt_get_int(&s_monlvl, ml, lvcol("HP"), 7);
+    int base_dm = txt_get_int(&s_monlvl, ml, lvcol("DM"), 2);
+    int base_xp = txt_get_int(&s_monlvl, ml, lvcol("XP"), 30);
+    int base_ac = txt_get_int(&s_monlvl, ml, lvcol("AC"), 6), base_th = txt_get_int(&s_monlvl, ml, lvcol("TH"), 8);
+    if (no_ratio) /* los esbirros: lo de monstats.txt tal cual (sin monlvl.txt) */
         base_hp = base_dm = base_ac = base_th = 100;
     u->level = level;
-    u->ac = base_ac * txt_get_int(&s_monstats, ms, "AC", 100) / 100;
-    u->ar = base_th * txt_get_int(&s_monstats, ms, "A1TH", 100) / 100;
-    snprintf(u->tc, sizeof u->tc, "%s", txt_get(&s_monstats, ms, txt_col(&s_monstats, "TreasureClass")));
+    u->ac = base_ac * txt_get_int(t, ms, dcol(t, "AC"), 100) / 100;
+    u->ar = base_th * txt_get_int(t, ms, dcol(t, "A1TH"), 100) / 100;
+    snprintf(u->tc, sizeof u->tc, "%s", txt_get(t, ms, txt_col(t, dcol(t, "TreasureClass"))));
     /* En el orden de ELEM_NONE (física), ELEM_FIRE, ELEM_COLD, ELEM_LTNG, ELEM_POIS y ELEM_MAG */
     static const char *const k_res_cols[6] = { "ResDm", "ResFi", "ResCo", "ResLi", "ResPo", "ResMa" };
     for (int e = 0; e < 6; e++)
-        u->res[e] = txt_get_int(&s_monstats, ms, k_res_cols[e], 0);
+        u->res[e] = txt_get_int(t, ms, dcol(t, k_res_cols[e]), 0);
 
-    int min_hp = txt_get_int(&s_monstats, ms, "minHP", 50), max_hp = txt_get_int(&s_monstats, ms, "maxHP", 100);
+    int min_hp = txt_get_int(t, ms, dcol(t, "minHP"), 50), max_hp = txt_get_int(t, ms, dcol(t, "maxHP"), 100);
     int pct = min_hp + (max_hp > min_hp ? (int)(rnd(u) % (uint32_t)(max_hp - min_hp + 1)) : 0);
     u->max_hp = u->hp = base_hp * pct / 100 > 0 ? base_hp * pct / 100 : 1;
-    u->a2_min = base_dm * txt_get_int(&s_monstats, ms, "A2MinD", 0) / 100;
-    u->a2_max = base_dm * txt_get_int(&s_monstats, ms, "A2MaxD", txt_get_int(&s_monstats, ms, "A2MinD", 0)) / 100;
-    if (u->a2_min < 1 && txt_get_int(&s_monstats, ms, "A2MinD", 0) > 0)
+    int a2min = txt_get_int(t, ms, dcol(t, "A2MinD"), 0);
+    u->a2_min = base_dm * a2min / 100;
+    u->a2_max = base_dm * txt_get_int(t, ms, dcol(t, "A2MaxD"), a2min) / 100;
+    if (u->a2_min < 1 && a2min > 0)
         u->a2_min = 1;
     if (u->a2_max < u->a2_min) u->a2_max = u->a2_min;
-    u->dmg_min = base_dm * txt_get_int(&s_monstats, ms, "A1MinD", 50) / 100;
-    u->dmg_max = base_dm * txt_get_int(&s_monstats, ms, "A1MaxD", 100) / 100;
+    u->dmg_min = base_dm * txt_get_int(t, ms, dcol(t, "A1MinD"), 50) / 100;
+    u->dmg_max = base_dm * txt_get_int(t, ms, dcol(t, "A1MaxD"), 100) / 100;
     if (u->dmg_min < 1) u->dmg_min = 1;
     if (u->dmg_max < u->dmg_min) u->dmg_max = u->dmg_min;
-    u->exp = base_xp * txt_get_int(&s_monstats, ms, "Exp", 100) / 100;
-    u->attack_delay = txt_get_int(&s_monstats, ms, "aidel", 15);
-    u->s1_min = base_dm * txt_get_int(&s_monstats, ms, "S1MinD", 0) / 100;
-    u->s1_max = base_dm * txt_get_int(&s_monstats, ms, "S1MaxD", 0) / 100;
+    u->exp = base_xp * txt_get_int(t, ms, dcol(t, "Exp"), 100) / 100;
+    u->attack_delay = txt_get_int(t, ms, dcol(t, "aidel"), 15);
+    u->s1_min = base_dm * txt_get_int(t, ms, dcol(t, "S1MinD"), 0) / 100;
+    u->s1_max = base_dm * txt_get_int(t, ms, dcol(t, "S1MaxD"), 0) / 100;
     /* El daño elemental de cada ataque, como MONSTERMODE del original: del
        DM de monlvl.txt por el porcentaje de la tabla */
     static const char *const k_el_types[] = { "fire", "cold", "ltng", "pois", "mag", "mana", "rand" };
     for (int k = 0; k < 3; k++) {
         char col[12];
         snprintf(col, sizeof col, "El%dMode", k + 1);
-        const char *mode = txt_get(&s_monstats, ms, txt_col(&s_monstats, col));
+        const char *mode = txt_get(t, ms, txt_col(t, col));
         u->el[k].anim = (int8_t)(!strcmp(mode, "A1") ? ANIM_ATTACK : !strcmp(mode, "A2") ? ANIM_ATTACK2
                                  : !strcmp(mode, "S1") ? ANIM_SKILL : -1);
         snprintf(col, sizeof col, "El%dType", k + 1);
-        const char *type = txt_get(&s_monstats, ms, txt_col(&s_monstats, col));
+        const char *type = txt_get(t, ms, txt_col(t, col));
         u->el[k].elem = 0;
         for (int e = 0; e < (int)(sizeof k_el_types / sizeof k_el_types[0]); e++)
             if (strcmp(type, k_el_types[e]) == 0)
                 u->el[k].elem = (int8_t)(e + 1);
         snprintf(col, sizeof col, "El%dPct", k + 1);
-        u->el[k].pct = (int16_t)txt_get_int(&s_monstats, ms, col, 0);
+        u->el[k].pct = (int16_t)txt_get_int(t, ms, dcol(t, col), 0);
         snprintf(col, sizeof col, "El%dMinD", k + 1);
-        u->el[k].min = (int16_t)(base_dm * txt_get_int(&s_monstats, ms, col, 0) / 100);
+        u->el[k].min = (int16_t)(base_dm * txt_get_int(t, ms, dcol(t, col), 0) / 100);
         snprintf(col, sizeof col, "El%dMaxD", k + 1);
-        u->el[k].max = (int16_t)(base_dm * txt_get_int(&s_monstats, ms, col, 0) / 100);
+        u->el[k].max = (int16_t)(base_dm * txt_get_int(t, ms, dcol(t, col), 0) / 100);
         snprintf(col, sizeof col, "El%dDur", k + 1);
-        u->el[k].dur = (int16_t)txt_get_int(&s_monstats, ms, col, 0);
+        u->el[k].dur = (int16_t)txt_get_int(t, ms, dcol(t, col), 0);
         if (u->el[k].max < u->el[k].min)
             u->el[k].max = u->el[k].min;
     }
@@ -834,6 +1087,23 @@ static void monster_stats(Unit *u, int ms, int level)
 
 /* Las piezas, la clase de arma y los modos que se cargan de un monstruo
    (ms y ms2: sus filas de monstats y monstats2) */
+/* Las IA del Acto 5 que usan S1, RN, SC o S2..S4 (los Sk*mode de monstats.txt
+   y sus secuencias de monseq.txt, si monstats2.txt tiene el modo): sin
+   cargarlos, sus habilidades no salían (ANIM_SKILL2 vale por S2, S3 y S4) */
+static int a5_needs_mode(const char *ai, int anim)
+{
+    static const struct { const char *ai; uint8_t s1, rn, sc, s234; } k_ai[] = {
+        { "Ancient", 1, 0, 1, 0 },      { "BaalCrab", 1, 0, 0, 1 },       { "BaalCrabClone", 1, 0, 0, 1 },
+        { "BaalThrone", 0, 0, 0, 1 },   { "EvilHole", 0, 0, 0, 1 },       { "GenericSpawner", 1, 0, 0, 0 },
+        { "Imp", 1, 0, 1, 1 },          { "Overseer", 1, 0, 0, 1 },       { "PutridDefiler", 1, 0, 0, 0 },
+        { "ReanimatedHorde", 1, 1, 0, 0 }, { "Succubus", 0, 0, 0, 1 },    { "SuccubusWitch", 0, 0, 0, 1 },
+    };
+    for (int i = 0; i < (int)(sizeof k_ai / sizeof k_ai[0]); i++)
+        if (strcmp(ai, k_ai[i].ai) == 0)
+            return anim == ANIM_SKILL ? k_ai[i].s1 : anim == ANIM_RUN ? k_ai[i].rn : anim == ANIM_CAST ? k_ai[i].sc : k_ai[i].s234;
+    return 0;
+}
+
 static void monster_look(int ms, int ms2, int enemy, int merc, CharLook *out, char *wclass_out, const char **modes)
 {
     CharLook look;
@@ -859,8 +1129,9 @@ static void monster_look(int ms, int ms2, int enemy, int merc, CharLook *out, ch
     if (!wclass[0])
         strcpy(wclass, "hth");
 
-    static const char *const mode_cols[ANIM_COUNT] = { "mNU", "mWL", "mA1", "mGH", "mDT", "mDD", "mA2", "mS1", "mRN", "mSC" };
-    static const char *const mode_codes[ANIM_COUNT] = { "nu", "wl", "a1", "gh", "dt", "dd", "a2", "s1", "rn", "sc" };
+    static const char *const mode_cols[ANIM_COUNT] = { "mNU", "mWL", "mA1", "mGH", "mDT", "mDD", "mA2", "mS1", "mRN", "mSC",
+                                                       "mS2", "mS3", "mS4" };
+    static const char *const mode_codes[ANIM_COUNT] = { "nu", "wl", "a1", "gh", "dt", "dd", "a2", "s1", "rn", "sc", "s2", "s3", "s4" };
     for (int a = 0; a < ANIM_COUNT; a++)
         modes[a] = NULL;
     modes[0] = "nu";
@@ -872,17 +1143,28 @@ static void monster_look(int ms, int ms2, int enemy, int merc, CharLook *out, ch
                                      strcmp(ai_name, "MaggotEgg") == 0 || strcmp(ai_name, "Vulture") == 0 ||
                                      strcmp(ai_name, "SandMaggotQueen") == 0 || strcmp(ai_name, "ZakarumPriest") == 0 ||
                                      strcmp(ai_name, "HighPriest") == 0 || strcmp(ai_name, "FrogDemon") == 0 ||
-                                     strcmp(ai_name, "Tentacle") == 0 || strcmp(ai_name, "TentacleHead") == 0));
+                                     strcmp(ai_name, "Tentacle") == 0 || strcmp(ai_name, "TentacleHead") == 0 ||
+                                     strcmp(ai_name, "VileMother") == 0 || strcmp(ai_name, "FingerMage") == 0 ||
+                                     strcmp(ai_name, "Regurgitator") == 0 || strcmp(ai_name, "AbyssKnight") == 0 ||
+                                     strcmp(ai_name, "OblivionKnight") == 0 || strcmp(ai_name, "Megademon") == 0 ||
+                                     strcmp(ai_name, "Diablo") == 0 || strcmp(ai_name, "TrappedSoul") == 0 ||
+                                     a5_needs_mode(ai_name, ANIM_SKILL)));
     /* RN: los que corren hacia el jugador (las pícaras corruptas, los zombis) */
     int need_rn = merc || (enemy && (strcmp(ai_name, "CorruptRogue") == 0 || strcmp(ai_name, "CorruptArcher") == 0 ||
-                                     strcmp(ai_name, "Zombie") == 0));
+                                     strcmp(ai_name, "Zombie") == 0 || strcmp(ai_name, "Diablo") == 0 ||
+                                     a5_needs_mode(ai_name, ANIM_RUN)));
     /* SC: los que lanzan hechizos (Andariel, los Desterrados) y la momia mayor que revive */
     int need_sc = enemy && (strcmp(ai_name, "Andariel") == 0 || strcmp(ai_name, "Vampire") == 0 ||
                             strcmp(ai_name, "GreaterMummy") == 0 || strcmp(ai_name, "Summoner") == 0 ||
-                            strcmp(ai_name, "WillOWisp") == 0 || strcmp(ai_name, "FetishShaman") == 0);
+                            strcmp(ai_name, "WillOWisp") == 0 || strcmp(ai_name, "FetishShaman") == 0 ||
+                            strcmp(ai_name, "Izual") == 0 || strcmp(ai_name, "Diablo") == 0 || a5_needs_mode(ai_name, ANIM_CAST));
+    /* S2..S4: los hechizos de Diablo (el frío, los muros, la prisión), las maldiciones del Caballero del
+       Olvido y las almas atrapadas */
+    int need_s234 = enemy && (strcmp(ai_name, "Diablo") == 0 || strcmp(ai_name, "OblivionKnight") == 0 ||
+                              strcmp(ai_name, "TrappedSoul") == 0 || a5_needs_mode(ai_name, ANIM_SKILL2));
     for (int a = 1; a < ANIM_COUNT; a++)
         if ((a == ANIM_WALK || enemy || merc) && (a != ANIM_SKILL || need_s1) && (a != ANIM_RUN || need_rn) &&
-            (a != ANIM_CAST || need_sc) &&
+            (a != ANIM_CAST || need_sc) && (a < ANIM_SKILL2 || need_s234) &&
             txt_get_int(&s_monstats2, ms2, mode_cols[a], 0) == 1)
             modes[a] = mode_codes[a];
     *out = look;
@@ -894,7 +1176,7 @@ static void monster_look(int ms, int ms2, int enemy, int merc, CharLook *out, ch
    muerte de un jefe que lo dejaría quieto al morir) */
 void units_check_anims(void)
 {
-    static const char *const names[ANIM_COUNT] = { "nu", "wl", "a1", "gh", "dt", "dd", "a2", "s1", "rn", "sc" };
+    static const char *const names[ANIM_COUNT] = { "nu", "wl", "a1", "gh", "dt", "dd", "a2", "s1", "rn", "sc", "s2", "s3", "s4" };
     int checked = 0, missing = 0;
     for (int ms = 1; ms < s_monstats.rows; ms++) {
         const char *id = txt_get(&s_monstats, ms, txt_col(&s_monstats, "Id"));
@@ -935,43 +1217,34 @@ void units_check_anims(void)
    (en la carpeta cof de sus gráficos) cambian unos colores de la paleta por
    otros. Los comunes usan la de TransLvl + 2 (las variantes: el Caído
    rojo, el Tallador, el Diablillo...); los jefes, la de Utrans de su
-   dificultad (Normal). NULL si la tabla no cambia nada. */
-#define PALSHIFT_CACHE 96
-static const uint8_t *mon_palshift(const char *token, int ms, int ms2)
+   dificultad (Normal). Se lee en el hilo de trabajos, como los gráficos
+   (en la Pi eran de 0,2 a 4 ms en el hilo del juego por cada tipo nuevo):
+   hasta que está, el monstruo no se dibuja. NULL si no tiene. */
+static const PalShift *mon_palshift(const char *token, int ms, int ms2)
 {
-    static struct {
-        char    token[8];
-        int     ok;
-        uint8_t tab[8][256];
-    } s_ps[PALSHIFT_CACHE];
+    static PalShift s_ps[PALSHIFT_MAX]; /* (las unidades apuntan acá: no se mueven) */
     static int s_nps;
     const char *ut = txt_get(&s_monstats2, ms2, txt_col(&s_monstats2, "Utrans"));
     int idx = ut[0] ? atoi(ut) : txt_get_int(&s_monstats, ms, "TransLvl", 0) + 2;
     if (idx < 0 || idx >= 8)
         return NULL;
-    int k = 0;
-    while (k < s_nps && strcmp(s_ps[k].token, token) != 0)
-        k++;
-    if (k == s_nps) {
-        if (s_nps >= PALSHIFT_CACHE)
-            return NULL;
-        k = s_nps++;
-        snprintf(s_ps[k].token, sizeof s_ps[k].token, "%s", token);
-        char path[96];
-        snprintf(path, sizeof path, "data/global/monsters/%s/cof/palshift.dat", token);
-        size_t n;
-        uint8_t *d = fs_read(path, &n);
-        s_ps[k].ok = d && n >= sizeof s_ps[k].tab;
-        if (s_ps[k].ok)
-            memcpy(s_ps[k].tab, d, sizeof s_ps[k].tab);
-        free(d);
-    }
-    if (!s_ps[k].ok)
+    for (int k = 0; k < s_nps; k++)
+        if (s_ps[k].idx == idx && strcmp(s_ps[k].token, token) == 0)
+            return &s_ps[k];
+    if (s_nps >= PALSHIFT_MAX)
         return NULL;
-    for (int c = 0; c < 256; c++)
-        if (s_ps[k].tab[idx][c] != c)
-            return s_ps[k].tab[idx];
-    return NULL;
+    PalShift *p = &s_ps[s_nps++];
+    snprintf(p->token, sizeof p->token, "%s", token);
+    p->idx = idx;
+    job_flag_set(&p->state, PS_LOADING);
+    jobs_push(palshift_job, p, 0);
+    return p;
+}
+
+/* La tabla de colores de la unidad, si ya se leyó y cambia algo */
+static const uint8_t *unit_palshift(const Unit *u)
+{
+    return u->pshift && job_flag_get(&u->pshift->state) == PS_READY ? u->pshift->tab : NULL;
 }
 
 static Unit *create_monster(const char *id, float x, float y, int level, int enemy)
@@ -1014,6 +1287,7 @@ static Unit *create_monster(const char *id, float x, float y, int level, int ene
     u->pshift = mon_palshift(look.token, ms, ms2);
     u->light = txt_get_int(&s_monstats2, ms2, "Light", 0);
     u->solid = 1;
+    u->killable = txt_col(&s_monstats, "killable") < 0 || txt_get_int(&s_monstats, ms, "killable", 0) == 1;
     {
         int fs = txt_get_int(&s_monstats2, ms2, "SizeX", 2);
         u->foot = fs < 1 ? 1 : fs > 3 ? 3 : fs;
@@ -1082,10 +1356,10 @@ static Unit *create_monster(const char *id, float x, float y, int level, int ene
         for (int k = 0; k < 8; k++) {
             char col[8];
             snprintf(col, sizeof col, "aip%d", k + 1);
-            u->aip[k] = (int16_t)txt_get_int(&s_monstats, ms, col, 0);
+            u->aip[k] = (int16_t)txt_get_int(&s_monstats, ms, dcol(&s_monstats, col), 0);
         }
-        for (int k = 0; k < 4; k++) { /* sus habilidades, la secuencia o el modo de cada una y su nivel */
-            static const char *const k_modes[] = { "NU", "WL", "A1", "GH", "DT", "DD", "A2", "S1", "RN", "SC" }; /* ANIM_* */
+        for (int k = 0; k < MON_SKILLS; k++) { /* sus habilidades, la secuencia o el modo de cada una y su nivel */
+            static const char *const k_modes[] = { "NU", "WL", "A1", "GH", "DT", "DD", "A2", "S1", "RN", "SC", "S2", "S3", "S4" }; /* ANIM_* */
             char col[8];
             snprintf(col, sizeof col, "Skill%d", k + 1);
             snprintf(u->skill[k], sizeof u->skill[k], "%s", txt_get(&s_monstats, ms, txt_col(&s_monstats, col)));
@@ -1096,16 +1370,18 @@ static Unit *create_monster(const char *id, float x, float y, int level, int ene
             for (int a = 0; a < (int)(sizeof k_modes / sizeof k_modes[0]); a++)
                 if (strcmp(k_modes[a], sq) == 0)
                     u->sk_anim[k] = (int8_t)a;
-            snprintf(col, sizeof col, "Sk%dlvl", k + 1);
-            u->sk_lvl[k] = (int16_t)txt_get_int(&s_monstats, ms, col, 1);
+            snprintf(col, sizeof col, "Sk%dlvl", k + 1); /* (más MonsterSkillBonus: +3 en Pesadilla y +7 en Infierno) */
+            u->sk_lvl[k] = (int16_t)(txt_get_int(&s_monstats, ms, col, 1) + diff_int("MonsterSkillBonus", 0));
         }
         u->heal_target = -1;
-        if (u->ai == AI_MAGGOT || u->ai == AI_MAGGOTEGG || u->ai == AI_MAGGOTQUEEN) /* el huevo que pone, la larva que sale, los gusanos de la reina */
+        if (u->ai == AI_MAGGOT || u->ai == AI_MAGGOTEGG || u->ai == AI_MAGGOTQUEEN || u->ai == AI_VILEMOTHER) /* el huevo que pone, la larva que sale, los gusanos de la reina, las crías de la madre */
             snprintf(u->minion, sizeof u->minion, "%s", txt_get(&s_monstats, ms, txt_col(&s_monstats, "spawn")));
         if (u->ai && getenv("D2_AI_DEBUG"))
             printf("IA: aparece %s en (%.0f, %.0f) con IA %d y habilidades %s%s %s%s %s%s\n", id, x, y, u->ai, u->skill[0],
                    u->seqs[0] ? "*" : "", u->skill[1], u->seqs[1] ? "*" : "", u->skill[2], u->seqs[2] ? "*" : "");
         u->revivable = txt_get_int(&s_monstats2, ms2, "revive", 0) == 1;
+        u->soft = (uint8_t)(txt_get_int(&s_monstats2, ms2, "soft", 0) == 1);
+        u->a4_corpse = -1;
         u->demon = txt_get_int(&s_monstats, ms, "demon", 0) == 1;
         if (strcmp(ai, "BloodRaven") == 0) {
             /* Dispara flechas (y a veces de fuego, MissSQ) y levanta zombis */
@@ -1164,7 +1440,8 @@ static Unit *create_monster(const char *id, float x, float y, int level, int ene
        pícaras de guardia se quedan quietas */
     const char *ai = txt_get(&s_monstats, ms, txt_col(&s_monstats, "AI"));
     int npc = txt_get_int(&s_monstats, ms, "npc", 0) == 1;
-    u->npc = (npc && strcmp(ai, "Npc") == 0) || strcmp(id, "tyrael1") == 0; /* Tyrael encadenado también habla */
+    /* los que se quedan en su lugar (NpcStationary: Tyrael, también encadenado; el espíritu de Izual) y Hadriel (Buffy) también hablan */
+    u->npc = npc && (strcmp(ai, "Npc") == 0 || strcmp(ai, "NpcStationary") == 0 || strcmp(ai, "Buffy") == 0);
     if (!gfx_has(g, ANIM_WALK))
         u->wander = 0.0f;
     else if (strcmp(ai, "Npc") == 0)
@@ -1217,11 +1494,12 @@ static int mod_hit(Unit *u, UnitTarget *t, int dmg)
     return extra;
 }
 
-/* Un jefe: más vida (hp_mul veces), algo más de daño y puntería, y más
-   experiencia (exp_mul). El nivel ya viene con UNIQUE_LEVELS de más. */
-static void make_boss(Unit *u, int hp_mul, int exp_mul)
+/* Un jefe: más vida (la de monumod.txt de su dificultad: "Unique HP % Bonus",
+   300, 200 o 100 %), algo más de daño y puntería, y más experiencia
+   (exp_mul). El nivel ya viene con UNIQUE_LEVELS de más. */
+static void make_boss(Unit *u, int exp_mul)
 {
-    u->max_hp = u->hp = u->hp * hp_mul;
+    u->max_hp = u->hp = u->hp + u->hp * umod_const(7 + s_diff, 300) / 100;
     u->dmg_min = u->dmg_min * 5 / 4 + 1;
     u->dmg_max = u->dmg_max * 5 / 4 + 1;
     u->a2_min = u->a2_min * 5 / 4;
@@ -1285,23 +1563,38 @@ static void apply_mods(Unit *u, uint32_t mods)
         u->spray = 3;
 }
 
-/* Un jefe al azar (más nivel, vida y experiencia, y un modificador al azar,
-   como los únicos del original en Normal) */
+/* `n` modificadores al azar distintos (los únicos del original: uno en
+   Normal, dos en Pesadilla y tres en Infierno; nDifficulty + 1) */
+static uint32_t random_mods(int n)
+{
+    static const int pool[] = { MOD_STRONG, MOD_FAST, MOD_CURSE, MOD_FIRE, MOD_LIGHTNING,
+                                MOD_COLD, MOD_MANAHIT, MOD_SPECTRAL, MOD_STONESKIN };
+    uint32_t mods = 0;
+    for (int k = 0; k < n; k++)
+        for (int tries = 0; tries < 8; tries++) {
+            int m = pool[spawn_rnd() % (sizeof pool / sizeof pool[0])];
+            if (!(mods & (1u << m))) {
+                mods |= 1u << m;
+                break;
+            }
+        }
+    return mods;
+}
+
+/* Un jefe al azar (más nivel, vida y experiencia, y sus modificadores al
+   azar, como los únicos del original) */
 static Unit *spawn_random_boss(const char *id, float x, float y, int level)
 {
     Unit *boss = create_monster(id, x, y, level + UNIQUE_LEVELS, 1);
     if (!boss)
         return NULL;
-    make_boss(boss, 4, 5); /* +300% de vida y 5 veces la experiencia, como los de nombre (sub_6FC6E8D0) */
+    make_boss(boss, 5); /* +300% de vida en Normal y 5 veces la experiencia, como los de nombre (sub_6FC6E8D0) */
     boss->spawn_boss = 1;
     int ms = mon_row(&s_monstats, id);
-    const char *utc = ms >= 0 ? txt_get(&s_monstats, ms, txt_col(&s_monstats, "TreasureClassUnique")) : "";
+    const char *utc = ms >= 0 ? txt_get(&s_monstats, ms, txt_col(&s_monstats, dcol(&s_monstats, "TreasureClassUnique"))) : "";
     if (utc[0])
         snprintf(boss->tc, sizeof boss->tc, "%s", utc);
-    static const int pool[] = { MOD_STRONG, MOD_FAST, MOD_CURSE, MOD_FIRE, MOD_LIGHTNING,
-                                MOD_COLD, MOD_MANAHIT, MOD_SPECTRAL, MOD_STONESKIN };
-    int m = pool[spawn_rnd() % (sizeof pool / sizeof pool[0])];
-    apply_mods(boss, (1u << m) | (boss->ranged ? 1u << MOD_MULTISHOT : 0u));
+    apply_mods(boss, random_mods(1 + s_diff) | (boss->ranged ? 1u << MOD_MULTISHOT : 0u));
     return boss;
 }
 
@@ -1337,7 +1630,7 @@ int units_spawn_boss_pack(const char *id, float x, float y, int level)
         Unit *mu = group_spot(x, y, k, &px, &py) ? create_monster(minion, px, py, level, 1) : NULL;
         if (!mu)
             continue;
-        mu->max_hp = mu->hp = mu->hp * 2;
+        mu->max_hp = mu->hp = mu->hp + mu->hp * umod_const(1 + s_diff, 100) / 100; /* (100, 75 o 50 %) */
         apply_mods(mu, mods);
     }
     return i;
@@ -1354,17 +1647,19 @@ static Unit *spawn_champion(const char *id, float x, float y, int level, int kin
     if (!u)
         return NULL;
     int ms = mon_row(&s_monstats, id), vel = txt_get_int(&s_monstats, ms, "Velocity", 0);
-    u->max_hp = u->hp = u->hp * 3; /* +200% (monumod.txt: leveladd) */
+    u->max_hp = u->hp = u->hp + u->hp * umod_const(4 + s_diff, 200) / 100; /* +200, 150 o 100 % (monumod.txt: Champion HP % Bonus) */
+    /* El daño de más: en Pesadilla e Infierno, por ChampionDamageBonus (75 y 66 %) */
+    int bonus = s_diff ? diff_int("ChampionDamageBonus", 90) : 100;
     u->exp *= 5;                   /* UMod2 */
     u->champion = (int8_t)kind;
     u->spawn_boss = 1;
     if (kind != CHAMP_BERSERK) { /* UMod16: -40% de experiencia, +100% de daño, +75% de puntería y más rápido */
         u->exp -= u->exp * 2 / 5;
-        u->dmg_min *= 2;
-        u->dmg_max *= 2;
-        u->a2_min *= 2;
-        u->a2_max *= 2;
-        u->ar = u->ar * 175 / 100;
+        u->dmg_min = u->dmg_min * (100 + bonus) / 100;
+        u->dmg_max = u->dmg_max * (100 + bonus) / 100;
+        u->a2_min = u->a2_min * (100 + bonus) / 100;
+        u->a2_max = u->a2_max * (100 + bonus) / 100;
+        u->ar = u->ar * (100 + 75 * bonus / 100) / 100;
         if (vel > 0 && kind != CHAMP_GHOSTLY) {
             int pct = kind == CHAMP_FANATIC ? 2048 / vel - 128 : 20;
             pct = kind == CHAMP_FANATIC ? (pct < 10 ? 10 : pct > 100 ? 100 : pct) : pct;
@@ -1394,11 +1689,11 @@ static Unit *spawn_champion(const char *id, float x, float y, int level, int kin
         u->max_hp = u->hp = u->hp * 2;
     } else if (kind == CHAMP_BERSERK) { /* UMod39: -75% de vida, +300% de daño y de puntería */
         u->max_hp = u->hp = u->hp / 4 > 1 ? u->hp / 4 : 1;
-        u->dmg_min *= 4;
-        u->dmg_max *= 4;
-        u->a2_min *= 4;
-        u->a2_max *= 4;
-        u->ar *= 4;
+        u->dmg_min = u->dmg_min * (100 + 3 * bonus) / 100;
+        u->dmg_max = u->dmg_max * (100 + 3 * bonus) / 100;
+        u->a2_min = u->a2_min * (100 + 3 * bonus) / 100;
+        u->a2_max = u->a2_max * (100 + 3 * bonus) / 100;
+        u->ar = u->ar * (100 + 3 * bonus) / 100;
     }
     /* el nombre: el monstruo y el tipo, con su género (ChampionFormat: "%1 %0") */
     static const char *const k_keys[] = { "", "Champion", "Ghostly", "Fanatic", "Possessed", "Berserk" };
@@ -1443,7 +1738,8 @@ int units_is_champion(int i)
 }
 
 /* Jefes con nombre propio (superuniques.txt), como Corpsefire: un monstruo
-   común con mucha más vida, más daño y experiencia, mejor botín y escolta */
+   común con mucha más vida, más daño y experiencia, mejor botín y escolta.
+   Devuelve su unidad (-1 = no salió). */
 static int spawn_superunique(const char *name, float x, float y, int level)
 {
     int row = txt_find_row(&s_superuniques, 0, name);
@@ -1453,7 +1749,7 @@ static int spawn_superunique(const char *name, float x, float y, int level)
     Unit *u = create_monster(cls, x, y, level + UNIQUE_LEVELS, 1);
     if (!u)
         return -1;
-    make_boss(u, 4, 5);
+    make_boss(u, 5);
     u->no_bind = u->spawn_boss = 1;
     static const char *const mod_cols[3] = { "Mod1", "Mod2", "Mod3" };
     uint32_t mods = 0;
@@ -1462,16 +1758,30 @@ static int spawn_superunique(const char *name, float x, float y, int level)
         if (m > 0 && m < 32)
             mods |= 1u << m;
     }
+    if (s_diff > 0) /* uno más al azar en Pesadilla y dos en Infierno */
+        mods |= random_mods(s_diff);
     apply_mods(u, mods);
     snprintf(u->name, sizeof u->name, "%s", name);
     u->display = str_get(txt_get(&s_superuniques, row, txt_col(&s_superuniques, "Name")));
-    snprintf(u->tc, sizeof u->tc, "%s", txt_get(&s_superuniques, row, txt_col(&s_superuniques, "TC")));
+    snprintf(u->tc, sizeof u->tc, "%s", txt_get(&s_superuniques, row, txt_col(&s_superuniques, dcol(&s_superuniques, "TC"))));
     char cls_copy[32];
     snprintf(cls_copy, sizeof cls_copy, "%s", cls);
     int lo = txt_get_int(&s_superuniques, row, "MinGrp", 0), hi = txt_get_int(&s_superuniques, row, "MaxGrp", 0);
     int escort = lo + (hi > lo ? (int)(spawn_rnd() % (uint32_t)(hi - lo + 1)) : 0);
+    int self = (int)(u - s_units);
     spawn_group(cls_copy, escort, x + 1.5f, y + 1.5f, level);
-    return 0;
+    return self;
+}
+
+int units_spawn_superunique(const char *name, float x, float y, int level)
+{
+    return spawn_superunique(name, x, y, level);
+}
+
+int units_monstats_int(const char *id, const char *col, int def)
+{
+    int r = mon_row(&s_monstats, id);
+    return r >= 0 ? txt_get_int(&s_monstats, r, col, def) : def;
 }
 
 static int wall_foot(const Map *m, float x, float y, int size, uint16_t mask);
@@ -1499,6 +1809,45 @@ static int monster_variant(const char *base, int level, char *out, size_t cap)
         return -1;
     snprintf(out, cap, "%s%d", base, best);
     return 0;
+}
+
+/* Un monstruo del lado de los jugadores que no es NPC (Align 1 en monstats:
+   los bárbaros del Acto 5, IA NpcBarb): los jugadores no le pueden pegar,
+   los monstruos lo atacan (el original lo anota en la lista de blancos 8,
+   sub_6FC40280, al pensar por primera vez) y él pelea contra ellos
+   (barb_think). No tiene dueño: es de su zona, como los demás. No tapa el
+   paso (como los esbirros): si no, se traba el que pasa por la barricada */
+static void barb_spawn(const char *id, int ms, float x, float y, int level)
+{
+    Unit *u = create_monster(id, x, y, level, 2);
+    if (!u)
+        return;
+    u->merc = 0;
+    u->pet = 1;
+    u->barb = 1;
+    u->owner = -1;
+    u->target = -1;
+    u->zone = s_spawn_zone;
+    int ms2 = mon_row(&s_monstats2, id);
+    int size = txt_get_int(&s_monstats2, ms2, "SizeX", 2);
+    size = size < 1 ? 1 : size > 3 ? 3 : size;
+    u->radius = 0.25f + 0.25f * (float)size;
+    monster_stats(u, ms, level);
+    memset(&u->ms, 0, sizeof u->ms);
+    u->ms.level = level;
+    u->ms.hp_max = u->max_hp;
+    u->ms.defense = u->ac;
+    u->ms.ar = u->ar;
+    u->ms.dmin = u->dmg_min;
+    u->ms.dmax = u->dmg_max;
+    u->level = level;
+    u->reach = MELEE_REACH + u->radius;
+    for (int k = 0; k < 3; k++) {
+        char col[8];
+        snprintf(col, sizeof col, "aip%d", k + 1);
+        u->aip[k] = (int16_t)txt_get_int(&s_monstats, ms, dcol(&s_monstats, col), 0);
+    }
+    u->timer = 1 + (int)(spawn_rnd() % 25u); /* (no piensan todos en el mismo tick) */
 }
 
 static void spawn_preset_monster(int act, int id, float x, float y, int level)
@@ -1588,13 +1937,50 @@ static void spawn_preset_monster(int act, int id, float x, float y, int level)
                 units_spawn_monster(a, x, y, level);
                 spawn_group(b, 2 + (int)(spawn_rnd() % 2), x + 1.5f, y + 1.5f, level);
             }
+        } else if (act == 5) {
+            /* El Acto 5 (D2GAME_SpawnPresetMonster_6FC66560): en Normal, grupos (MinGrp..MaxGrp) de
+               diablillos (en el Bloody Foothills, Death Maulers) y de esbirros; los cadáveres de un
+               esbirro, de un diablillo (o Death Mauler) y de un bárbaro; la horda reanimada caída que
+               se levanta a los 10 a 12 segundos. place_imp, place_minion y place_bloodlord no ponen nada. */
+            int lid = s_level_id_at ? s_level_id_at(x, y) : 0;
+            const char *base = strcmp(place, "place_impgroup") == 0 || strcmp(place, "place_deadimp") == 0
+                                   ? (lid == 110 ? "deathmauler" : "imp")
+                               : strcmp(place, "place_miniongroup") == 0 || strcmp(place, "place_deadminion") == 0 ? "minion"
+                               : strcmp(place, "place_deadbarb") == 0                                            ? "act5barb"
+                               : strcmp(place, "place_reanimateddead") == 0                                      ? "reanimatedhorde"
+                                                                                                                 : NULL;
+            char a[24];
+            if (!base || monster_variant(base, level, a, sizeof a) != 0)
+                return;
+            if (strstr(place, "group")) {
+                int ms = mon_row(&s_monstats, a), lo = txt_get_int(&s_monstats, ms, "MinGrp", 2), hi = txt_get_int(&s_monstats, ms, "MaxGrp", 4);
+                spawn_group(a, lo + (hi > lo ? (int)(spawn_rnd() % (uint32_t)(hi - lo + 1)) : 0), x, y, level);
+                return;
+            }
+            Unit *c = create_monster(strcmp(base, "act5barb") == 0 ? "act5barb1" : a, x, y, level, 1);
+            if (!c)
+                return;
+            c->hp = 0;
+            c->solid = 0;
+            set_state(c, ST_DEAD);
+            c->anim_acc = 0;
+            if (strcmp(base, "reanimatedhorde") == 0) /* (a5_reanimate la levanta cuando ai_p[2] llega a 3 s) */
+                c->ai_p[2] = 3 * TICK_RATE - (250 + (int)(spawn_rnd() % 50u)) * TICK_RATE / 25;
+            else
+                c->ai_p[1] = 1, c->exp = 0, c->tc[0] = '\0', c->searched = 1;
         }
         return;
     }
-    if (spawn_superunique(place, x, y, level) == 0)
+    if (spawn_superunique(place, x, y, level) >= 0)
         return;
-    /* Fuera del pueblo, los que no son NPC son enemigos (Andariel) */
+    /* Fuera del pueblo, los que no son NPC son enemigos (Andariel), salvo los
+       del lado de los jugadores (los bárbaros del Acto 5) */
     int ms = mon_row(&s_monstats, place);
+    if (level > 0 && ms >= 0 && txt_get_int(&s_monstats, ms, "npc", 0) != 1 &&
+        txt_get_int(&s_monstats, ms, "Align", 0) == 1) {
+        barb_spawn(place, ms, x, y, level);
+        return;
+    }
     int enemy = level > 0 && ms >= 0 && txt_get_int(&s_monstats, ms, "npc", 0) != 1;
     Unit *u = create_monster(place, x, y, level, enemy);
     /* El NPC que queda sobre algo bloqueado (Tyrael, en la tarima de Tal
@@ -1606,6 +1992,7 @@ static void spawn_preset_monster(int act, int id, float x, float y, int level)
             if (wall_foot(s_map, nx, ny, u->foot, u->move_mask) == 0) {
                 u->x = u->prev_x = u->home_x = nx;
                 u->y = u->prev_y = u->home_y = ny;
+                grid_moved(u);
                 break;
             }
         }
@@ -1637,30 +2024,81 @@ static void object_look(int row, CharLook *look)
 {
     memset(look, 0, sizeof *look);
     strcpy(look->base, "objects");
-    lower_copy(look->token, sizeof look->token, txt_get(&s_objects, row, txt_col(&s_objects, "Token")));
+    /* El Token son 2 letras (DATATBLS_LoadObjectsTxt: TXTFIELD_ASCII de largo 2): el de RedLight es "ss " */
+    lower_copy(look->token, 3, txt_get(&s_objects, row, txt_col(&s_objects, "Token")));
     for (int c = 0; c < COMP_COUNT; c++)
         if (txt_get_int(&s_objects, row, k_comp_names[c], 0) == 1)
             strcpy(look->part[c], "lit");
 }
 
-/* Los gráficos de un objeto de objects.txt en ese modo */
+/* Los gráficos de un objeto de objects.txt en ese modo. Se recuerdan por
+   fila y modo (los cofres y barriles de cada sala buscaban de nuevo en toda
+   la tabla de gráficos): vale mientras ese lugar siga con la misma clave. */
+static struct {
+    UnitGfx *g;
+    int      row, mode;
+    char     key[32];
+} s_obj_gfx_memo[256];
+
 static UnitGfx *object_gfx(int row, const char *mode)
 {
+    int mi = obj_mode_index(mode);
+    unsigned slot = ((unsigned)row * 8u + (unsigned)mi) & 255u;
+    UnitGfx *m = s_obj_gfx_memo[slot].g;
+    if (m && s_obj_gfx_memo[slot].row == row && s_obj_gfx_memo[slot].mode == mi && strcmp(k_obj_modes[mi], mode) == 0 &&
+        strcmp(m->key, s_obj_gfx_memo[slot].key) == 0 && gfx_state(m) != GFX_FAILED)
+        return m;
     CharLook look;
     object_look(row, &look);
     char key[32];
     snprintf(key, sizeof key, "objects/%s/%s", look.token, mode);
     const char *modes[ANIM_COUNT] = { mode };
-    return get_gfx(key, &look, modes, "hth");
+    UnitGfx *g = get_gfx(key, &look, modes, "hth");
+    s_obj_gfx_memo[slot].g = g;
+    s_obj_gfx_memo[slot].row = row;
+    s_obj_gfx_memo[slot].mode = mi;
+    snprintf(s_obj_gfx_memo[slot].key, sizeof s_obj_gfx_memo[slot].key, "%s", key);
+    return g;
 }
+
+static Unit *spawn_object_row(Map *m, int row, const char *cls, float x, float y, const char *force_mode);
 
 /* Un objeto de objects.txt por su clase; `force_mode` NULL = el de siempre */
 static Unit *spawn_object_class(Map *m, const char *cls, float x, float y, const char *force_mode)
 {
-    int row = txt_find_row(&s_objects, txt_col(&s_objects, "Class"), cls);
+    return spawn_object_row(m, txt_find_row(&s_objects, txt_col(&s_objects, "Class"), cls), cls, x, y, force_mode);
+}
+
+/* Lo mismo por su fila (el reparto de objects.inc ya la sabe). `cls` es el
+   nombre que queda (el de objpreset.txt puede venir con otras mayúsculas:
+   LamesEnsTome); NULL = el de objects.txt */
+static Unit *spawn_object_row(Map *m, int row, const char *cls, float x, float y, const char *force_mode)
+{
+    if (!cls)
+        cls = txt_get(&s_objects, row, txt_col(&s_objects, "Class"));
+    /* El lugar de Larzuk en Harrogath: ahí sale él (OBJECTS_InitFunction71_LarzukStandard),
+       o en el lugar libre más cercano */
+    if (row >= 0 && txt_get_int(&s_objects, row, "InitFn", 0) == 71) {
+        int i = units_spawn_npc("larzuk", x, y);
+        /* (el marcador queda sobre su yunque: al lugar libre más cercano, como los NPC de los DS1) */
+        Unit *u = i >= 0 ? &s_units[i] : NULL;
+        for (int r = 1; u && m && wall_foot(m, u->x, u->y, u->foot, u->move_mask) > 0 && r <= 8; r++)
+            for (int a = 0; a < 8 * r; a++) {
+                float nx = x + cosf((float)a * PI_F / (4.0f * r)) * (float)r, ny = y + sinf((float)a * PI_F / (4.0f * r)) * (float)r;
+                if (wall_foot(m, nx, ny, u->foot, u->move_mask) == 0) {
+                    u->x = u->prev_x = u->home_x = nx;
+                    u->y = u->prev_y = u->home_y = ny;
+                    grid_moved(u);
+                    break;
+                }
+            }
+        return NULL;
+    }
     /* marcadores invisibles (sonido ambiente, puntos de aparición); los de los
-       glifos del Invocador sí (dibujo vacío ss, como los de Jerhyn): ahí flotan */
-    if (row < 0 || (txt_get_int(&s_objects, row, "Draw", 0) == 0 && strcmp(cls, "PlaceArcaneThingamajig") != 0))
+       glifos del Invocador sí (dibujo vacío ss, como los de Jerhyn): ahí flotan;
+       y el lugar donde sale Diablo (a4quest.inc) */
+    if (row < 0 || (txt_get_int(&s_objects, row, "Draw", 0) == 0 && strcmp(cls, "PlaceArcaneThingamajig") != 0 &&
+                    strcmp(cls, "DiabloStart") != 0))
         return NULL;
 
     /* Fogatas, antorchas y el waypoint del pueblo arrancan encendidos */
@@ -1678,6 +2116,7 @@ static Unit *spawn_object_class(Map *m, const char *cls, float x, float y, const
     }
     u->gfx = g;
     u->obj_row = row;
+    u->obj_mode = mode;
     object_frames(u, mode);
     CharLook look;
     object_look(row, &look);
@@ -1761,13 +2200,105 @@ void units_object_mode(int i, const char *mode, const char *next)
     char col[16];
     snprintf(col, sizeof col, "FrameDelta%d", obj_mode_index(mode));
     u->anim_speed = txt_get_int(&s_objects, u->obj_row, col, 256);
-    object_frames(u, obj_mode_index(mode));
+    u->obj_mode = obj_mode_index(mode);
+    object_frames(u, u->obj_mode);
     snprintf(u->obj_next, sizeof u->obj_next, "%s", next ? next : "");
+}
+
+int units_place_object(Map *m, const char *cls, float x, float y)
+{
+    Unit *u = spawn_object_class(m, cls, x, y, NULL);
+    return u ? (int)(u - s_units) : -1;
+}
+
+int units_place_object_row(Map *m, int row, float x, float y)
+{
+    Unit *u = row > 0 && row < s_objects.rows ? spawn_object_row(m, row, NULL, x, y, NULL) : NULL;
+    return u ? (int)(u - s_units) : -1;
+}
+
+int units_object_row(int i)
+{
+    return i >= 0 && i < s_num_units && s_units[i].zone != ZONE_FREE && s_units[i].obj_row > 0 ? s_units[i].obj_row : 0;
+}
+
+int units_object_cur_mode(int i)
+{
+    return units_object_row(i) ? s_units[i].obj_mode : -1;
+}
+
+int units_object_state(int i)
+{
+    return units_object_row(i) ? s_units[i].obj_state : 0;
+}
+
+void units_object_set_state(int i, int state)
+{
+    if (units_object_row(i))
+        s_units[i].obj_state = state;
+}
+
+/* La animación del modo de ahora, ya terminada (el cofre que ya estaba abierto) */
+void units_object_finish(int i)
+{
+    if (!units_object_row(i))
+        return;
+    Unit *u = &s_units[i];
+    if (u->obj_next[0]) {
+        char next[4];
+        snprintf(next, sizeof next, "%s", u->obj_next);
+        units_object_mode(i, next, NULL);
+    }
+    u->anim_acc = (u->obj_frames > 0 ? u->obj_frames : 64) << 8;
+}
+
+int units_objects_find(const char *cls)
+{
+    return txt_find_row(&s_objects, txt_col(&s_objects, "Class"), cls);
+}
+
+int units_objects_row_of_id(int id)
+{
+    char key[12];
+    snprintf(key, sizeof key, "%d", id);
+    if (id + 1 > 0 && id + 1 < s_objects.rows && strcmp(txt_get(&s_objects, id + 1, txt_col(&s_objects, "*ID")), key) == 0)
+        return id + 1;
+    return txt_find_row(&s_objects, txt_col(&s_objects, "*ID"), key);
+}
+
+int units_objects_int(int row, const char *col, int def)
+{
+    return row > 0 && row < s_objects.rows ? txt_get_int(&s_objects, row, col, def) : def;
+}
+
+const char *units_objects_str(int row, const char *col)
+{
+    return row > 0 && row < s_objects.rows ? txt_get(&s_objects, row, txt_col(&s_objects, col)) : "";
 }
 
 void units_set_picker(const char *(*pick)(float x, float y))
 {
     s_picker = pick;
+}
+
+/* Un monstruo que no es enemigo ni habla (los bárbaros presos del Acto 5): pasea en su lugar */
+int units_spawn_neutral(const char *id, float x, float y, int level)
+{
+    Unit *u = create_monster(id, x, y, level, 0);
+    if (!u)
+        return -1;
+    u->wander = 1.5f;
+    return (int)(u - s_units);
+}
+
+void units_walk_to(int i, float x, float y)
+{
+    if (i < 0 || i >= s_num_units)
+        return;
+    Unit *u = &s_units[i];
+    u->goal = 1;
+    u->goal_x = x;
+    u->goal_y = y;
 }
 
 int units_spawn_npc(const char *id, float x, float y)
@@ -1793,11 +2324,61 @@ void units_zone_end(void)
     s_spawn_zone = -1;
 }
 
-int units_spawn_presets(Map *m, int (*level_of)(float x, float y))
+/* Lo que sale de una baldosa de puerta (DRLGROOMTILE_AddTilePresetUnits, la
+   parte del Acto 5): en Harrogath, el portón; en las barricadas (solo las
+   que se ven), las torres, puertas y muros de las barricadas, las puertas
+   de las prisiones y los portales rojos a los infiernos.
+   shortcut: el portón sale abierto (el original arranca cerrado y se abre
+   con un clic; acá todavía no hay puertas que se abren) */
+static void spawn_tile_unit(Map *m, const MapObject *o, int level)
+{
+    static const struct {
+        uint8_t     style, seq, right, obj;
+        const char *id;
+        int8_t      dx, dy;
+    } k_tile[] = {
+        { 3, 3, 0, 1, "Gate", -2, 4 },
+        { 2, 1, 0, 0, "barricadetower", 1, 2 },  { 2, 1, 1, 0, "barricadetower", 2, 1 }, { 2, 6, 0, 0, "barricadetower", 1, 1 },
+        { 2, 2, 0, 0, "barricadedoor2", 0, 1 },  { 2, 3, 1, 0, "barricadedoor1", 1, 0 }, { 26, 0, 0, 0, "prisondoor", 0, 1 },
+        { 2, 4, 1, 0, "barricadewall1", 0, 0 },  { 2, 4, 0, 0, "barricadewall2", 0, 0 },
+        { 29, 0, 1, 1, "PortalPermanent", 2, 0 }, { 29, 0, 0, 1, "PortalPermanent", 0, 2 },
+    };
+    int lid = s_level_id_at ? s_level_id_at(o->x, o->y) : 0, lo, hi;
+    if (lid == 109) { /* Harrogath: el portón (shortcut: sin la torre, que acá sería un enemigo en el pueblo) */
+        lo = 0;
+        hi = 0;
+    } else if ((lid == 111 || lid == 112 || lid == 117) && !(o->id >> 16 & 1)) {
+        lo = 1;
+        hi = (int)(sizeof k_tile / sizeof k_tile[0]) - 1;
+    } else {
+        return;
+    }
+    int style = o->id >> 8 & 0xFF, seq = o->id >> 1 & 0x7F, right = o->id & 1;
+    for (int k = lo; k <= hi; k++) {
+        if (k_tile[k].style != style || k_tile[k].seq != seq || k_tile[k].right != right)
+            continue;
+        float x = o->x + k_tile[k].dx + 0.5f, y = o->y + k_tile[k].dy + 0.5f;
+        if (k_tile[k].obj)
+            spawn_object_class(m, k_tile[k].id, x, y, k == 0 ? "on" : NULL);
+        else
+            create_monster(k_tile[k].id, x, y, level, 1);
+        return;
+    }
+}
+
+int units_spawn_presets(Map *m, int (*level_of)(float x, float y), int from, int cap, double ms)
 {
     s_map = m;
-    for (int i = 0; i < m->num_objects; i++) {
+    double until = ms > 0 ? map_now_ms() + ms : 0;
+    int i = from > 0 ? from : 0;
+    for (int done = 0; i < m->num_objects; i++, done++) {
+        if (done > 0 && ((cap > 0 && done >= cap) || (until > 0 && map_now_ms() > until)))
+            break;
         const MapObject *o = &m->objects[i];
+        if (o->type == 3) {
+            spawn_tile_unit(m, o, level_of ? level_of(o->x, o->y) : 1);
+            continue;
+        }
         if (o->type == 1 && o->act == 3 && o->id == 21) { /* el Orbe cautivante: un objeto (que se golpea) y el orbe que se ve (DRLGPRESET) */
             spawn_object_class(m, "CompellingOrb", o->x, o->y, NULL);
             create_monster("compellingorb", o->x, o->y, level_of ? level_of(o->x, o->y) : 1, 0);
@@ -1806,7 +2387,7 @@ int units_spawn_presets(Map *m, int (*level_of)(float x, float y))
         else if (o->type == 2)
             spawn_object(m, o->act, o->id, o->x, o->y);
     }
-    return s_num_units;
+    return i;
 }
 
 /* ---- Movimiento e IA ---- */
@@ -1969,6 +2550,7 @@ static void move_towards(Unit *u, const Map *m, float tx, float ty)
         u->x = nx;
         u->y = ny;
     }
+    grid_moved(u);
     u->walking = u->x != u->prev_x || u->y != u->prev_y;
     u->sector = sector_from_world(dx, dy);
 }
@@ -2066,6 +2648,7 @@ static void wander_tick(Unit *u, const Map *m, const UnitTarget *pl, int n)
     } else {
         u->x = nx;
         u->y = ny;
+        grid_moved(u);
         u->sector = sector_from_world(dx, dy);
     }
 }
@@ -2074,6 +2657,29 @@ static int in_radius_xy(const Unit *u, float x, float y, float radius)
 {
     float dx = u->x - x, dy = u->y - y;
     return dx * dx + dy * dy <= radius * radius;
+}
+
+/* El jugador más cercano de los que lo tienen en su pantalla (con `scale`
+   > 1, un poco más allá del borde); -1 = ninguno */
+static int nearest_player_seen(const Unit *u, const UnitTarget *pl, int n, float scale, float *dist)
+{
+    int best = -1;
+    float best_d = 1e9f;
+    for (int i = 0; i < n; i++) {
+        if (!pl[i].alive || pl[i].in_town)
+            continue;
+        float sx, sy;
+        iso_to_screen(pl[i].x - u->x, pl[i].y - u->y, &sx, &sy);
+        if (fabsf(sx) > SCREEN_W * 0.5f * scale || fabsf(sy) > SCREEN_H * 0.5f * scale)
+            continue;
+        float dx = pl[i].x - u->x, dy = pl[i].y - u->y, d = sqrtf(dx * dx + dy * dy) - pl[i].body;
+        if (d < best_d) {
+            best_d = d;
+            best = i;
+        }
+    }
+    *dist = best_d;
+    return best;
 }
 
 static int nearest_player(const Unit *u, const UnitTarget *pl, int n, float range, float *dist)
@@ -2212,8 +2818,8 @@ static int enemy_melee_hit(Unit *u, UnitTarget *t, int anim, int pct, int ar_pct
     int dmg = (lo + (int)(rnd(u) % (uint32_t)(hi - lo + 1))) * pct / 100;
     if (u->curse_ticks > 0) /* Grito de batalla */
         dmg = dmg * (100 + u->curse_dmg_pct) / 100;
-    if (t->amplified) /* maldecido: el doble */
-        dmg *= 2;
+    if (t->amplified) /* maldecido: el doble (Decrepitud: la mitad más) */
+        dmg = dmg * (100 + t->amplified) / 100;
     int ndmg = (u->nc_ticks > 0 ? u->nc_dmg : 0) + (u->enrage_ticks > 0 ? u->enrage_dmg : 0);
     if (ndmg) /* Debilitar, Decrepitud, el Sigilo de rencor */
         dmg = dmg * (100 + ndmg) / 100;
@@ -2251,18 +2857,46 @@ static void seq_attack(Unit *u, const Map *m, UnitTarget *pl)
     step = step < q->n ? step : q->n - 1;
     u->anim_acc += u->gfx->anim[q->anim[step]].speed;
     int now = u->anim_acc >> 8;
-    if (strcmp(sk, "MonLeap") == 0) { /* del principio al final, por el aire */
+    if (strcmp(sk, "MonLeap") == 0 || strcmp(sk, "MonLeapAttack") == 0) { /* del principio al final, por el aire (Korlic pega al caer) */
         float f = (float)(now < q->n ? now : q->n) / (float)q->n;
         u->x = u->leap_x0 + (u->leap_x1 - u->leap_x0) * f;
         u->y = u->leap_y0 + (u->leap_y1 - u->leap_y0) * f;
-    } else if (strcmp(sk, "SerpentCharge") == 0 && q->anim[step] == ANIM_WALK && u->target >= 0) {
-        float speed = u->speed; /* repta rápido hasta el jugador */
+        grid_moved(u);
+    } else if (strcmp(sk, "DiabRun") == 0 && u->target >= 0) {
+        /* La carga de Diablo (SrvDo103): desde el cuadro 5 corre hasta donde estaba el jugador (velocidad
+           calc1 = 20), repitiendo los cuadros 6..13; al llegar sigue en el 14, y pega en el 18 */
+        if (now >= 5 && now <= 13) {
+            float speed = u->speed;
+            u->speed = speed * 3.0f;
+            if (dist_to(u, u->leap_x1, u->leap_y1) > u->reach) {
+                move_towards(u, m, u->leap_x1, u->leap_y1);
+                if (now == 13 && u->ai_p[2]++ < 3) /* (hasta tres vueltas) */
+                    u->anim_acc = 6 << 8;
+            } else {
+                u->anim_acc = 14 << 8;
+            }
+            u->speed = speed;
+            u->walking = 0;
+        } else if (now > 13) {
+            u->ai_p[2] = 0;
+        }
+    } else if (strcmp(sk, "Whirlwind") == 0) { /* Talic gira hasta pasar al jugador, pegando en el camino */
+        float speed = u->speed;
+        u->speed = speed * 2.0f;
+        if (dist_to(u, u->leap_x1, u->leap_y1) > 0.5f)
+            move_towards(u, m, u->leap_x1, u->leap_y1);
+        u->speed = speed;
+        u->walking = 0;
+    } else if ((strcmp(sk, "SerpentCharge") == 0 || strcmp(sk, "Charge") == 0) && q->anim[step] == ANIM_WALK && u->target >= 0) {
+        float speed = u->speed; /* repta (o carga) rápido hasta el jugador */
         u->speed = (u->run_speed > speed ? u->run_speed : speed) * 2.0f;
         if (dist_to(u, pl[u->target].x, pl[u->target].y) > u->reach)
             move_towards(u, m, pl[u->target].x, pl[u->target].y);
         u->speed = speed;
         u->walking = 0;
     }
+    if (u->a4_hit == A4H_NEST && now >= 10) /* el nido (seq_vileres): la cría sale en el cuadro 10 */
+        a4_hit_frame(u, pl);
     for (; u->hit_done <= now && u->hit_done < q->n; u->hit_done++) {
         if (!q->hit[u->hit_done] || u->target < 0)
             continue;
@@ -2348,15 +2982,26 @@ static void enemy_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
 
     switch (u->state) {
     case ST_DEAD:
+        if (u->ai == AI_REANIMATED) /* la horda reanimada se levanta */
+            a5_reanimate(u);
         return;
     case ST_DYING:
         if (u->boom) /* encantado de fuego o frío: explota al morir */
             death_boom(u, pl, n);
+        if (u->pregnant) /* preñado: sale el gusano (monai5.inc) */
+            a5_birth(u);
+        if (u->ai == AI_SUICIDEMINION) /* el esbirro suicida explota al morir (monai5.inc) */
+            a5_suicide_boom(u, pl, n);
         u->anim_acc += a->speed;
         if ((u->anim_acc >> 8) >= frames)
             set_state(u, ST_DEAD);
         return;
     case ST_HIT:
+        if (u->ai == AI_SUICIDEMINION) { /* (MONSTERUNIQUE_SuicideModeChange: si se resiente, muere) */
+            units_play_death((int)(u - s_units));
+            return;
+        }
+        /* fall through */
     case ST_RISE:
         u->anim_acc += a->speed;
         if ((u->anim_acc >> 8) >= frames)
@@ -2370,7 +3015,19 @@ static void enemy_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
         u->anim_acc += a->speed;
         int frame = u->anim_acc >> 8;
         int hit_frame = a->hit_frame > 0 ? a->hit_frame : frames / 2;
-        if (!u->hit_done && frame >= hit_frame && u->ai == AI_MAGGOTEGG) {
+        if (u->inferno_end) { /* el aliento sostenido: quieto en su cuadro mientras dura */
+            if ((int)s_unit_ticks < u->inferno_end && frame >= u->inferno_frame) {
+                u->anim_acc = u->inferno_frame << 8;
+                a4_inferno_tick(u, pl);
+                return;
+            }
+            if ((int)s_unit_ticks >= u->inferno_end)
+                u->inferno_end = 0;
+        }
+        if (!u->hit_done && frame >= hit_frame && u->a4_hit) { /* los hechizos del Acto 4 (monai4.inc) */
+            u->hit_done = 1;
+            a4_hit_frame(u, pl);
+        } else if (!u->hit_done && frame >= hit_frame && u->ai == AI_MAGGOTEGG) {
             /* El huevo se abre: sale la larva (y el huevo se termina, sin experiencia ni botín) */
             u->hit_done = 1;
             int saved = s_spawn_zone;
@@ -2447,6 +3104,8 @@ static void enemy_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
             UnitTarget *t = &pl[u->target];
             const char *name = u->missile2[0] && missiles_exists(u->missile2) && rnd(u) % 3 == 0 ? u->missile2 : u->missile;
             int shots = u->ring > 0 ? u->ring : u->spray > 1 ? u->spray : 1;
+            static int s_mon_group = -1; /* las novas de los monstruos: a cada jugador le pega uno solo (game.c) */
+            int group = (u->spell_flags & MF_GROUP) ? s_mon_group-- : 0;
             for (int s = 0; s < shots; s++) {
             float a = u->ring > 0 ? (float)s * 2.0f * PI_F / (float)shots /* la Nova: alrededor */
                     : atan2f(t->y - u->y, t->x - u->x) + (shots > 1 ? (s - (shots - 1) / 2.0f) * 0.17f : 0.0f);
@@ -2472,6 +3131,7 @@ static void enemy_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
                 mi->emin = emin;
                 mi->emax = emax;
                 mi->flags |= u->spell_flags;
+                mi->group = group;
                 if (u->spell_elem || u->spell_dmax) { /* un hechizo: el daño de la habilidad en su nivel */
                     mi->dmin = u->spell_dmin;
                     mi->dmax = u->spell_dmax;
@@ -2489,6 +3149,19 @@ static void enemy_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
                     mi->emin = mi->dmin / 2 + 1;
                     mi->emax = mi->dmax / 2 + 1;
                 }
+                /* El veneno de missiles.txt es por cuadro (en 1/256 << HitShift):
+                   el total en sus ELen cuadros, como el original (antes pegaba
+                   todo de una); el frío dura su ELen */
+                int elen = missiles_elen(name);
+                if (mi->elem == ELEM_POIS && elen > 0) {
+                    missiles_poison_total(name, &mi->emin, &mi->emax);
+                    mi->elen = elen;
+                } else if (mi->elem == ELEM_COLD && elen > 0 && mi->elen <= 0) {
+                    mi->elen = elen;
+                }
+                /* Las pociones de las felinas van en arco y caen donde estaba el blanco */
+                if (missiles_is_lob(mi))
+                    missiles_lob_to(mi, t->x, t->y);
                 if (HAS_MOD(u, MOD_STRONG) && pl[u->target].amplified) {
                     mi->dmin *= 2;
                     mi->dmax *= 2;
@@ -2606,10 +3279,12 @@ static void enemy_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
         }
     }
     u->mm_attack = 0;
-    float sight = u->state == ST_CHASE ? CHASE_RANGE : AGGRO_RANGE;
+    int t;
     if ((u->nc_ticks > 0 && u->nc_kind == NC_DIM) || (u->cloak_ticks > 0 && u->cloak_blind))
-        sight = 1.5f; /* Visión reducida y Manto de sombras: solo ve al que tiene al lado */
-    int t = nearest_player(u, pl, n, sight, &d);
+        t = nearest_player(u, pl, n, 1.5f, &d); /* Visión reducida y Manto de sombras: solo ve al que tiene al lado */
+    else if ((t = nearest_player_seen(u, pl, n, u->state == ST_CHASE ? CHASE_SCREEN : 1.0f, &d)) < 0 &&
+             u->state == ST_CHASE)
+        t = nearest_player(u, pl, n, CHASE_RANGE, &d);
     if (t < 0) {
         u->state = ST_IDLE;
         if (u->ai && ai_tick(u, m, pl, -1, 1e9f)) /* el gusano se entierra, el huevo espera */
@@ -3116,15 +3791,123 @@ static void turret_tick(Unit *u)
     set_state(u, ST_ATTACK);
 }
 
+/* El monstruo que tiene más cerca a esa distancia (con los tamaños), o -1 */
+static int barb_nearest(const Unit *u, float range, float *dist)
+{
+    int c[GRID_CANDS], best = -1;
+    float h = range + UNIT_RADIUS_MAX + GRID_SLACK, best_d = range;
+    int nc = grid_box(u->x - h, u->y - h, u->x + h, u->y + h, c);
+    for (int k = 0; k < (nc >= 0 ? nc : s_num_units); k++) {
+        int i = nc >= 0 ? c[k] : k;
+        if (!units_alive_enemy(i))
+            continue;
+        const Unit *e = &s_units[i];
+        float d = dist_to(u, e->x, e->y) - e->radius;
+        if (d < best_d) {
+            best_d = d;
+            best = i;
+        }
+    }
+    *dist = best_d;
+    return best;
+}
+
+/* Lo que piensa un bárbaro del Acto 5 (AITHINK_Fn127_NpcBarb): al monstruo
+   que tiene al lado le pega y después espera aip1; al que está a menos de
+   aip3, corre (aip2 %); si no, camina 20 a 40 hacia el oeste (si no puede,
+   20 a 40 al norte o al sur) y si tampoco, espera 15. Mientras camina vuelve
+   a mirar cada aip1 ticks (el original camina de a tramos y piensa al final
+   de cada uno). Lejos de todos los jugadores no hace nada, como los monstruos
+   (las salas inactivas del original) */
+static void barb_think(Unit *u, const Map *m, const UnitTarget *pl, int n)
+{
+    int near = 0;
+    for (int k = 0; k < n && !near; k++) {
+        float dx = pl[k].x - u->x, dy = pl[k].y - u->y;
+        near = pl[k].player && dx * dx + dy * dy < SLEEP_RANGE * SLEEP_RANGE;
+    }
+    if (!near) {
+        u->walking = u->running = 0;
+        return;
+    }
+    int stall = u->aip[0] > 0 ? u->aip[0] : 15;
+    float chase = u->aip[2] > 0 ? (float)u->aip[2] : 15.0f;
+    int walk = 0; /* sigue caminando a donde iba si no aparece nadie */
+    if (u->running) { /* corre hacia el monstruo hasta llegar */
+        const Unit *e = units_alive_enemy(u->target) ? &s_units[u->target] : NULL;
+        float d = e ? dist_to(u, e->x, e->y) - e->radius : 0.0f;
+        if (e && d > u->reach && d < chase + 4.0f) {
+            float sp = u->speed;
+            u->speed = u->run_speed > sp ? u->run_speed : sp;
+            move_towards(u, m, e->x, e->y);
+            u->speed = sp;
+            if (u->walking)
+                return;
+        }
+    } else if (u->walking) { /* camina a donde iba */
+        move_towards(u, m, u->target_x, u->target_y);
+        float dx = u->target_x - u->x, dy = u->target_y - u->y;
+        int there = dx * dx + dy * dy < 0.25f;
+        if (!u->walking && !there) { /* trabado: espera un poco */
+            u->timer = 15;
+            return;
+        }
+        walk = !there;
+        if (walk && --u->timer > 0)
+            return;
+    } else if (--u->timer > 0) {
+        return; /* espera */
+    }
+    u->walking = u->running = 0;
+    float d;
+    int best = barb_nearest(u, chase, &d);
+    if (best >= 0) {
+        u->target = best;
+        u->sector = sector_from_world(s_units[best].x - u->x, s_units[best].y - u->y);
+        if (d <= u->reach) { /* (y al terminar el golpe espera aip1) */
+            u->attack_anim = ANIM_ATTACK;
+            u->ranged_attack = 0;
+            set_state(u, ST_ATTACK);
+            u->hit_done = 0;
+            u->timer = stall;
+            return;
+        }
+        if ((int)(rnd(u) % 100u) < u->aip[1]) {
+            u->running = u->walking = 1;
+            return;
+        }
+    }
+    u->target = -1;
+    if (walk) {
+        u->walking = 1;
+        u->timer = stall;
+        return;
+    }
+    /* 20 a 40 al oeste; si no, al norte o al sur (primero uno al azar) */
+    int side = (int)(rnd(u) & 1u) ? 1 : -1;
+    for (int k = 0; k < 3; k++) {
+        float tx = u->x + (k == 0 ? -40.0f : -10.0f) + (float)(rnd(u) % 20u);
+        float ty = u->y - 10.0f + (float)(rnd(u) % 20u) + (k == 0 ? 0.0f : k == 1 ? -30.0f * (float)side : 30.0f * (float)side);
+        if (tx >= 0.0f && ty >= 0.0f && !wall_foot(m, tx, ty, u->foot, u->move_mask)) {
+            u->target_x = tx;
+            u->target_y = ty;
+            u->walking = 1;
+            u->timer = stall;
+            return;
+        }
+    }
+    u->timer = 15;
+}
+
 static void pet_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
 {
-    if (u->hidden || u->owner < 0 || u->owner >= n)
+    if (u->hidden || (!u->barb && (u->owner < 0 || u->owner >= n)))
         return;
     if (u->turret) {
         turret_tick(u);
         return;
     }
-    const UnitTarget *o = &pl[u->owner];
+    const UnitTarget *o = u->barb ? NULL : &pl[u->owner];
     const CharAnim *a = &u->gfx->anim[current_anim(u)];
     int frames = charanim_frames(a);
     if (u->pet_ticks > 0 && u->state < ST_DYING && --u->pet_ticks == 0) { /* se le terminó (Revivir, los muros) */
@@ -3198,7 +3981,7 @@ static void pet_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
                     int exp = units_damage(target, dealt);
                     if (exp > 0 && s_num_kills < MAX_KILLS) { /* la experiencia es del dueño */
                         s_kills[s_num_kills].unit = target;
-                        s_kills[s_num_kills].owner = u->owner;
+                        s_kills[s_num_kills].owner = u->barb ? UNITS_KILL_ALLY : u->owner;
                         s_kills[s_num_kills].exp = exp;
                         s_num_kills++;
                     }
@@ -3259,6 +4042,12 @@ static void pet_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
         u->anim_acc += u->gfx->anim[current_anim(u)].speed;
         return;
     }
+    if (u->barb) {
+        barb_think(u, m, pl, n);
+        if (u->state == ST_IDLE)
+            u->anim_acc += u->gfx->anim[current_anim(u)].speed;
+        return;
+    }
     float d_owner = dist_to(u, o->x, o->y);
     if (d_owner > MERC_WARP) {
         units_merc_warp((int)(u - s_units), o->x, o->y);
@@ -3272,14 +4061,15 @@ static void pet_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
         if (u->target >= 0 && u->target < s_num_units) {
             const Unit *e = &s_units[u->target];
             float d = dist_to(u, e->x, e->y);
-            if (e->enemy && e->state < ST_DYING && !e->hidden && d < PET_RANGE && dist_to(e, o->x, o->y) < PET_LEASH) {
+            if (e->enemy && e->state < ST_DYING && !e->hidden && e->killable && d < PET_RANGE &&
+                dist_to(e, o->x, o->y) < PET_LEASH) {
                 best = u->target;
                 best_d = d;
             }
         }
         for (int i = 0; best < 0 && i < s_num_units; i++) {
             const Unit *e = &s_units[i];
-            if (!e->enemy || e->state >= ST_DYING || e->hidden)
+            if (!e->enemy || e->state >= ST_DYING || e->hidden || !e->killable)
                 continue;
             float d = dist_to(u, e->x, e->y);
             if (d < best_d && dist_to(e, o->x, o->y) < PET_LEASH) {
@@ -3700,6 +4490,7 @@ void units_place(int i, float x, float y)
         u->sector = sector_from_world(x - u->x, y - u->y);
     u->x = x;
     u->y = y;
+    grid_moved(u);
 }
 
 int units_revivable(int i)
@@ -3718,6 +4509,20 @@ int units_pet_targets(int *out, int max)
         const Unit *u = &s_units[i];
         if (u->pet && !u->turret && !u->hidden && u->zone != ZONE_FREE && u->state < ST_DYING && u->owner >= 0)
             out[n++] = i;
+    }
+    /* y después los bárbaros del Acto 5 que tiene cerca algún jugador (los
+       otros no hacen nada: así no se llena la lista ni la recorre cada monstruo) */
+    for (int i = 0; i < s_num_units && n < max; i++) {
+        const Unit *u = &s_units[i];
+        if (!u->barb || u->hidden || u->zone == ZONE_FREE || u->state >= ST_DYING)
+            continue;
+        for (int k = 0; k < s_tick_npl; k++) {
+            float dx = s_tick_pl[k].x - u->x, dy = s_tick_pl[k].y - u->y;
+            if (s_tick_pl[k].player && dx * dx + dy * dy < SLEEP_RANGE * SLEEP_RANGE) {
+                out[n++] = i;
+                break;
+            }
+        }
     }
     return n;
 }
@@ -3913,7 +4718,7 @@ void units_merc_hide_all(void)
     for (int i = 0; i < s_num_units; i++) {
         if (s_units[i].merc)
             s_units[i].hidden = 1;
-        if (s_units[i].pet) /* la Valquiria de otra partida */
+        if (s_units[i].pet && !s_units[i].barb) /* la Valquiria de otra partida */
             units_remove(i);
     }
 }
@@ -3959,6 +4764,7 @@ void units_merc_warp(int i, float x, float y)
     }
     u->x = u->prev_x = x;
     u->y = u->prev_y = y;
+    grid_moved(u);
     u->walking = u->running = 0;
     if (u->state >= ST_DYING) { /* revivida */
         u->hp = u->max_hp;
@@ -3973,6 +4779,7 @@ void units_tick(const Map *m, UnitTarget *players, int num_players)
     s_tick_npl = num_players < TICK_PLAYERS ? num_players : TICK_PLAYERS;
     memcpy(s_tick_pl, players, (size_t)s_tick_npl * sizeof *players);
     ehydra_tick(players, num_players);
+    a5_tick();
     for (int i = 0; i < s_num_units; i++) {
         Unit *u = &s_units[i];
         if (u->zone == ZONE_FREE)
@@ -4041,6 +4848,10 @@ void units_tick(const Map *m, UnitTarget *players, int num_players)
                 u->mark_ticks--;
             if (u->enrage_ticks > 0)
                 u->enrage_ticks--;
+            if (u->lust_ticks > 0)
+                u->lust_ticks--;
+            if (u->shout_ticks > 0)
+                u->shout_ticks--;
             if (u->haste_ticks > 0 && u->state < ST_DYING) { /* más rápido: a veces, un tick de más */
                 u->haste_ticks--;
                 u->haste_acc += u->haste_pct;
@@ -4057,8 +4868,10 @@ void units_tick(const Map *m, UnitTarget *players, int num_players)
             u->owner = -1;
             u->target = -1;
             memset(&u->au, 0, sizeof u->au);
-            if (u->state < ST_DYING)
+            if (u->state < ST_DYING) {
+                u->solid = !u->hidden; /* monstruo otra vez: tapa el paso */
                 set_state(u, ST_CHASE);
+            }
         }
         if (u->pet) {
             sound_tick(u);
@@ -4089,7 +4902,10 @@ void units_tick(const Map *m, UnitTarget *players, int num_players)
             merc_tick(u, m, players, num_players);
             continue;
         }
-        wander_tick(u, m, players, num_players);
+        if (u->goal) /* el preso que va a su portal (monai5.inc) */
+            a5_goal_tick(u, m);
+        else
+            wander_tick(u, m, players, num_players);
         const CharAnim *a = &u->gfx->anim[current_anim(u)];
         u->anim_acc += u->anim_speed ? u->anim_speed : a->speed;
         /* La animación de abrirse (la jaula, el árbol) se juega una vez y sigue la de abierto */
@@ -4099,6 +4915,7 @@ void units_tick(const Map *m, UnitTarget *players, int num_players)
             units_object_mode(i, next, NULL);
         }
     }
+    a5_riders(); /* los diablillos montados van con su bestia (después de que se movió) */
 }
 
 /* ---- Consultas ---- */
@@ -4121,6 +4938,12 @@ int units_zone(int i)
 /* Borra las unidades de la zona: sus lugares quedan libres y los gráficos
    que nadie más usa se liberan. Las que se fueron caminando a otra zona
    armada pasan a ser de esa. */
+void units_heal(int i, int hp)
+{
+    if (i >= 0 && i < s_num_units && s_units[i].state < ST_DYING && hp > 0)
+        s_units[i].hp = s_units[i].hp + hp < s_units[i].max_hp ? s_units[i].hp + hp : s_units[i].max_hp;
+}
+
 void units_remove(int i)
 {
     if (i < 0 || i >= s_num_units || s_units[i].zone == ZONE_FREE)
@@ -4223,10 +5046,15 @@ int units_is_corpse(int i)
     return s_units[i].enemy && s_units[i].state >= ST_DYING;
 }
 
+int units_riding(int i)
+{
+    return s_units[i].ride != 0;
+}
+
 void units_draw(int i, int x, int y)
 {
     const Unit *u = &s_units[i];
-    if (u->hidden || !gfx_ready(u->gfx))
+    if (u->hidden || !gfx_ready(u->gfx) || (u->pshift && job_flag_get(&u->pshift->state) == PS_LOADING))
         return;
     int anim = current_anim(u);
     const CharAnim *a = &u->gfx->anim[anim];
@@ -4255,7 +5083,9 @@ void units_draw(int i, int x, int y)
             frame = frames - 1;
     }
 
-    if (u->shadow && u->state < ST_DYING)
+    if (u->ride) /* el diablillo montado, sobre el lomo de su bestia */
+        y -= RIDE_DY;
+    else if (u->shadow && u->state < ST_DYING)
         fb_shade_ellipse(x, y, 14, 6, 14);
     /* Los estados con color de states.txt: el frío (colorshift 108, prioridad
        100) le gana al veneno (104, prioridad 95) */
@@ -4264,10 +5094,11 @@ void units_draw(int i, int x, int y)
         tint = u->chill_ticks > 0 ? fb_hue(108) : u->poison_ticks > 0 ? fb_hue(104) : NULL;
     if (u->dark) /* el Guerrero de las sombras: oscuro */
         tint = g_light[LIGHT_LEVELS / 4];
-    if (u->pshift) { /* sus colores, y encima el del estado */
+    const uint8_t *pshift = unit_palshift(u);
+    if (pshift) { /* sus colores, y encima el del estado */
         static uint8_t combo[256];
         for (int c = 0; c < 256; c++)
-            combo[c] = tint ? tint[u->pshift[c]] : u->pshift[c];
+            combo[c] = tint ? tint[pshift[c]] : pshift[c];
         tint = combo;
     }
     if (u->champion == CHAMP_GHOSTLY && u->state < ST_DYING) /* el campeón fantasmal, translúcido */
@@ -4339,11 +5170,13 @@ int units_find(const char *name, float *x, float *y)
 
 int units_find_enemy(float x, float y, float range)
 {
-    int best = -1;
-    float best_d = range * range;
-    for (int i = 0; i < s_num_units; i++) {
+    int best = -1, c[GRID_CANDS];
+    float best_d = range * range, h = fabsf(range) + UNIT_RADIUS_MAX - UNIT_RADIUS + GRID_SLACK;
+    int nc = grid_box(x - h, y - h, x + h, y + h, c);
+    for (int k = 0; k < (nc >= 0 ? nc : s_num_units); k++) {
+        int i = nc >= 0 ? c[k] : k;
         const Unit *u = &s_units[i];
-        if (!u->enemy || u->state >= ST_DYING || u->hidden)
+        if (!u->enemy || u->state >= ST_DYING || u->hidden || !u->killable)
             continue;
         float dx = u->x - x, dy = u->y - y, d = sqrtf(dx * dx + dy * dy) - (u->radius - UNIT_RADIUS);
         d = d > 0.0f ? d * d : 0.0f;
@@ -4355,13 +5188,58 @@ int units_find_enemy(float x, float y, float range)
     return best;
 }
 
+int units_find_enemy_path(const int (*cells)[2], int n, int msize, const int *skip, int nskip)
+{
+    int best = -1, best_c = n;
+    float best_d = 1e30f;
+    if (n <= 0)
+        return -1;
+    int x0 = cells[0][0], x1 = x0, y0 = cells[0][1], y1 = y0;
+    for (int c = 1; c < n; c++) {
+        x0 = cells[c][0] < x0 ? cells[c][0] : x0;
+        x1 = cells[c][0] > x1 ? cells[c][0] : x1;
+        y0 = cells[c][1] < y0 ? cells[c][1] : y0;
+        y1 = cells[c][1] > y1 ? cells[c][1] : y1;
+    }
+    int cand[GRID_CANDS], nc = grid_box((float)(x0 - 2), (float)(y0 - 2), (float)(x1 + 3), (float)(y1 + 3), cand);
+    for (int j = 0; j < (nc >= 0 ? nc : s_num_units); j++) {
+        int i = nc >= 0 ? cand[j] : j;
+        const Unit *u = &s_units[i];
+        if (!u->enemy || u->state >= ST_DYING || u->hidden || !u->killable || u->x < x0 - 2 || u->x >= x1 + 3 ||
+            u->y < y0 - 2 || u->y >= y1 + 3)
+            continue;
+        int k = 0;
+        while (k < nskip && skip[k] != i)
+            k++;
+        if (k < nskip)
+            continue;
+        for (int c = 0; c < best_c + 1 && c < n; c++) {
+            if (!missiles_touches(msize, cells[c][0], cells[c][1], u->x, u->y, u->foot))
+                continue;
+            float dx = u->x - (cells[c][0] + 0.5f), dy = u->y - (cells[c][1] + 0.5f), d = dx * dx + dy * dy;
+            if (c < best_c || d < best_d) {
+                best = i;
+                best_c = c;
+                best_d = d;
+            }
+            break;
+        }
+    }
+    return best;
+}
+
+int units_foot(int i)
+{
+    return s_units[i].foot;
+}
+
 int units_find_melee(float x, float y, float range)
 {
     int best = -1;
     float best_d = 1e30f;
     for (int i = 0; i < s_num_units; i++) {
         const Unit *u = &s_units[i];
-        if (!u->enemy || u->state >= ST_DYING || u->hidden)
+        if (!u->enemy || u->state >= ST_DYING || u->hidden || !u->killable)
             continue;
         float dx = u->x - x, dy = u->y - y, d = sqrtf(dx * dx + dy * dy) - (u->radius - UNIT_RADIUS);
         if (d < range + u->melee_bonus && d < best_d) {
@@ -4378,7 +5256,10 @@ int units_find_reviver(float x, float y, float range)
     float best_d = range * range;
     for (int i = 0; i < s_num_units; i++) {
         const Unit *u = &s_units[i];
-        if (!u->enemy || u->state >= ST_DYING || !(u->resurrect || u->raiser))
+        /* (también la madre vil mientras le queden crías por parir: si no,
+           los bots mataban una cría tras otra sin llegar a ella) */
+        int spawner = u->ai == AI_VILEMOTHER && u->ai_p[0] < u->aip[0];
+        if (!u->enemy || u->state >= ST_DYING || !(u->resurrect || u->raiser || spawner))
             continue;
         float dx = u->x - x, dy = u->y - y, d = dx * dx + dy * dy;
         if (d < best_d) {
@@ -4437,7 +5318,8 @@ int units_resist(int i, int elem, int amount)
 
 int units_alive_enemy(int i)
 {
-    return i >= 0 && i < s_num_units && s_units[i].enemy && s_units[i].state < ST_DYING && !s_units[i].hidden;
+    return i >= 0 && i < s_num_units && s_units[i].enemy && s_units[i].state < ST_DYING && !s_units[i].hidden &&
+           s_units[i].killable;
 }
 
 /* Lo que reciben los otros del grupo de almas unidas */
@@ -4550,6 +5432,15 @@ const char *units_treasure_class(int i)
     return s_units[i].tc;
 }
 
+void units_debug_stats(int i, char *buf, size_t cap)
+{
+    const Unit *u = &s_units[i];
+    snprintf(buf, cap, "nivel %d vida %d daño %d-%d (%d-%d) exp %d def %d punt %d res %d/%d/%d/%d/%d/%d hab %s %d tc %s%s",
+             u->level, u->max_hp, u->dmg_min, u->dmg_max, u->a2_min, u->a2_max, u->exp, u->ac, u->ar, u->res[0],
+             u->res[1], u->res[2], u->res[3], u->res[4], u->res[5], u->skill[0][0] ? u->skill[0] : "-", u->sk_lvl[0],
+             u->tc, u->mods ? " (con modificadores)" : "");
+}
+
 float units_radius(int i)
 {
     return s_units[i].radius;
@@ -4564,7 +5455,7 @@ int units_defense(int i)
 {
     const Unit *u = &s_units[i];
     int pct = (u->curse_ticks > 0 ? u->curse_def_pct : 0) + (u->conv_ticks > 0 ? u->conv_def_pct : 0) + u->au.def_pct +
-              (u->cloak_ticks > 0 ? u->cloak_def : 0);
+              (u->cloak_ticks > 0 ? u->cloak_def : 0) + (u->lust_ticks > 0 ? 50 : 0) + (u->shout_ticks > 0 ? u->shout_pct : 0);
     if (u->berserk_ticks > 0)
         return 0; /* la Furia del hombre cabra: sin defensa mientras dura */
     int add = u->buff_ticks > 0 ? u->buff_def : 0; /* Atiborrarse */
@@ -4612,6 +5503,8 @@ int units_convert(int i, int owner, int ticks)
     u->enemy = 0;
     u->pet = 1;
     u->owner = owner;
+    u->solid = 0; /* como las otras mascotas, no le tapa el paso a su dueño (el demonio vinculado del Brujo lo
+                     encerraba al pie de la escalera del River of Flame) */
     u->convert_ticks = ticks;
     u->flee_ticks = u->stun_ticks = 0;
     memset(&u->ms, 0, sizeof u->ms);
@@ -4698,6 +5591,8 @@ static int in_radius(const Unit *u, float x, float y, float radius)
 
 void units_chill(int i, int ticks)
 {
+    if (s_cold_div > 1) /* en Pesadilla la mitad y en Infierno un cuarto (SUNITDMG: MonsterColdDivisor) */
+        ticks = ticks / s_cold_div > 1 ? ticks / s_cold_div : 1;
     if (units_alive_enemy(i) && ticks > s_units[i].chill_ticks)
         s_units[i].chill_ticks = ticks;
 }
@@ -4760,11 +5655,27 @@ int units_status(int i)
 
 int units_enemies_near(float x, float y, float radius, int *out, int max)
 {
-    int n = 0;
-    for (int i = 0; i < s_num_units && n < max; i++)
+    int n = 0, c[GRID_CANDS];
+    float h = fabsf(radius) + UNIT_RADIUS_MAX - UNIT_RADIUS + GRID_SLACK; /* (in_radius suma el tamaño) */
+    int nc = grid_box(x - h, y - h, x + h, y + h, c);
+    for (int k = 0; k < (nc >= 0 ? nc : s_num_units) && n < max; k++) {
+        int i = nc >= 0 ? c[k] : k;
         if (units_alive_enemy(i) && in_radius(&s_units[i], x, y, radius))
             out[n++] = i;
+    }
     return n;
+}
+
+int units_enemies_around(float x, float y, float r, int *out, int max)
+{
+    int n = 0, c[GRID_CANDS], nc = grid_box(x - r - GRID_SLACK, y - r - GRID_SLACK, x + r + GRID_SLACK, y + r + GRID_SLACK, c);
+    for (int k = 0; k < nc; k++)
+        if (units_alive_enemy(c[k])) {
+            if (n == max)
+                return -1;
+            out[n++] = c[k];
+        }
+    return nc >= 0 ? n : -1;
 }
 
 int units_scare(float x, float y, float radius, int ticks)
@@ -4838,7 +5749,8 @@ void units_slow(int i, int pct, int ticks)
 /* Congelado: no se mueve ni ataca y se ve azul */
 void units_freeze(int i, int ticks)
 {
-    units_stun(i, ticks);
+    /* (MonsterFreezeDivisor: la mitad en Pesadilla, un cuarto en Infierno) */
+    units_stun(i, s_freeze_div > 1 ? (ticks / s_freeze_div > 1 ? ticks / s_freeze_div : 1) : ticks);
     units_chill(i, ticks);
 }
 
@@ -4881,6 +5793,7 @@ void units_knockback(int i, float from_x, float from_y, float dist)
         if (s_map && unit_step_ok(s_map, u, nx, ny) && !crowded(u, nx, ny)) {
             u->x = nx;
             u->y = ny;
+            grid_moved(u);
             return;
         }
     }
@@ -4992,12 +5905,14 @@ int units_count_enemies(void)
 void units_free(void)
 {
     memset(s_ehydra, 0, sizeof s_ehydra);
+    a5_reset();
     for (int i = 0; i < s_num_gfx; i++)
         for (int k = 0; k < ANIM_COUNT; k++)
             charanim_free(&s_gfx[i].anim[k]);
     memset(s_gfx, 0, sizeof s_gfx);
     s_num_gfx = 0;
     s_num_units = s_free_from = 0;
+    s_grid_ok = 0;
     txt_free(&s_objpreset);
     txt_free(&s_monpreset);
     txt_free(&s_objects);
@@ -5005,4 +5920,6 @@ void units_free(void)
     txt_free(&s_monstats2);
     txt_free(&s_monlvl);
     txt_free(&s_superuniques);
+    txt_free(&s_monumod);
+    txt_free(&s_difflv);
 }

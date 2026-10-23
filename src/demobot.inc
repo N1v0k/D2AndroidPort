@@ -17,8 +17,8 @@
    En la demostración los jugadores no mueren (la vida no baja de 1) y cada
    cosa que deciden queda en el log, para encontrar lo que anda mal.
 
-   La del menú (s_demo_all) empieza con nivel 30 y todas las habilidades, y
-   las va usando una por una (ver "Todas las habilidades", más abajo). */
+   La del menú (s_demo_all) empieza con nivel 30 a 60 (según el acto) y todas
+   las habilidades, y las va usando una por una (ver "Todas las habilidades", más abajo). */
 
 #define DEMO_IGNORE      16
 #define DEMO_FARM_CAP    (15 * 60 * TICK_RATE) /* tope de farmeo por jefe */
@@ -42,7 +42,7 @@ typedef struct {
     int         ready_told;     /* jefes para los que ya dijo que está listo */
     uint64_t    seen_levels;    /* niveles por los que pasó (bit = índice de world_level) */
     uint64_t    barren;         /* niveles donde farmeó sin ganar experiencia: no vuelve */
-    int         farm_exp;       /* experiencia al llegar al nivel donde farmea */
+    uint32_t    farm_exp;       /* experiencia al llegar al nivel donde farmea */
     int         farm_in;        /* ya llegó (para medir lo que ganó ahí) */
     int         routing;        /* viajando por waypoint al destino del paso */
     uint32_t    cleared[DEMO_LEVELS]; /* cuándo limpió cada nivel (tick), 0 = nunca */
@@ -77,6 +77,7 @@ typedef struct {
     uint32_t    show_until;     /* la de apoyo ya usada: cuándo pasa a la siguiente */
     uint32_t    ward_at;        /* cuándo puede volver a poner el Tótem lúgubre */
     uint32_t    equip_at;       /* no se pudo cambiar (la mochila llena): cuándo prueba de nuevo */
+    int         escapes;        /* intentos de salir de un hueco cerrado (demo_escape) */
 } DemoBrain;
 
 static DemoBrain s_brain[MAX_PLAYERS];
@@ -245,6 +246,16 @@ static int demo_ignored(const DemoIgnore *list, int id)
     return 0;
 }
 
+static void demo_ignore(DemoIgnore *list, int id, int seconds);
+
+/* Lo que dejó en el piso para hacer lugar a lo de la misión: no lo levanta
+   de nuevo por un rato */
+static void demo_forget_item(const Player *p, int ground)
+{
+    if (ground >= 0)
+        demo_ignore(s_brain[p - s_pl].ignore_item, ground, 600);
+}
+
 static void demo_ignore(DemoIgnore *list, int id, int seconds)
 {
     int slot = 0;
@@ -378,16 +389,51 @@ static int demo_antidotes(const Player *p)
 {
     int n = 0;
     for (int k = 0; k < p->bag_count; k++)
-        n += p->bag[k].type->antidote_ticks > 0;
+        n += p->bag[k].type->antidote_ticks > 0 ? stack_count(&p->bag[k]) : 0;
     return n;
 }
 
+/* (las pilas cuentan por lo que tienen) */
 static int demo_bag_potions(const Player *p)
 {
     int n = 0;
     for (int k = 0; k < p->bag_count; k++)
-        n += is_potion(p->bag[k].type);
+        n += is_potion(p->bag[k].type) ? stack_count(&p->bag[k]) : 0;
     return n;
+}
+
+/* Cuántos Pergaminos de Portal tiene */
+static int demo_tp_charges(const Player *p)
+{
+    int n = 0;
+    for (int k = 0; k < p->bag_count; k++)
+        n += strcmp(p->bag[k].type->code, "tsc") == 0 ? stack_count(&p->bag[k]) : 0;
+    return n;
+}
+
+/* Lo de este pueblo con ese código (los pergaminos), o NULL */
+static const Item *demo_town_stock(const char *code)
+{
+    for (int v = 0; v < VENDOR_COUNT; v++) {
+        const Shop *sh = &s_shops[v];
+        for (int k = 0; sh->act == s_act && k < sh->count; k++)
+            if (strcmp(sh->stock[k].type->code, code) == 0)
+                return &sh->stock[k];
+    }
+    return NULL;
+}
+
+/* El portal al pueblo, con lo que sobra después de las pociones: pergaminos
+   hasta tener 10 (van todos en una pila) */
+static int demo_buy_tp(Player *p)
+{
+    int bought = 0;
+    const Item *tsc = demo_town_stock("tsc");
+    while (tsc && demo_tp_charges(p) < 10 && items_price(tsc, 0) + 50 <= p->gold && bag_add(p, tsc)) {
+        p->gold -= items_price(tsc, 0);
+        bought++;
+    }
+    return bought;
 }
 
 /* ¿Vale la pena levantarlo? */
@@ -930,23 +976,116 @@ static void  st_equip(Player *p, int kind);
 #define DEMO_SHOW_TICKS (15 * TICK_RATE) /* o cuánto pelea con ella, lo que pase antes */
 #define DEMO_SHOW_WAIT  (6 * TICK_RATE)  /* si la de apoyo no sale en este tiempo, sigue */
 
+/* ---- Pesadilla e Infierno (docs/plan-dificultades.md) ----
+   El equipo de un personaje de esa dificultad, para que los bots jueguen
+   ahí como lo haría una persona: cada pieza en su versión excepcional
+   (Pesadilla) o de élite (Infierno) si le alcanzan la fuerza, la destreza y
+   el nivel, rara, con las resistencias que compensan la penalidad (-40 o
+   -100: 10 o 20 a todas en cada una de las nueve piezas), vida y, la
+   armadura, defensa; las armas, con daño aumentado; el amuleto, con
+   habilidades */
+static void demo_diff_item(const Player *p, Item *it)
+{
+    if (!it->type || s_diff == 0 || it->type->ammo)
+        return;
+    for (int up = s_diff; up >= 1; up--) { /* (la de élite, o si no la excepcional) */
+        const ItemType *to = items_find(up == 2 ? it->type->ultracode : it->type->ubercode);
+        if (to && to != it->type && items_supported(to) && to->req_str <= player_str(p) && to->req_dex <= player_dex(p) &&
+            to->level_req <= p->level_num && items_upgrade(it, up == 2))
+            break;
+    }
+    int amount = it->amount;
+    items_make_rare(it, p->level_num);
+    it->amount = amount;
+    if (it->type->kind == ITEM_WEAPON) {
+        items_apply_prop(it, "dmg%", "", 100 + 75 * s_diff, 100 + 75 * s_diff);
+        /* y fuego y rayo: los inmunes al daño físico (los fantasmas en
+           Infierno) también bajan, como con el equipo de una persona */
+        items_apply_prop(it, "dmg-fire", "", 20 * s_diff * s_diff, 60 * s_diff * s_diff);
+        items_apply_prop(it, "dmg-ltng", "", 10 * s_diff * s_diff, 100 * s_diff * s_diff);
+        /* y robo de vida y maná (dividido por 2 o 3 en esas dificultades): sin
+           eso volvían al pueblo cada pocos monstruos y se pasaba el tiempo */
+        items_apply_prop(it, "lifesteal", "", 6 * s_diff, 6 * s_diff);
+        items_apply_prop(it, "manasteal", "", 4 * s_diff, 4 * s_diff);
+        return;
+    }
+    items_apply_prop(it, "res-all", "", 10 * s_diff, 10 * s_diff);
+    items_apply_prop(it, "hp", "", 20 + 20 * s_diff, 20 + 20 * s_diff);
+    if (it->type->kind == ITEM_ARMOR && it->type->max_ac > 0)
+        items_apply_prop(it, "ac%", "", 100, 100);
+    if (it->type->slot == SLOT_AMULET)
+        items_apply_prop(it, "allskills", "", s_diff, s_diff);
+}
+
+/* La base de más defensa (o de más nivel, las joyas) que puede usar en ese lugar (las de clase no) */
+static const ItemType *demo_diff_base(const Player *p, int slot)
+{
+    const ItemType *best = NULL;
+    for (int k = 0; k < items_type_count(); k++) {
+        const ItemType *t = items_type(k);
+        if (t->slot != slot || !items_supported(t) || t->class_only || t->req_str > player_str(p) ||
+            t->req_dex > player_dex(p) || t->level_req > p->level_num)
+            continue;
+        if (!best || t->max_ac > best->max_ac || (t->max_ac == best->max_ac && t->level > best->level))
+            best = t;
+    }
+    return best;
+}
+
+static void demo_diff_gear(int i)
+{
+    Player *p = &s_pl[i];
+    static const int k_slots[] = { SLOT_HELM, SLOT_BODY, SLOT_GLOVES, SLOT_BOOTS, SLOT_BELT, SLOT_AMULET, SLOT_RING1, SLOT_RING2 };
+    for (unsigned k = 0; k < sizeof k_slots / sizeof k_slots[0]; k++) {
+        const ItemType *t = demo_diff_base(p, k_slots[k] == SLOT_RING2 ? SLOT_RING1 : k_slots[k]);
+        if (!t)
+            continue;
+        Item it = items_make(t);
+        demo_diff_item(p, &it);
+        p->equip[k_slots[k]] = it;
+    }
+    refresh_look(p);
+    refresh_stats(p);
+    printf("  demo J%d equipo de %s: %s, %s; vida %d, resistencias %d/%d/%d/%d\n", i + 1, k_diff_names[s_diff],
+           p->equip[SLOT_BODY].type ? p->equip[SLOT_BODY].type->name : "-",
+           p->equip[SLOT_HELM].type ? p->equip[SLOT_HELM].type->name : "-", p->hp_max, player_resist(p, 0),
+           player_resist(p, 1), player_resist(p, 2), player_resist(p, 3));
+}
+
 static void demo_show_setup(int i)
 {
     Player *p = &s_pl[i];
     DemoBrain *br = &s_brain[i];
     /* El Acto 1 con nivel 30; el 2, con nivel 40 y todas las habilidades en 6;
-       el 3, con nivel 50 y en 8 */
-    int lvl = s_at.act == 3 ? 50 : s_at.act == 2 ? 40 : 30, base = s_at.act == 3 ? 8 : s_at.act == 2 ? 6 : 1;
+       el 3, con nivel 50 y en 8; el 4, con nivel 60 y en 10; el 5, con nivel 70 y en 12 */
+    int lvl = s_at.act == 5 ? 70 : s_at.act == 4 ? 60 : s_at.act == 3 ? 50 : s_at.act == 2 ? 40 : 30;
+    int base = s_at.act == 5 ? 12 : s_at.act == 4 ? 10 : s_at.act == 3 ? 8 : s_at.act == 2 ? 6 : 1;
+    lvl = lvl + 25 * s_diff < 99 ? lvl + 25 * s_diff : 99; /* (en Pesadilla 25 niveles más y en Infierno 50, hasta el 99) */
+    base += 8 * s_diff; /* (y las habilidades 8 y 16 más) */
     if (p->level_num < lvl)
         gain_exp(p, s_classes[p->cls].exp_next[lvl - 1] - p->exp);
     /* Los 145 puntos: fuerza y destreza para las armas que usa, el resto vitalidad */
     static const int add[NUM_CLASSES][4] = { { 40, 40, 65, 0 }, { 32, 60, 53, 0 }, { 15, 15, 70, 45 }, { 50, 30, 65, 0 },
                                              { 35, 15, 60, 35 }, { 40, 40, 65, 0 }, { 40, 20, 65, 20 },
                                              { 35, 20, 60, 30 } };
+    /* (en la campaña se llama en cada acto: se reparten de nuevo todos, como
+       en uno nuevo de ese nivel y esa dificultad; si no, el que venía de
+       Normal llegaba a Pesadilla con todo en vitalidad y sin la fuerza para
+       las armas de ahí) */
+    for (int a = 0; a < 4; a++) {
+        p->stat_points += p->stat_add[a];
+        p->stat_add[a] = 0;
+    }
     for (int a = 0; a < 4 && p->stat_points > 0; a++) {
         int n = add[p->cls][a] < p->stat_points ? add[p->cls][a] : p->stat_points;
         p->stat_add[a] += n;
         p->stat_points -= n;
+    }
+    if (s_diff > 0) { /* las bases mejores de Pesadilla e Infierno piden más fuerza y destreza */
+        int str = p->stat_points * 35 / 100, dex = p->stat_points * 15 / 100;
+        p->stat_add[0] += str;
+        p->stat_add[1] += dex;
+        p->stat_points -= str + dex;
     }
     p->stat_add[2] += p->stat_points; /* los del nivel 40, a vitalidad */
     p->stat_points = 0;
@@ -995,6 +1134,8 @@ static void demo_show_setup(int i)
     }
     p->skill_points = 0;
     refresh_stats(p);
+    if (s_diff > 0)
+        demo_diff_gear(i);
     p->hp = p->hp_max;
     p->mana = p->mana_max;
     br->show_cur = br->show_count > 0 ? s_show_resume[p->cls] % br->show_count : 0;
@@ -1019,6 +1160,11 @@ static void demo_show_next(int i)
 static void demo_show_weapons(Player *p, const SkillDef *d)
 {
     if (st_support(d->kind) && weapon_allows(p, d))
+        return;
+    /* Con un objeto de misión en la mano (la Voluntad de Khalim, hasta romper
+       el Orbe) no se cambia: el Bárbaro se ponía dos hachas para Frenesí y
+       el Orbe ya no se podía romper */
+    if (is_quest_item(p->equip[SLOT_WEAPON].type) || is_quest_item(p->equip[SLOT_SHIELD].type))
         return;
     const char *main, *off;
     st_weapons(p, d->kind, &main, &off);
@@ -1280,6 +1426,37 @@ static void demo_press(int i, PlayerInput *in, int b)
     }
 }
 
+/* Sin camino a pie: Teletransporte, la Hoja de distorsión y el Salto cruzan
+   las paredes que solo son COLL_WALL (como en el original) y lo dejaban en
+   un hueco cerrado de una cueva, donde se quedaba hasta que se pasaba el
+   tiempo. Sale de la misma forma: hacia el compañero si está en la misma
+   zona, si no hacia adonde va, y cada intento gira 45 grados. 1 = en eso */
+static int demo_escape(int i, PlayerInput *in, AtBot *b, float x, float y)
+{
+    static const char *const k_keys[] = { "Teleport", "Blade Warp", "Leap" };
+    Player *p = &s_pl[i];
+    int sk = -1;
+    for (int k = 0; k < 3 && sk < 0; k++)
+        sk = demo_skill(p, k_keys[k], 0);
+    if (sk < 0)
+        return 0;
+    float dx = x - p->x, dy = y - p->y;
+    for (int k = 0; k < s_num_players; k++)
+        if (k != i && s_pl[k].state < PS_DYING && zone_at(s_pl[k].x, s_pl[k].y) == zone_at(p->x, p->y)) {
+            dx = s_pl[k].x - p->x;
+            dy = s_pl[k].y - p->y;
+        }
+    float a = atan2f(dy, dx) + (float)(s_brain[i].escapes % 8) * PI_F / 4.0f;
+    at_move(in, cosf(a), sinf(a)); /* (mira hacia ahí) */
+    if (b->pulse++ % 4 == 0 && p->state == PS_NORMAL) {
+        demo_assign(i, 3, sk);
+        demo_press(i, in, 3);
+        if (s_brain[i].escapes++ == 0)
+            printf("  demo J%d no tiene camino: prueba salir con %s\n", i + 1, skills_get(p->cls, sk)->name);
+    }
+    return 1;
+}
+
 /* ---- Equipo y tiendas ---- */
 
 /* Se pone lo mejor que tenga en la mochila (un objeto por vez) */
@@ -1311,10 +1488,20 @@ static void demo_equip(int i)
     }
 }
 
-/* La mejor poción de vida (kind 0) o maná (1) que vende Akara y le alcanza */
+/* El que vende pociones en el pueblo de este acto */
+static const Shop *demo_potion_shop(void)
+{
+    return &s_shops[s_act == 5   ? VENDOR_MALAH
+                    : s_act == 4 ? VENDOR_JAMELLA
+                    : s_act == 3 ? VENDOR_ALKOR
+                    : s_act == 2 ? VENDOR_LYSANDER
+                                 : VENDOR_AKARA];
+}
+
+/* La mejor poción de vida (kind 0) o maná (1) que vende y le alcanza */
 static const Item *demo_shop_potion(int kind, int gold)
 {
-    const Shop *sh = &s_shops[s_act == 3 ? VENDOR_ALKOR : s_act == 2 ? VENDOR_LYSANDER : VENDOR_AKARA]; /* el que vende pociones en el pueblo */
+    const Shop *sh = demo_potion_shop();
     const Item *best = NULL;
     for (int k = 0; k < sh->count; k++) {
         const ItemType *t = sh->stock[k].type;
@@ -1428,7 +1615,7 @@ static void demo_shop(int i)
     }
     /* Antídotos para Andariel (y lo que envenena): dos en la mochila */
     if (p->level_num >= 8 || p->andy_q >= 1) {
-        const Shop *ak = &s_shops[s_act == 3 ? VENDOR_ALKOR : s_act == 2 ? VENDOR_LYSANDER : VENDOR_AKARA];
+        const Shop *ak = demo_potion_shop();
         for (int k = 0; k < ak->count && demo_antidotes(p) < 2; k++) {
             const Item *it = &ak->stock[k];
             if (!it->type->antidote_ticks || items_price(it, 0) > p->gold || !bag_add(p, it))
@@ -1438,10 +1625,12 @@ static void demo_shop(int i)
             k--; /* las pociones no se acaban: otra igual */
         }
     }
+    bought += demo_buy_tp(p);
     br->sold += sold;
     br->bought += bought;
     if (sold || bought)
-        printf("  demo J%d en el pueblo: vende %d, compra %d (oro %d -> %d)\n", i + 1, sold, bought, gold0, p->gold);
+        printf("  demo J%d en el pueblo: vende %d, compra %d (oro %d -> %d, %d portales)\n", i + 1, sold, bought, gold0,
+               p->gold, demo_tp_charges(p));
 }
 
 /* ---- Pociones y vuelta al pueblo ---- */
@@ -1463,18 +1652,25 @@ static void demo_potions(int i, PlayerInput *in)
                 slot = s;
         if (slot < 0) { /* el cinturón lleno de otras (las de maná que levantó): cambia una */
             Item other = p->belt[0];
-            p->belt[0] = p->bag[k];
-            p->bag[k] = other;
+            p->belt[0] = potion_take_one(&p->bag[k]);
+            if (p->bag[k].amount <= 0)
+                bag_remove(p, k);
+            if (!bag_add(p, &other))
+                p->gold += items_price(&other, 1); /* (no entra: como si la vendiera) */
             break;
         }
-        p->belt[slot] = p->bag[k];
-        bag_remove(p, k);
+        p->belt[slot] = potion_take_one(&p->bag[k]);
+        if (p->bag[k].amount <= 0)
+            bag_remove(p, k);
     }
     if (p->poison_ticks > 0 && p->antidote_ticks == 0) {
         for (int k = 0; k < p->bag_count; k++)
             if (p->bag[k].type->antidote_ticks > 0) {
                 apply_potion(p, p->bag[k].type);
-                bag_remove(p, k);
+                if (is_potion(p->bag[k].type) && stack_count(&p->bag[k]) > 1)
+                    potion_take_one(&p->bag[k]);
+                else
+                    bag_remove(p, k);
                 br->potions++;
                 br->potion_at = s_ticks + TICK_RATE / 2;
                 printf("  demo J%d toma un antídoto\n", i + 1);
@@ -1505,19 +1701,29 @@ static int demo_has_heal(const Player *p)
     return 0;
 }
 
-/* Poca vida y sin pociones: al pueblo por waypoint a curarse (y comprar).
-   El primero vuelve al mismo waypoint; el segundo, a donde esté el primero.
-   1 = está en eso. */
+/* Poca vida y sin pociones: al pueblo a curarse (y comprar). Con un
+   pergamino o el tomo, por su portal al pueblo y de vuelta por el mismo
+   (como un jugador); si no, por waypoint: el primero vuelve al mismo y el
+   segundo a donde esté el primero. 1 = está en eso. */
 static int demo_retreat(int i, PlayerInput *in)
 {
     Player *p = &s_pl[i];
     DemoBrain *br = &s_brain[i];
     int town = p->level && p->level->town;
-    AtStep st = { AT_WAYPOINT, NULL, (s_act - 1) * WP_ACT, NULL, NULL, 0 }; /* el del pueblo de este acto */
+    AtStep st = { AT_WAYPOINT, NULL, wp_first(s_act), NULL, NULL, 0 }; /* el del pueblo de este acto */
     switch (br->retreat) {
     case 0:
         if (town || p->hp * 100 >= p->hp_max * 30 || demo_has_heal(p) || p->dialog_npc >= 0)
             return 0;
+        /* (en la cumbre con el rito empezado, el portal haría volver a los Antiguos a sus estatuas: por waypoint) */
+        int rite = p->level && p->level->id == 120 && p->ancients_q == 2;
+        if (!rite && tp_find(p) >= 0 && tp_cast(p, tp_find(p))) {
+            br->retreat = 10;
+            br->retreats++;
+            printf("  demo J%d (nivel %d) con %d/%d de vida y sin pociones: abre un portal al pueblo\n", i + 1,
+                   p->level_num, p->hp, p->hp_max);
+            return 1;
+        }
         br->ret_wp = demo_nearest_wp(p, NULL);
         if (br->ret_wp < 0)
             return 0; /* ningún waypoint: sigue como pueda */
@@ -1529,6 +1735,34 @@ static int demo_retreat(int i, PlayerInput *in)
     case 1:
         if (at_player_step(i, &st, in) == 1)
             br->retreat = 2;
+        return 1;
+    case 10: /* entra a su portal (se abrió al lado) */
+    case 12: { /* curado: vuelve por el mismo, desde el pueblo */
+        int id = br->retreat == 10 ? PORTAL_TP_FIELD(i) + 1 : PORTAL_TP_TOWN(i) + 1;
+        const Warp *w = NULL;
+        for (int k = 0; k < world_warp_count() && !w; k++)
+            if (world_warp(k)->portal == id)
+                w = world_warp(k);
+        if (!w) { /* (se cerró: sigue como pueda) */
+            br->retreat = 0;
+            return 0;
+        }
+        float wx = (w->x0 + w->x1) / 2, wy = (w->y0 + w->y1) / 2;
+        if ((wx - p->x) * (wx - p->x) + (wy - p->y) * (wy - p->y) > 6.0f * 6.0f) {
+            br->retreat = 0;
+            return 0;
+        }
+        int back = br->retreat == 12;
+        use_warp(p, w);
+        br->retreat = back ? 0 : 11;
+        if (back)
+            printf("  demo J%d vuelve por su portal (%d pociones)\n", i + 1, demo_bag_potions(p) + 4);
+        return 1;
+    }
+    case 11: /* en el pueblo, por el portal: se cura, compra y vuelve */
+        if (p->hp * 100 < p->hp_max * 95 || !br->shopped || s_ticks - br->shopped > 10 * TICK_RATE)
+            return 1;
+        br->retreat = 12;
         return 1;
     case 2: /* en el pueblo la vida se llena sola; las compras las hace demo_shop */
         if (p->hp * 100 < p->hp_max * 95 || !br->shopped || s_ticks - br->shopped > 10 * TICK_RATE)
@@ -1968,7 +2202,7 @@ static int demo_farm(PlayerInput *in, int ni, const Level *goal)
             br->cleared[k] = s_ticks;
         if (k >= 0 && p->exp == br->farm_exp)
             br->barren |= 1ull << k;
-        printf("  demo J1 limpió %s (nivel %d, %d de experiencia)\n", br->farm->name, p->level_num, p->exp);
+        printf("  demo J1 limpió %s (nivel %d, %u de experiencia)\n", br->farm->name, p->level_num, (unsigned)p->exp);
         br->farm = NULL; /* el próximo tick elige otra */
         return 1;
     }
@@ -1986,9 +2220,17 @@ static int demo_farm(PlayerInput *in, int ni, const Level *goal)
 /* Lo que no lleva controles: puntos, habilidades, botones, equipo, tiendas */
 static void demo_tick(void)
 {
+    static const ItemType *s_quest_hand[MAX_PLAYERS]; /* lo de la misión que tenía en la mano */
     for (int i = 0; i < s_num_players; i++) {
         Player *p = &s_pl[i];
         DemoBrain *br = &s_brain[i];
+        const ItemType *hand = is_quest_item(p->equip[SLOT_WEAPON].type)   ? p->equip[SLOT_WEAPON].type
+                               : is_quest_item(p->equip[SLOT_SHIELD].type) ? p->equip[SLOT_SHIELD].type
+                                                                           : NULL;
+        if (s_quest_hand[i] && hand != s_quest_hand[i]) /* para ver quién se la saca */
+            printf("  demo J%d ya no tiene %s en la mano: arma %s\n", i + 1, s_quest_hand[i]->name,
+                   p->equip[SLOT_WEAPON].type ? p->equip[SLOT_WEAPON].type->name : "-");
+        s_quest_hand[i] = hand;
         int k = p->level ? demo_level_index(p->level) : -1;
         if (k >= 0)
             br->seen_levels |= 1ull << k;
@@ -2048,6 +2290,7 @@ static int demo_lead(const AtStep *st, PlayerInput *in)
 {
     Player *p = &s_pl[0];
     DemoBrain *br = &s_brain[0];
+    /* (con un diálogo abierto sin querer, at_lead_step lo cierra) */
     if (p->state >= PS_DYING || p->dialog_npc >= 0 || p->inv_open || p->reading || s_at.phase > 0)
         return 0;
     /* Farmeaba para un paso que ya pasó (llegó caminando mientras farmeaba) */
@@ -2105,7 +2348,9 @@ static void demo_follow(int i, PlayerInput *in)
             in->back = in->button[1] = 1;
         return;
     }
-    if (p->state >= PS_DYING || p->dialog_npc >= 0 || p->inv_open)
+    if (at_close_dialog(p, &s_at.bot[i], in)) /* le habló sin querer a un NPC */
+        return;
+    if (p->state >= PS_DYING || p->inv_open)
         return;
     if (demo_retreat(i, in))
         return;

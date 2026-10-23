@@ -87,8 +87,10 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
   nada hasta que alguien se acerca, como las salas inactivas del original.
   - Vida, daño y experiencia como en el original: porcentajes de
     `monstats.txt` sobre `monlvl.txt`.
-  - Te ven a 9 subtiles, te persiguen y pegan en el cuadro del golpe que
-    marca `animdata.d2`.
+  - Te ven apenas están en tu pantalla (el rectángulo de 800x600 centrado
+    en el jugador; antes, a 9 subtiles), te persiguen hasta que salís un
+    cuarto más allá del borde y pegan en el cuadro del golpe que marca
+    `animdata.d2`.
   - Se resienten con golpes fuertes y dejan cadáver.
 - Combate:
   - El ataque apunta solo al monstruo más cercano.
@@ -263,7 +265,9 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
   - Bárbaro: Porrazo (empuja), Aturdir, Concentración, Doble golpe y Frenesí
     (con dos armas: la segunda va en la mano izquierda y la animación es la
     doble del original, `1ss`/`1js`/`1jt`/`1st`), Doble lanzamiento, Salto
-    (empuja al caer), Salto ofensivo, Torbellino, Vesania (daño mágico y la
+    (empuja al caer) y Salto ofensivo (no cruzan paredes ni puertas: como
+    `SKILLS_FindLeapTargetPosition`, la línea hasta donde cae no choca con
+    `COLL_MISSILE_BARRIER` ni `COLL_DOOR`), Torbellino, Vesania (daño mágico y la
     defensa queda en 0), los gritos (Aullido, Provocar, Grito, Órdenes
     bélicas, Orden de batalla, Grito de batalla, Grito de guerra), Buscar
     poción, Buscar objeto, Tótem lúgubre, los dominios, Aumentar estamina,
@@ -277,16 +281,28 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
     Proyectiles lentos, Señuelo, Valquiria y las pasivas (Golpe crítico,
     Esquivar, Evitar, Evadir, Penetrar, Perforar).
   - Hechicera (`src/skillsor.inc`, como `SkillSor.cpp` y `MissMode.cpp` de
-    D2MOO): las descargas (ígnea, de hielo que enfría, Centella con chispas
-    que zigzaguean), Bola de fuego (explota), Resplandor gélido (congela),
-    Púa glacial (explota y congela alrededor), Rayo (atraviesa), Cadena de
-    relámpagos (salta de un monstruo al más cercano), Orbe gélido (escupe
+    D2MOO): las descargas (ígnea, de hielo que enfría, Centella: sus
+    chispas salen hacia el blanco y cada una va por el camino al azar del
+    original, `charged_step` como `PATH_ComputePathChargedBolt`: tramos de 2
+    subtiles hacia allá o a 45 grados, sin acumularse, hasta 77 cuadros),
+    Bola de fuego (explota), Resplandor gélido (congela), Púa glacial
+    (explota y congela alrededor), Rayo (`lightningbolt`, atraviesa) y Cadena
+    de relámpagos (salta de un monstruo al más cercano): los dos, y los
+    rayos de los monstruos (pCltDoFunc 8), dejan detrás pedazos de su dibujo
+    (`missiles_trail`) y así se ven como el rayo largo del original; Orbe
+    gélido (escupe
     descargas en espiral y termina en una nova), las novas (64 proyectiles
     en ronda: a cada monstruo le pega uno solo), Campo de estática (un % de
     la vida que le queda, sin matar), Telequinesis (daño y empuja),
     Teletransportar (hacia donde mira, al lugar libre más lejos), Muro de
-    fuego, Llamarada (fuego por donde camina), Meteoro (la marca, a los 2,4
-    segundos cae y deja fuego), Ventisca (trozos de hielo en una zona),
+    fuego, Llamarada (fuego por donde camina), Meteoro (la marca y a los 2,4
+    segundos cae y deja fuego; la piedra y su cola, `meteortail`, aparecen
+    los últimos 25 cuadros y bajan 15 píxeles por cuadro en diagonal desde
+    arriba a la izquierda: `missiles_meteor`, con los CltParam de su centro;
+    también el de los vampiros), Ventisca (cada 4 cuadros un trozo de hielo
+    a hasta el radio menos uno, que cae desde 120 píxeles en sus 9 cuadros:
+    `blizzard_fall`, como los CltParam de blizzard1; daña y explota al
+    tocar el piso),
     Infierno (con la secuencia del original), Hidra (tres cabezas quietas
     que escupen fuego, 10 segundos), las armaduras de hielo (más defensa;
     la glacial congela al que le pega, la de escalofrío lo daña y enfría,
@@ -302,7 +318,8 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
     sagrado), Fervor (varios golpes seguidos, a los que tenga pegados),
     Carga (corre hasta el monstruo y lo empuja), Venganza (fuego, frío y
     rayo en el golpe), Conversión (el monstruo pelea de su lado un rato y
-    los otros monstruos lo atacan; los jefes no), Descarga sagrada (atraviesa, daña a no muertos y
+    los otros monstruos lo atacan; los jefes no; mientras tanto no le tapa
+    el paso a su dueño, como las otras mascotas), Descarga sagrada (atraviesa, daña a no muertos y
     demonios y cura al compañero), Martillo bendecido (la espiral del
     original, `PATH_ComputePathBlessedHammer`: sale siempre hacia el mismo
     lado y se abre 4,7 subtiles por vuelta hasta unos 11; más daño a no
@@ -422,7 +439,8 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
     por cuadro y cada medio segundo prueba (más fácil cuanto más herido y
     con Marca de la muerte; los jefes al azar desde el nivel 15, los de
     misión y los de nombre propio nunca); el vinculado pelea con lo de la
-    habilidad y es muy fuerte desde el nivel 5, muy rápido desde el 10,
+    habilidad, no le tapa el paso al Brujo (como las otras mascotas: antes
+    lo encerraba en un paso angosto) y es muy fuerte desde el nivel 5, muy rápido desde el 10,
     tiene golpe espectral desde el 15 y desde el 20 un aura del Paladín
     para los de alrededor. Maleficios
     del arma (uno a la vez, también con sus proyectiles): Flagelo (daño
@@ -446,11 +464,9 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
     heridos y los hace estallar), Hecatombe (fuego alrededor que baja la
     resistencia) y Abismo (atrae a los enemigos y estalla). Las de
     `localdelay` tienen su espera. Sus íconos: el `waskillicon.dc6` de D2R
-    es una copia del del Druida (el Brujo solo tiene íconos HD). Si está
-    `data/global/ui/spells/waskillicon.d2rw` (lo arma `tools/hd_icons.py`
-    con su `waskillicon.sprite` HD), se usan esos; si no, se arman al vuelo
-    con lo que se ve de cada habilidad (su proyectil, su efecto o su
-    demonio). Empieza con daga y un libro viejo (los grimorios
+    es una copia del del Druida (el Brujo solo tiene íconos HD), así que se
+    arman al vuelo con lo que se ve de cada habilidad (su proyectil, su
+    efecto o su demonio). Empieza con daga y un libro viejo (los grimorios
     son su escudo, y van también con un arma a dos manos, como dice
     `charstats.txt`: se ve solo el arma, porque las animaciones a dos
     manos no tienen la capa del escudo).
@@ -676,8 +692,8 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
     dunas, el carro...), como `InitAct2OutdoorLevel`.
   - El Canyon of the Magi: el acantilado con las siete tumbas y el waypoint
     en el medio (se llega por el portal rojo del diario del Invocador).
-  - Todavía no: los santuarios (el motor no los tiene) ni el borde secundario
-    de `lvlsub.txt`.
+  - Los santuarios y los objetos al azar salen como en todo el juego (ver
+    "Objetos que se usan"). Todavía no: el borde secundario de `lvlsub.txt`.
 - Los monstruos del desierto con la IA del original (`monai.inc`, de
   `AiThink.cpp`): deciden tirando contra sus `aip` de `monstats.txt`
   (pegar, quedarse quietos, acercarse, rodear al jugador, juntarse con su
@@ -729,7 +745,11 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
   Tal Rasha, con el generador de laberintos y las salas de cada tipo. El
   segundo piso del templo, la planta baja del palacio y la guarida de
   Duriel son piezas fijas, y el Arcane Sanctuary tiene su generador propio:
-  las plataformas que salen del centro, unidas por caminos sobre el vacío.
+  las plataformas que salen del centro, unidas por caminos sobre el vacío,
+  como `DRLGMAZE_PlaceArcaneSanctuary` (todas las salas vecinas unidas,
+  piezas de 12x12, el piso en blanco que no se camina donde no hay piso) y
+  con las almohadillas que unen las islas de las piezas de la variante 2
+  (con A; los bots también las usan). Ver `plan-acto2.md`.
   La tumba verdadera y la de Ancient Kaa se eligen al azar en cada partida,
   como `DRLG_InitAct2`.
 - Las seis misiones del Acto 2, como `QUESTS/ACT2` de D2MOO, con sus textos
@@ -763,7 +783,9 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
   - Una pared sobre el piso en blanco (estilo 30, que no está en los DT1 del
     calabozo) bloquea solo lo suyo, como el original, que arranca cada sala
     en 0 y le suma cada baldosa (`map.c`). Antes la baldosa entera quedaba
-    como vacío.
+    como vacío. **Corregido el 2026-10-23:** el original carga `Blank.dt1`
+    en todas las salas (`DRLGROOMTILE_LoadDT1FilesForRoom`), así que el piso
+    en blanco sí está y no se camina; ver "Las piezas de lvlprest.txt".
   - La boca de cueva que se pisa pero deja encerrado al que llega por ella
     se usa con A, como todas en el original (`world.c`): de la sala de
     llegada del Maggot Lair se sale por encima de la boca, y pisarla lo
@@ -786,7 +808,12 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
     anterior), Kurast apilada arriba de la última selva (la baja, el bazar y
     la alta con sus bordes, puertas y piezas al azar), el Causeway y
     Travincal. Las piezas salen de `lvlprest.txt` y cargan sus DT1 como el
-    original (los de `lvltypes.txt` que pide su `Dt1Mask`).
+    original (los de `lvltypes.txt` que pide su `Dt1Mask`). El paso entre
+    dos selvas (el punto que usan los bots y la carga de zonas; el original
+    no lo tiene) va en el borde de las dos piezas: entre dos claros, a 13
+    tiles del lado de arriba o de la izquierda, por donde cruza su camino (en
+    el medio es selva: `D2_ZONETEST` daba "pasillo" en 5 de 120 semillas);
+    entre piezas de río, en el medio.
   - Los calabozos: las cuevas de las arañas, el Swampy Pit y el Flayer
     Dungeon, las cloacas (la ronda de 5x5 con sus cuatro bocas), los seis
     templos y el Durance of Hate, con las salas especiales del original.
@@ -804,7 +831,7 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
     de Khalim (sus cuatro partes, el cubo y el Orbe cautivante que abre el
     Durance), la Gidbinn, el Pájaro Dorado (hasta la Poción de la vida), el
     Templo Corrupto (el Consejo) y el Guardián (Mefisto, el puente de
-    sangre y el portal rojo; el Acto 4 todavía no está), con su página en el
+    sangre y el portal rojo al Acto 4), con su página en el
     registro de misiones. Como en D2MOO:
     - el altar de la Gidbinn es un señuelo: sale un fetiche jefe
       (`fetish11`, con su escolta de `minion1`/`minion2`) y la Gidbinn la
@@ -814,6 +841,125 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
       (`QUESTS_SetJadeFigurineBoss`); si se suelta su zona, es el próximo;
     - del Consejo, el primero que muere suelta el Mangual y el siguiente un
       Cubo Horádrico a los que no tienen (`ACT3Q5_Callback08_MonsterKilled`).
+
+- Acto 4, entero (`docs/plan-acto4.md`), con su prueba automática
+  (`--autotest act4`), la de las misiones (`D2_A4QTEST=1`) y la
+  demostración del menú (la que juega por defecto):
+  - El portal rojo de Mefisto lleva a los dos a la Fortaleza del
+    Pandemónium (la primera vez, con su cinemática). Tyrael (se presenta y
+    resucita al mercenario), Caín, Halbu (armas y armaduras) y Jamella
+    (magia, la apuesta y cura); la solapa IV de los waypoints y del registro.
+  - El mundo como el original (`src/world4.inc`): la Fortaleza; las tres
+    mesetas unidas como `gAct4OutdoorDrlgLink` (el Outer Steppes al este de
+    la Fortaleza con la pieza de paso, el Plains of Despair y el City of the
+    Damned pegados por un lado al azar), con sus bordes (abiertos en el
+    medio del tramo que comparten), sus piezas y sus pozos en las cantidades
+    de `DRLGOUTDOORS_InitAct4OutdoorLevel` y la variante de cada una en
+    ronda; el River of Flame de `DRLGMAZE_PlaceAct4Lava` (seis salas, la
+    subida al sur, la Forja, tres puentes al norte y la lava alrededor), que
+    se planea al armar el mundo para pegar el Santuario del Caos (5x5) al
+    último puente.
+  - Las IA del acto (`src/monai4.inc`) con lo que hacen sus habilidades
+    (`SkillMonst.cpp`): el aliento sostenido del Balrog y el rayo rojo de
+    Diablo (quietos en el cuadro `InfernoAnim` mientras dura), el nido de las
+    madres, el Corpulento que come cadáveres, la Armadura y el Espíritu de
+    hueso, las maldiciones de los caballeros sobre el jugador (con su ícono)
+    y Diablo con sus 16 elecciones pesadas y sus siete hechizos. La prisión
+    de hueso (`DiabPrison`, a quien está lejos) son 12 piezas `boneprison1`
+    del bando enemigo que se rompen a golpes y no se terminan solas, como el
+    original; no sale una pieza donde ya hay otra (antes salían neutrales,
+    no se podían romper y se apilaban de a 12 en cada lanzamiento).
+  - Las misiones (`src/a4quest.inc`): Izual y su espíritu (sale donde cayó
+    Izual o, si ahí no entra, lo más cerca que se pueda, como
+    `ACT4Q1_SpawnIzualGhost`), la Forja (la
+    piedra, el Martillo de Hephasto y las gemas), los cinco sellos con sus
+    jefes, Diablo, Hadriel y el portal del final con el epílogo. Lo que sale
+    en pleno juego (el espíritu, los jefes de los sellos con su escolta,
+    Diablo y el portal) es de la zona donde sale, como el portal al pueblo:
+    se borra con ella y al rearmarse sale de nuevo, uno de cada uno (antes
+    quedaba sin zona: se duplicaba, pasaba a otro acto y el bot buscaba al
+    espíritu en el pueblo); el portal vuelve a estar al lado de Tyrael al
+    volver al acto o al cargar la partida.
+
+- Acto 5, entero (`docs/plan-acto5.md`), con su prueba automática
+  (`--autotest act5`, 62 pasos): el portal del final del Acto 4 lleva a
+  Harrogath (`src/world5.inc`) con sus NPC (Larzuk, Malah, Qual-Kehk,
+  Nihlathak y Caín), sus voces, sus tiendas, la apuesta, los bárbaros
+  mercenarios y las solapas V del registro y de los waypoints (que ahora
+  son de 64 bits: el Acto 5 usa los números 30 a 38). Harrogath es pueblo
+  (`l->town`: ahí se habla con los NPC).
+  - Las afueras (`src/world5.inc`, como `DrlgOutSiege.cpp`): el Bloody
+    Foothills son las 15 tiras de 16x48 una al lado de la otra, sin grupos
+    al azar (`MonDen` 0: sus monstruos son los de las tiras). El Frigid
+    Highlands, el Arreat Plateau y la Frozen Tundra son barricadas de 64x160
+    o 160x64 armadas en una grilla de celdas de 8x8: el borde de acantilado
+    (y el de barranco en dos lados), la entrada y la salida hacia la vecina,
+    las bocas de las cuevas, las barricadas que las cruzan (el borde
+    secundario de `lvlsub.txt`: los grupos de sustitución de
+    `4x3barricade_rules.ds1`, que ahora lee `ds1_load`), las tres prisiones
+    del Frigid Highlands, las piezas especiales (el portal al infierno, el
+    waypoint, las ruinas, los lagos) y el piso en lo que queda. La celda
+    "vacía" de las reglas es la pieza `None` (0x0): no ocupa la celda.
+    `D2_A5GRID=1` imprime la grilla de cada barricada al armarla.
+  - La decoración de `lvlsub.txt` (`barr_decorate`) va solo en las celdas
+    de relleno, como el original (la sustitución corre en las salas
+    `DRLGTYPE_MAZE` de `DRLGOUTPLACE_CreateOutdoorRoomEx`, no en las de
+    pieza). Antes caía también sobre el piso liso de las piezas, y un tronco
+    tapaba la salida del hueco del portal rojo: la llegada desde Hell1 o
+    Hell2 quedaba encerrada (8 de 120 semillas). Cambió la decoración de las
+    tres barricadas en todas las semillas (lo demás, igual en `D2_COLLHASH`).
+  - Las cuevas de hielo (Crystalline Passage, Glacial Trail y Ancients' Way)
+    usan el generador de calabozos del Acto 3 (`build_act3_maze`, tipo
+    `A3M_ICE`: salas de 16x16 con la subida, la siguiente, la bajada, el
+    tema del Glacial Trail y el waypoint, como `DRLGMAZE_PlaceAct5IceStuff`);
+    el Frozen River (River A o B), el Drifter Cavern, el Icy Cellar, la
+    cumbre del Arreat y la entrada del templo son de una sola pieza.
+  - El templo de Nihlathak (la ronda de 2x2 salas de 40x40), la Fortaleza
+    de la Piedra del Mundo (la sala de la subida con tres salidas en el
+    medio) y los tres infiernos (tres salas de lava en línea y la Lava X
+    del Acto 4 alrededor) también salen de `build_act3_maze`; los Halls of
+    Vaught, el Trono y la Cámara son de una sola pieza.
+  - Si una sala especial no entra (todas las salas libres tienen ocupado
+    ese lado), el original la deja afuera y el nivel queda sin su waypoint
+    o su salida; acá `build_act3_maze` arma la grilla de nuevo con los
+    números al azar que siguen (hasta 60 veces, como `maze_build`). Pasaba
+    en 8 de 120 semillas del Acto 5 (la 29: el Glacial Trail sin waypoint);
+    los mapas que ya salían bien no cambian (`D2_COLLHASH`).
+  - Las baldosas de puerta (orientación 8 y 9) quedan en la lista de
+    objetos del mapa como tipo 3, y `spawn_tile_unit` crea lo que el
+    original pone ahí (`DRLGROOMTILE_AddTilePresetUnits`): en las
+    barricadas, las torres, puertas y muros, las puertas de las prisiones y
+    el portal rojo a su infierno (`a5quest.inc`); en Harrogath, el portón
+    (abierto).
+  - Los niveles del acto usan `MonLvlEx` de `levels.txt` (el nivel de los
+    monstruos de la expansión; `MonLvl` es 0 en la Cámara y Baal salía
+    del bando neutral).
+  - Las IA del acto (`src/monai5.inc`, de `AiThink.cpp` y `AiBaal.cpp`):
+    los generadores (el capataz, la madre pútrida, la madre vil) con sus
+    crías en el cuadro de golpe, los diablillos que se teletransportan, las
+    súcubos con sus maldiciones, el horror congelado con su aliento, la
+    bestia de asedio con su pisotón, los muertos que se levantan
+    (`ReanimatedHorde`), Nihlathak con la explosión de cadáver, los tres
+    Antiguos (`units_set_ancients`) y Baal: en el Trono, las cinco oleadas
+    (Colenzo, Achmel, Bartuc, Ventar y Lister con su escolta) cuando no
+    queda nadie cerca; después se va a la Cámara (`units_baal_left`), donde
+    pelea con las elecciones pesadas del original (el clon, el
+    teletransporte, los tentáculos, la nova y los misiles de frío).
+  - Las seis misiones (`src/a5quest.inc`): Shenk y el engarce de Larzuk
+    (`items_larzuk_sockets`), los 15 presos de las tres prisiones del
+    Frigid Highlands y las runas de Qual-Kehk, Anya congelada (la poción de
+    Malah y el Pergamino de Resistencia), Nihlathak en los Halls of Vaught
+    y la personalización de Anya (el panel de Larzuk y Anya es el de
+    Charsi: `imbue_mode`), el altar de los Antiguos en la cumbre (desde el
+    nivel 20) que abre la Fortaleza, y Baal: muerto, Tyrael aparece 5 al
+    noroeste y, cuando se termina de hablar con él, abre el portal del
+    final 5 al este del que le habló (`ACT5Q6_SpawnTyrael`,
+    `ACT5Q6_Callback02_NpcDeactivate`; la cinemática `d2x_out`). Los dos
+    van al lugar libre más cerca al que se llega caminando
+    (`a5_free_spot`): el original usa `QUESTS_GetFreePosition`, que solo
+    mira objetos porque su Cámara es una sala abierta; en la nuestra, con
+    pasillos, el portal en el cadáver de Baal + 5 caía en la pared en el
+    13 % de los lugares donde puede morir (en el 5 % ni se podía tocar).
 
 - El resto del Acto 1, en el mismo mapa y con el sistema de zonas:
   - Afuera, en fila: Stony Field (con las Piedras Cairn y Rakanishu), Dark
@@ -853,9 +999,19 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
     - El alcance cuerpo a cuerpo de cada monstruo suma su `MeleeRng` de
       `monstats2.txt` (`UNITS_GetMeleeRange`): Duriel, Mefisto, los
       fanáticos, los lanceros y los tentáculos pegan desde más lejos.
+    - A los que tienen `killable` en 0 en `monstats.txt` (Baal en su trono,
+      los vigías de las catapultas, `baaltaunt`, los animales) no les llega
+      daño (`SUNITDMG_ApplyDamage`) y no son enemigos para los jugadores ni
+      para sus mascotas (antes la demostración mataba a Baal en el trono y
+      no salía la quinta oleada).
   - El techo de la casa donde hay un jugador no se dibuja, como el original:
     se entra a las casas de Kurast y a los edificios de Lut Gholein y se ve
-    al personaje adentro.
+    al personaje adentro. También parado en una baldosa de adentro sin techo
+    (las de algunas paredes en las casas de Kurast) si hay techo de la misma
+    casa para los cuatro lados. En el muelle del Acto 3 las chozas (Alkor,
+    Asheara) no tienen baldosas de techo: el de paja son paredes sin
+    colisión en una capa de arriba; se esconden las unidas a las dos paredes
+    de delante (la de su columna y la de su fila) del que está adentro.
   - Con A al lado de un objeto de misión y de una escalera o un portal, va
     primero el objeto si el paso está cerrado o si el objeto está más cerca
     (y el cartel dice lo mismo): la palanca de las cloacas está junto a la
@@ -1082,10 +1238,36 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
   dos personajes de clases distintas (primero el Brujo y el Paladín;
   después Bárbaro y Amazona, Amazona y Hechicera, Hechicera y Paladín,
   Paladín y Nigromante, Nigromante y Asesina, Asesina y Druida, Druida y
-  Brujo, Brujo y Bárbaro, una vez cada pareja, y vuelve a empezar) y juegan el
-  Acto 2 entero, de Radament a Duriel, Tyrael y Meshif (unos 40 minutos),
-  con nivel 40, todas las habilidades de su clase en 6 y los puntos que
-  sobran en vitalidad. Con `D2_DEMO_ACT=1` juegan el Acto 1, de la Guarida
+  Brujo, Brujo y Bárbaro, una vez cada pareja, y vuelve a empezar) y juegan
+  la campaña: los Actos 1 a 5 en Normal, después en Pesadilla y en Infierno,
+  siempre con los mismos dos personajes (unas 8 horas de juego). Cada acto
+  es su prueba automática y sigue desde donde terminó el anterior (el viaje
+  con Warriv, el barco de Meshif, el portal del final del Acto 4); después
+  de Baal el personaje pasa a la dificultad siguiente como una partida
+  guardada que se carga ahí (en memoria: la demostración no escribe nada),
+  con las misiones y los waypoints de cero. Si un acto se traba, sigue con
+  el que viene (con lo de ese acto dado por hecho). Al empezar cada acto
+  tiran lo de misión que quedó de antes (los Libros de habilidad sin leer,
+  la estatuilla de un acto cortado, el Martillo; se quedan con un Cubo: si
+  no, se llenaba la mochila y en el Acto 4 de Pesadilla no entraba el
+  Martillo de la Forja), suben al nivel de ese acto si no lo tienen (30, 40, 50, 60 y 70; 25 más en
+  Pesadilla y 50 en Infierno, hasta el 99) y las habilidades (1, 6, 8, 10 y
+  12; 8 y 16 más), con los atributos repartidos como uno nuevo de ese nivel
+  (fuerza y destreza hasta lo que piden sus armas y el resto a vitalidad);
+  en Pesadilla e Infierno, el equipo de esa dificultad. El
+  cartel de arriba dice el acto y la dificultad; al terminar (o al apretar
+  Start) el log tiene el informe de cada acto y el de la campaña. Con
+  `D2_DEMO_ACT=5` juegan solo el Acto 5, de Shenk a Baal y el portal de
+  Tyrael (unos 30 minutos), con nivel 70, todas las habilidades de su clase
+  en 12 y los puntos que sobran en vitalidad; compran en Harrogath (Anya y
+  Larzuk). Con `D2_DEMO_ACT=4`
+  juegan el Acto 4, de Izual a la Forja Infernal, los sellos, Diablo y el
+  portal del final (unos 10 minutos), con nivel 60 y las habilidades en 10.
+  Con `D2_DEMO_ACT=3` juegan el Acto 3, del muelle de Kurast al
+  Consejo y Mefisto (unos 35 minutos), con nivel 50 y las habilidades en 8.
+  Con `D2_DEMO_ACT=2` juegan el Acto 2, de Radament a Duriel,
+  Tyrael y Meshif (unos 40 minutos), con nivel 40 y las habilidades en 6.
+  Con `D2_DEMO_ACT=1` juegan el Acto 1, de la Guarida
   del Mal a Andariel y el viaje con Warriv (unos 30 minutos), con nivel 30
   (lo que pide la última fila del árbol) y todas las habilidades en 1. Las
   van usando una por una:
@@ -1203,6 +1385,26 @@ GPU de una Pi 3B.
   original, como las que rodean el campamento. También el piso "en blanco"
   (estilo 30, secuencia 0 o 1). Las esquinas norte (orientación 3) traen una
   segunda pieza (la 4) que también cuenta.
+- **Las piezas de lvlprest.txt** se estampan como
+  `DRLGPRESET_AddPresetRoomMapTiles` (desde el 2026-10-23, `stamp_rules` en
+  `world3.inc` y `map_set_stamp_rules` en `map.c`, para todo DS1 que esté en
+  la tabla):
+  - **KillEdge:** sin la última fila y columna del DS1, que de otro modo se
+    encima con la pieza vecina.
+  - **FillBlanks** (casi todas lo tienen): las celdas sin piso dentro de la
+    pieza llevan oculto el piso en blanco de `Blank.dt1` (30.0, que no se
+    camina ni deja pasar proyectiles; 30.1 en el Santuario Arcano, que solo
+    no se camina). El original carga `Blank.dt1`, `InvisWal.dt1` y
+    `Warp.dt1` en todas las salas, así que los pisos 30.x que traen los DS1
+    también son ese.
+  - El relleno va aparte (`MapChunk.blank`) y se suma a lo que estampe
+    encima el borde de la vecina, como en el original, donde las dos salas
+    suman sus baldosas.
+  - Lo que cambió: en las cloacas del Acto 2 y Ancient Tunnels ya no se
+    camina por los escombros y debajo de los arcos detrás de las paredes
+    (eran celdas con pared y sin piso: un cuarto de lo que se alcanzaba).
+    `D2_ZONETEST` cuenta, por zona, los tiles a los que se llega sin nada
+    dibujado o con pared y sin piso; con esto son 0 en los cinco actos.
 - La colisión es la del original (D2Collision de D2Common, según
   [D2MOO](https://github.com/ThePhrozenKeep/D2MOO)): **una máscara de 16 bits
   por subtile** (`COLL_*` en `src/map.h`) y cada cosa mira solo los bits que
@@ -1221,6 +1423,117 @@ GPU de una Pi 3B.
     no son baldosas.
   - **El vacío:** donde no hay piso es como afuera de las salas del
     original (`COLLIDE_MASK_INVALID`).
+- **Las pilas de la mochila** (pedido del usuario; el original no apila
+  pociones, las llaves van de a 12 y los pergaminos se guardan en el tomo):
+  las pociones de a `POTION_STACK` (10), las llaves de a `KEY_STACK` (20) y
+  los Pergaminos de Portal de a `TP_STACK` (20). En una pila de pociones
+  `amount` son los tragos de todas (3 por poción; la de arriba es la
+  empezada): el guardado no cambia y el precio sale de los tragos; en las
+  llaves y los pergaminos son cuántos hay (una pila de pergaminos vale lo
+  que todos). Al cinturón y al cubo pasan de a una (`potion_take_one`, la
+  empezada primero); dos empezadas no se juntan. `bag_add` junta lo que
+  entra entero en una pila (las llaves y los pergaminos llenan la que tenga
+  lugar y el resto va aparte). El número se dibuja abajo a la derecha
+  (`draw_stack_count`). En la tienda, X sobre los pergaminos compra los que
+  faltan para llenar una pila (`shop_fill_count`).
+- **No hay Tomo de Portal** (pedido del usuario): `tbk` no es de los que
+  `items_supported`, así que no se vende ni cae; las bibliotecas sueltan un
+  pergamino o una pila de 5 (las cargas con que salía el tomo). Las
+  partidas con un tomo lo cambian al cargar por sus cargas en pergaminos
+  (`tomes_to_scrolls`).
+- **El portal al pueblo** (`tp_cast`): un Pergamino de Portal (`tsc`) de la
+  pila más chica (`tp_find`), con X en el inventario. Abre el portal azul
+  (`TownPortal`) al lado y otro en el pueblo, lejos de los NPC y en un lugar
+  abierto (`tp_town_spot`), unidos con `world_portal` (`PORTAL_TP_FIELD` y
+  `PORTAL_TP_TOWN` de cada jugador). Como el original: uno por jugador (otro
+  cierra el anterior), cualquiera lo usa y se cierra cuando el que lo abrió
+  vuelve desde el pueblo; no se guarda. Los dibujos vuelven al rearmar una
+  zona (`tp_zone_loaded`). Los bots compran pergaminos hasta tener 10 y,
+  con poca vida y sin pociones, vuelven al pueblo por su portal en vez de ir
+  hasta un waypoint (`demo_retreat`). `D2_TPTEST=1` lo prueba.
+- **Los íconos de lo que lo afecta** (pedido del usuario; el original no
+  los tiene): `player_effects` junta las mejoras de las habilidades (las
+  propias y las de un compañero: Grito, Órdenes de batalla, las armaduras,
+  Encantar, las formas...), las auras que lo alcanzan (`aura_give` las anota
+  en `au_got_*`), el santuario que dura (con el ícono de la habilidad que
+  más se parece), las pociones que duran y los males (veneno, frío,
+  Amplificar daño, Congelación sagrada). `draw_effects` los dibuja a 28
+  píxeles arriba de la barra del medio (con dos jugadores, arriba de la
+  franja de cada uno), con los segundos que quedan y titilando los últimos
+  tres; los males con marco rojo.
+- **El cofre (stash)** (pedido del usuario): A al lado del cofre del pueblo
+  (el objeto `Bank` de objpreset.txt, OperateFn 32) abre el inventario con
+  el cofre en el lugar del equipo, como el cubo (así entra igual con dos
+  jugadores): pestañas de `STASH_W` x `STASH_H` (10x6), sus botones arriba
+  y el oro guardado abajo, con la mochila debajo. Se empieza con una
+  pestaña y se gana una por cada acto al que se llega (`act_max`, que en
+  las partidas viejas sale de las misiones); se compran hasta
+  `STASH_BUY_MAX` (5) más con la pestaña "+" (dos veces A), la primera a
+  `STASH_PRICE` (50.000) y cada una al triple (`stash_price`), con el oro
+  que lleva y, si no alcanza, el del cofre. X pasa de la mochila a la
+  pestaña que se ve y al revés, A levanta y suelta (también sobre otra
+  pestaña, con lo de la mano), LB ordena la pestaña si el cursor está ahí,
+  y "Guardar oro"/"Sacar oro" mueven todo el oro. Se guarda en la partida
+  (`stash` y `stashat`) y al cerrarlo. Los bots no lo abren
+  (`bots_playing`): no sabrían cerrarlo.
+- **Al morir se pierde oro** (`set_player_state`, como
+  `PLAYER_ApplyDeathPenalty`): el nivel % (hasta 20) del oro que lleva. El
+  original lo cuenta con el del cofre y tira el resto en el cadáver; acá
+  (pedido del usuario) no hay cadáver: el equipo y el cofre no se tocan. Se
+  avisa al reaparecer.
+- **Las cinemáticas** (`src/cinema.c`): el Resurrected trae las clásicas en
+  `data/global/video/*.webm` (VP8 1920x1080 con franjas negras: el cuadro
+  útil es 1920x864) y el sonido aparte, por idioma, en
+  `data/local/video/*.flac` (inglés, 5.1) y
+  `locales/audio/esmx/data/local/video/*.flac` (español latino, estéreo). El
+  importador (`import_movies`) saca cada una de a pedazos y ffmpeg la pasa a
+  MPEG-1 640x288 a 24 cuadros con sonido MP2 estéreo a 44100 Hz en
+  `data/global/video/<nombre>.mpg` (`idioma.txt` dice de qué idioma es el
+  sonido; si cambia, se vuelven a convertir). Los logos (`new_bliz`,
+  `bliznorth`) son 640x480 sin sonido. Pesan 190 MB las siete; las de la
+  expansión (`d2x_intro`, `d2x_out`) no se convierten todavía.
+  - Las pasa [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
+    (`src/third/pl_mpeg.h`): en la PC decodifica unos 1500 cuadros por
+    segundo. El cuadro va a la GPU como YUV (`video_movie_frame`) y se
+    dibuja en toda la ventana, no en los 800x600 del juego.
+  - El sonido va por el mezclador (`audio_movie_*`): mientras pasa, la
+    música, los efectos y las voces quedan en pausa. El reloj es el sonido
+    que ya salió por la placa (la placa no va exactamente a la par del reloj
+    de la máquina y en los siete minutos de la presentación el video se
+    despegaba); sin sonido, el de la máquina.
+  - Cuándo sale cada una, como el original: el servidor le manda al cliente
+    el paquete 0x61 con el número de la película en `QUESTS_ActChange`
+    (Warriv: 2, Meshif: 3; Tyrael en el Acto 4: 5) y
+    `QUESTS_HellPortalActChange` (el portal rojo del Durance: 4), la primera
+    vez (A1COMPLETED, A2COMPLETED, A3COMPLETED). Acá: `andy_q` 3,
+    `A2F_SAILED` y `A3F_HELLGATE`; el juego la pide (`game_take_movie`) y la
+    pasa `main.c`, nunca los bots de la demo ni las pruebas. Al arrancar, los
+    logos y la presentación (cada una se saltea con A, B, Start o Esc).
+  - En el menú principal, **Cinemáticas** con el panel de la expansión
+    (`cinematicsselectionexp`, siete filas en el orden de
+    `cinematicsmodalhd.json`, que es el del número del paquete 0x61):
+    las ya vistas (`cinematicas.txt` en la carpeta de partidas) se pueden
+    volver a ver. Las dos presentaciones están siempre: `d2x_intro` (el 6)
+    no la manda nunca el servidor.
+- **El grosor de las paredes** (no está en el original): el original para a
+  los personajes en el centro de los subtiles; acá se camina en continuo y
+  con solo la cruz se llegaba hasta la esquina de una pared. En las cloacas
+  del Acto 3 la base de los bloques y las puntas de sus esquinas se dibujan
+  un subtile más allá de lo que bloquean y el personaje se paraba encima del
+  dibujo. Ahora:
+  - `dt1_volume` mira el dibujo de cada pared, esquina o columna (no puertas
+    ni árboles) y marca los subtiles libres pegados por delante (x o y más
+    grandes) a los que bloquea que el dibujo tapa en más de la mitad. Solo
+    las paredes de verdad, las que frenan el paso y los proyectiles: con las
+    lápidas del cementerio los bots no salían del Burial Grounds.
+  - Esos subtiles llevan `COLL_VOLUME` (0x4000, nuestro) y el jugador y los
+    bots quedan a medio subtile de ellos y de lo que bloquea
+    (`map_too_close`). Si ya estaba más cerca (al aparecer, por un empujón)
+    se mueve sin acercarse más.
+  - Nunca cierra un paso que el original deja (`volume_cuts`): en diagonal
+    por la esquina de un subtile con grosor (junto a un tótem del Great
+    Marsh los bots no llegaban a la Flayer Jungle), ni delante de una punta
+    si sus vecinos no siguen unidos sin pasar por ahí.
   - **Jugador y bots:** caminan por donde no hay pared, objeto ni puerta
     (`COLL_MASK_PLAYER_PATH`).
   - **Monstruos:** lo mismo (`COLL_MASK_MONSTER_PATH`).
@@ -1392,11 +1705,12 @@ en *Releases*, sin ningún archivo del juego (el script lo revisa):
   importador de la Pi va adentro del port, con dos entradas en el menú de
   ports ("Importar Diablo II (Español)" e "Import Diablo II (English)") que
   buscan la carpeta del juego en un USB o en `/userdata`.
-- `parche-brujo/`: la skin personal del Brujo (sus `.d2rw`), con
-  `instalar.sh` y su `README.md` (de `docs/publicar/README-warlock.md`). Los íconos HD de sus
-  habilidades (`waskillicon.d2rw`) no van porque salen del Resurrected: sin
-  ellos el port arma los suyos.
-- `diablo2-port.zip` y `parche-brujo.zip`, para subir.
+- `diablo2-port.zip`, para subir.
+
+La skin personal del Brujo (sus `.d2rw`) y las herramientas con que se hizo
+no se publican (desde el 2026-10-23, a pedido del usuario): no están en el
+repositorio ni en el paquete principal (`package-batocera.sh` deja afuera
+todo `.d2rw`); quedan solo en la copia local, ignoradas por git.
 
 ### El importador
 
@@ -1405,7 +1719,7 @@ estática: no depende de nada instalado) abre el almacenamiento CASC del
 Resurrected y copia **solo** los archivos de `archivos.txt`: los que usa el
 port (unos 30.000, 1,6 GB de los cerca de 40 GB del juego). La lista la
 arma `scripts/package-batocera.sh` con los mismos assets que el paquete
-completo, sin los `.d2rw` (dibujos nuestros, que no están en el CASC).
+completo.
 
 - Pide el idioma: en español copia las voces de `locales/audio/esmx/` y en
   inglés las de `data/local/sfx/` (si falta una, usa la otra), y lo anota
@@ -1428,11 +1742,17 @@ completo, sin los `.d2rw` (dibujos nuestros, que no están en el CASC).
   Si el motor empieza a usar archivos nuevos del juego (se agregan en
   `package-batocera.sh`), hay que armar el paquete y subir la lista nueva;
   si no, el que clona el código no los tiene.
+- Las carpetas de `data/global/monsters` las elige `tools/act1monsters.py`
+  por acto: `levels.txt`, los jefes, lo que ponen los mapas por
+  `monpreset.txt` y lo que el motor pone por nombre (su `EXTRA`: si el
+  código empieza a crear un monstruo nuevo, va ahí; así faltaban las
+  barricadas del Acto 5, que salen de las baldosas). Para ver si falta
+  algo: una demo de cada acto con los datos del paquete y `grep "sin
+  gráficos"` en el log.
 
 Para compilar el de la Pi hace falta `g++-aarch64-linux-gnu` (lo instala
 `scripts/setup-wsl.sh`, que también instala `mingw-w64` para el de Windows,
-que todavía no se publica: falta probarlo, igual que
-`docs/publicar/instalar-brujo.bat`).
+que todavía no se publica: falta probarlo).
 
 ### Los textos en inglés
 
@@ -1484,26 +1804,10 @@ mágicos, raros y de los campeones se arman con los formatos del juego
   monstruo, clase, proyectil y zona); el empaquetado para la Pi copia solo esos.
 - `tools/dc6compose.py`: arma en un BMP los fondos y paneles que vienen partidos en
   pedazos de 256x256 (`python tools/dc6compose.py archivo.dc6 pal.dat columnas salida.bmp`).
-- Redibujar a un personaje (hoy, el Brujo, que trae los dibujos del Nigromante):
-  - `tools/sprites_export.py` (con los `.raw` de `d2fmt raw`) pasa sus DCC a hojas
-    PNG en `editar/<personaje>/`, con su `INSTRUCCIONES.md` para editarlas en
-    cualquier programa.
-  - `tools/sprites_import.py editar/brujo` pasa las hojas editadas a `.d2rw` al
-    lado de cada DCC; el motor los carga en lugar del original
-    (`charanim.c`, `load_sprite`). `--deshacer` los borra; `--probar <carpeta
-    de .raw>` comprueba que las hojas sin tocar dibujan lo mismo que los DCC.
-  - El Brujo ya tiene su modelo propio, con la capucha roja con cuernos. Las
-    hojas se dibujan en `D:\rework-sprites\editar\brujo` y se pasan con
-    `py -3 tools/sprites_import.py "D:/rework-sprites/editar/brujo"`. Son 971
-    `.d2rw` (70 MB) del cuerpo en las tres armaduras; las armas son las de
-    siempre. El paquete de la Pi los lleva.
-- `herramientas-sprites/d2rsprite.py`: los `.sprite` HD del Resurrected ↔ PNG
-  (para modificar el Resurrected; el port no los usa). Ver su README.
-- `tools/hd_icons.py <waskillicon.sprite>`: los íconos HD del Brujo a 48x48 con
-  la paleta del juego, en `data/global/ui/spells/waskillicon.d2rw`. El `.sprite`
-  sale del CASC (`build/d2rextract <D2R> <destino>
-  data/hd/global/ui/spells/warlock/`). Hay que volver a correrlo si se
-  reextrae `data/` (no viene en la extracción).
+- Dibujos editados: si al lado de un DCC hay un `.d2rw` (los cuadros en
+  crudo, el formato de `d2fmt raw`), el motor lo carga en lugar del original
+  (`charanim.c`, `load_sprite`). Ni los dibujos ni las herramientas para
+  hacerlos se publican: ver más arriba.
 
 | Opción | Qué hace |
 |---|---|
@@ -1519,6 +1823,8 @@ mágicos, raros y de los campeones se arman con los formatos del juego
 | `--autotest act1` | Con `--headless`, juega el Acto 1 solo y muestra el informe |
 | `--autotest act2` | Lo mismo con el Acto 2 (63 pasos) |
 | `--autotest act3` | Lo mismo con el Acto 3 (74 pasos; arranca en el muelle con los dos actos anteriores hechos) |
+| `--autotest act4` | Lo mismo con el Acto 4 (36 pasos; arranca en la Fortaleza del Pandemónium) |
+| `--autotest act5` | Lo mismo con el Acto 5 (62 pasos; arranca en Harrogath con los cuatro actos anteriores hechos y en el nivel 20) |
 | `--autotest skills` | Con `--headless`, la prueba de habilidades contra Andariel: falla si alguna ronda no la mata en 2 minutos |
 
 Variables de depuración:
@@ -1542,12 +1848,20 @@ Variables de depuración:
 | `D2_DUMP_TILES=x0,y0,x1,y1` | Con `D2_DEBUG`, dibuja con caracteres la colisión de esos tiles |
 | `D2_ONEHIT=1` | Cada golpe de un jugador mata (para probar las misiones) |
 | `D2_MEM=1` | Muestra la memoria usada en cada paso del arranque y al armar o borrar zonas |
-| `D2_ZONES=1` | Muestra cada zona que se arma o se borra y cuánto tardó (y cuántos DT1 llegaron preparados del hilo de trabajos y cuántos se leyeron al armarla), y las que se van a armar pronto, cuyos DT1 se piden antes |
+| `D2_ZONES=1` | Muestra cada zona que se arma o se borra y cuánto tardó (y cuántos DT1 llegaron preparados del hilo de trabajos y cuántos se leyeron al armarla; cuánto fue estampar, leer los DS1 y los DT1, la colisión y cada parte de las unidades; en cuántos ticks se armó y el que más tardó, y en qué parte: mapa, presets, objetos, monstruos o "entera"), y las que se van a armar pronto, cuyos DT1 se piden antes |
+| `D2_ZONE_BUDGET=MS` | Milisegundos por tick para armar una zona en partes mientras uno se acerca (por defecto 20; 0 = entera de una vez, como antes) |
+| `D2_ZONE_PIECES=N` | Sin el hilo de trabajos (las pruebas sin gráficos), cuántas piezas se estampan por tick al armar una zona en partes (por defecto 16; así las pruebas no dependen del reloj) |
+| `D2_ZONE_PARTS=1` | Pruebas: también las zonas que se arman enteras (al llegar, `D2_ZONETEST`) van de a una pieza por pasada, para comparar con `D2_COLLHASH` y `D2_OBJ_TEST=1` que salen iguales |
+| `D2_GRID_CHECK=1` | Pruebas: cada búsqueda de monstruos por la grilla de `units.c` (el fuego del piso, las nubes, a quién le pega cada proyectil) se compara con la de todas las unidades y el juego se corta si difiere (un lugar nuevo que mueve unidades sin llamar a `grid_moved`) |
 | `D2_ZONE_MAX=N` | Cuántas zonas puede haber armadas a la vez sin contar el pueblo (por defecto 6) |
 | `D2_ZONE_RESET=S` | Segundos sin nadie para borrar una zona (por defecto 600) |
 | `D2_TOUR="Stony Field,4"` | Lleva al jugador 1 a esos niveles (por nombre o número de zona), uno cada `D2_TOUR_EVERY` ticks (100); los demás jugadores van a su lado |
 | `D2_GOD=1` | Los jugadores no reciben daño |
-| `D2_ZONETEST=1` | Arma cada zona y verifica que se llegue caminando a sus jefes, objetos y salidas (también las del acto en que arranca); `2`, además, dibuja cada zona con caracteres |
+| `D2_ZONETEST=1` | Arma cada zona y verifica que se llegue caminando a sus jefes, objetos y salidas (también las del acto en que arranca); `2`, además, dibuja cada zona con caracteres. Avisa, como dato, los tiles a los que se llega sin nada dibujado o con pared y sin piso |
+| `D2_ZONEREACH=1` | Con `D2_ZONETEST`, cuántos subtiles de cada zona se alcanzan desde su entrada (para comparar dos versiones del armado) |
+| `D2_NO_STAMP_RULES=1` | Estampa las piezas enteras, sin KillEdge ni FillBlanks (para ver qué cambia por eso) |
+| `D2_A5GRID=1` | Al armar una barricada del Acto 5, imprime su grilla de celdas de 8x8 (la pieza en su celda, `+` lo que tapa, `.` vacía) |
+| `D2_MAZEDUMP=1` | Al armar un calabozo de `world3.inc` (Actos 3 y 5), imprime cada sala: su lugar en la grilla, la pieza de `lvlprest.txt` y sus salidas |
 | `D2_SPAWN="scarab1,4"` | Esos monstruos alrededor del jugador 1 al empezar |
 | `D2_AI_DEBUG=1` | Muestra los monstruos con IA del original que aparecen, sus habilidades y cada ataque o habilidad que usan |
 | `D2_WAYPOINTS=0x3` | Waypoints activados al empezar (un bit por waypoint) |
@@ -1559,6 +1873,10 @@ Variables de depuración:
 | `D2_A2STATE="3,3,4,5,3,1"` | Cómo arrancan las seis misiones del Acto 2 (Radament, el Báculo, el Sol, el Santuario, el Invocador y las Tumbas: el paso de cada una) |
 | `D2_A2QTEST=1` | Con `D2_ACT=2`, recorre las seis misiones del Acto 2 con el J1 (cruzando las zonas, matando a los jefes y hablando con cada NPC) y muestra cómo queda cada misión en cada paso |
 | `D2_A3QTEST=1` | Lo mismo con las seis del Acto 3 (con `D2_ACT=3`) |
+| `D2_A4QTEST=1` | Lo mismo con las del Acto 4 (con `D2_ACT=4`): Izual, la Forja, los sellos, Diablo y el portal del final; además rearma el Santuario con los jefes vivos (tiene que haber uno de cada uno) y va al Acto 3 y vuelve (el portal no pasa al Acto 3 y sigue al lado de Tyrael) |
+| `D2_DIFF=1` o `2` | La partida en Pesadilla o Infierno (sin pasar por el menú): los monstruos, los tesoros, las tiendas, los mercenarios y las misiones de esa dificultad (`docs/plan-dificultades.md`). Con la demostración (`D2_AUTOTEST_DEMO`), los personajes tienen 25 o 50 niveles más, las habilidades 8 o 16 más y el equipo de esa dificultad (`demo_diff_gear`: bases excepcionales o de élite raras, con resistencias que compensan la penalidad, vida, defensa y daño aumentado en las armas) |
+| `D2_DIFFTEST=1` | En el Acto 1, muestra en cada dificultad el nivel de los monstruos de algunos niveles, cuáles salen y cuántos jefes, y los números (nivel, vida, daño, experiencia, defensa, puntería, resistencias, habilidad y tesoro) de algunos monstruos, un jefe de misión, uno de nombre, uno al azar con su escolta |
+| `D2_COWTEST=1` | El nivel de las vacas (`src/cows.inc`) en el Acto 1: el cuerpo de Wirt (la pierna y de 10 a 19 pilas de oro), la receta del cubo donde no va (sin Baal, fuera del campamento, otra vez en la misma partida, con el Rey Vaca muerto), el portal de ida y de vuelta, las vacas, el Rey Vaca (sus 8 pociones de aguante) y que se guarde; mide un tick entre las vacas (con `D2_GOD=1` no se muere). Dice `COW: BIEN` o `COW: MAL` en cada cosa |
 | `D2_WARPS=1` | Con `D2_ZONETEST`, lista cada salto (de qué zona a cuál) y los jefes y objetos de misión que encontró en cada zona |
 | `D2_AI_DEBUG=1` | Lo que decide la IA de cada monstruo (con sus hechizos y su daño) |
 | `D2_COLLDUMP="zona,tx,ty,ancho,alto"` | Con `D2_ZONETEST`, dibuja con caracteres la colisión de ese rectángulo de la zona (en tiles desde su esquina; dice en qué subtile del mapa empieza): `.` libre, `#` pared, `o` objeto, `~` vacío, `?` otra cosa (0x10, una salida, se camina) |
@@ -1588,8 +1906,9 @@ Variables de depuración:
 | `D2_TALKTEST=N` | Abre el diálogo de cada NPC del pueblo y aprieta "Hablar" N veces, mostrando qué dice cada vez (sirve con una partida guardada); con los que apuestan, la lista y una compra; con Kashya y Greiz, los mercenarios que ofrecen |
 | `D2_MAP_OPEN=1` | Arranca con el automapa abierto |
 | `D2_DEMO_SECONDS=N` | Segundos con el menú quieto hasta que arranca la demostración (por defecto 10; 0 = nunca) |
-| `D2_DEMO_ACT=1` | La demostración del menú juega el Acto 1 (por defecto, el 2); `3`, el Acto 3 con nivel 50 y las habilidades en 8 |
-| `D2_AUTOTEST_DEMO=1` | Con `--autotest`, juega como la demostración (en el Acto 2; con `D2_DEMO_ACT=1`, el 1) (1: el Bárbaro es el primero y la Amazona lo acompaña, 2: la Amazona y la Hechicera, 3: la Hechicera y el Paladín, 4: el Paladín y el Nigromante, 5: el Nigromante y la Asesina, 6: la Asesina y el Druida, 7: el Druida y el Brujo, 8: el Brujo y el Bárbaro, 9: el Brujo y el Paladín, la primera de la rotación): peleas de verdad, sin guardar |
+| `D2_DEMO_ACT=1` | La demostración del menú juega solo el Acto 1 con nivel 30; `2`, el Acto 2 con nivel 40 y las habilidades en 6; `3`, el Acto 3 con nivel 50 y las habilidades en 8; `4`, el Acto 4 con nivel 60 y las habilidades en 10; `5`, el Acto 5 con nivel 70 y las habilidades en 12 (por defecto, la campaña: los cinco actos en Normal, Pesadilla e Infierno con los mismos personajes; con `D2_DIFF`, desde esa dificultad) |
+| `D2_DEMO_FROM=5` | La campaña de la demostración empieza en ese acto (y sigue con los demás y las otras dificultades): para ver pronto el paso de un acto o de una dificultad a la siguiente |
+| `D2_AUTOTEST_DEMO=1` | Con `--autotest` y `--players 2`, juega como la demostración (la campaña entera, con un tope de 6 horas de juego por acto; con `D2_DEMO_ACT=1` a `5`, solo ese acto) (1: el Bárbaro es el primero y la Amazona lo acompaña, 2: la Amazona y la Hechicera, 3: la Hechicera y el Paladín, 4: el Paladín y el Nigromante, 5: el Nigromante y la Asesina, 6: la Asesina y el Druida, 7: el Druida y el Brujo, 8: el Brujo y el Bárbaro, 9: el Brujo y el Paladín, la primera de la rotación): peleas de verdad, sin guardar |
 | `D2_DEMO_PLAYERS=1` | La demostración con un solo bot (por defecto juegan dos) |
 | `D2_PATH_DEBUG=1` | Dibuja con caracteres los caminos de tierra de cada zona exterior que se arma (`o` camino nuevo, `E` entradas y lugares) |
 | `D2_TILE_SHEET="act1/town/floor.dt1,0[,N]"` | Con `--sprite-test --screenshot`, los pisos de ese estilo con su secuencia (salteando N); `D2_TILE_NOLABEL=1` sin los números |
@@ -1607,7 +1926,7 @@ Variables de depuración:
 | `D2_INVSHOW=5..7` | El árbol de habilidades del J1 en la solapa 1, 2 o 3 (para las capturas) |
 | `D2_INVSHOW=8` | El registro de misiones del panel del J1 |
 | `D2_INV_PAGE=N` | Con `D2_INV_OPEN`, abre esa página del panel (1 = el árbol de habilidades) |
-| `D2_DEMO_MODE=nuevo` | La demostración del menú juega desde el nivel 1 (por defecto, con nivel 40 y todas las habilidades en 6 en el Acto 2, o 30 y en 1 en el Acto 1); `habilidades`: la prueba contra Andariel |
+| `D2_DEMO_MODE=nuevo` | La demostración del menú juega desde el nivel 1 (por defecto, con nivel 50 y todas las habilidades en 8 en el Acto 3, 40 y en 6 en el Acto 2, o 30 y en 1 en el Acto 1); `habilidades`: la prueba contra Andariel |
 | `D2_ST_ROUND=N` | En la prueba de habilidades, empieza en esa ronda |
 | `D2_ST_ROUNDS=N` | En la prueba de habilidades, hace solo N rondas |
 | `D2_ST_SOLO=1` | En la prueba de habilidades pelea uno solo (1 o 2; el otro mira de lejos), para medir cada habilidad sola |
@@ -1671,14 +1990,27 @@ Los bots usan `src/bot.c`, un módulo aparte para reusarlo:
 - Ruta entre zonas con `world_route_next`: pasillos, escaleras, bocas de
   cueva y portales. No pisa saltos que no son el destino.
 - Sigue el camino en línea recta hasta donde se ve, rehace la búsqueda cada
-  5 segundos o si se desvía, y se destraba solo si queda quieto.
+  5 segundos o si se desvía, y se destraba solo si queda quieto (un rato
+  para un costado al azar que no pise una boca de cueva o una subida: al pie
+  de la escalera del River of Flame subía sin querer al City of the Damned).
 - La llegada se calcula igual en la búsqueda y en el chequeo de "llegó" (el
   centro del subtile adentro del destino), y las bocas de cueva que no son
   el destino se esquivan con un margen del cuerpo más un paso.
 
 En la prueba, si un monstruo lo traba, el bot pega un segundo y vuelve a
-intentar caminar; si la pelea no se termina porque un chamán revive a los
-Caídos, va primero por el chamán.
+intentar caminar (trabado, también a lo que está a un paso: así rompe la
+prisión de hueso de Diablo); si la pelea no se termina porque un chamán revive a los
+Caídos, va primero por el chamán. En la demostración, si en 3 minutos no le
+bajó la vida al jefe del paso, se lo saltea como a los inalcanzables y deja
+en el log dónde estaba cada uno. Si le habló sin querer a un NPC de afuera
+(pegando con A al lado del espíritu de Izual, A habla), cierra el diálogo
+en los pasos que no son de hablar; el que acompaña, siempre. Teletransporte,
+la Hoja de distorsión y el Salto cruzan las paredes que solo son `COLL_WALL`
+(como en el original) y pueden dejarlo en un hueco cerrado de una cueva: si
+la demostración se queda sin camino, sale igual (`demo_escape`: hacia el
+compañero o hacia adonde va, girando 45 grados en cada intento).
+Si falla un paso, el informe dice qué hacía la navegación de cada bot, qué
+tenía al lado y los enemigos vivos cerca (`at_stuck_report`).
 - El A\* va en ocho direcciones; corta una esquina en diagonal solo si los
   dos lados están libres o si están tapados los dos (una escalera angosta
   en diagonal), como el jugador, que prueba la diagonal cuando no puede por
@@ -1694,7 +2026,15 @@ Caídos, va primero por el chamán.
 | `D2_AT_TRACE=1` | Cada 2 segundos, dónde está cada jugador, su estado y el monstruo más cercano (`=2`: además cada paso de la navegación) |
 | `D2_BOT_DEBUG=1` | Muestra cada búsqueda de camino |
 | `D2_WARP_DEBUG=1` | Muestra cada salto entre zonas y dónde se llega |
-| `D2_COLL_DEBUG=1` | Dibuja la colisión de cada subtile cerca de la cámara: rojo pared que frena proyectiles, amarillo solo no se camina, naranja solo frena proyectiles, celeste solo tapa la vista, azul puerta, violeta objeto, verde salida |
+| `D2_COLL_DEBUG=1` | Dibuja la colisión de cada subtile cerca de la cámara: rojo pared que frena proyectiles, amarillo solo no se camina, naranja solo frena proyectiles, celeste solo tapa la vista, azul puerta, violeta objeto, verde salida, gris el grosor de una pared |
+| `D2_STASH_TEST=1` | Prueba sin gráficos del cofre (pestañas, compra, oro, pasar objetos, guardar y cargar), los pergaminos apilados, el tomo viejo y el oro al morir; `=2`, `=3` y `=4` dejan el cofre abierto para las capturas (la pestaña "+", un objeto, uno en la mano) |
+| `D2_TPTEST=1` | Con `D2_START` afuera del pueblo: abre un portal al pueblo, entra, vuelve y revisa que se cierre |
+| `D2_NO_CINEMA=1` | Arranca sin los logos ni la presentación |
+| `D2_CINEMA=nombre` | Pasa esa cinemática (`act02start`...) en la ventana y sale |
+| `D2_CINEMA_BENCH=nombre` | Decodifica esa cinemática entera lo más rápido posible y dice cuántos cuadros por segundo da (sirve sin ventana, para medir la Pi) |
+| `D2_CINEMA_SHOT=archivo.bmp,segundo` | Con `D2_CINEMA`, guarda el cuadro de ese segundo tal como lo dibuja la GPU |
+| `D2_CINEMA_LOG=1` | Cada segundo de una cinemática, cuánto sonido hay en la cola |
+| `D2_DUMP_BLOCKS=x,y` | Con `D2_DEBUG`, la colisión alrededor de ese subtile (radio `D2_DUMP_R`, 5): `#` bloquea, `v` grosor de pared, `u` alguien, `+` no entra la cruz, `-` el centro queda pegado a una pared |
 | `--selftest` | Prueba la colisión con baldosas inventadas (armado de la máscara, filas del DT1, vacío, trazado de línea) y sale |
 
 ### Prueba automática del Acto 2
@@ -1724,9 +2064,129 @@ tiempo, memoria, ticks lentos, zonas armadas, los bots). Con
 `D2_AUTOTEST_DEMO`, la demostración juega estos mismos pasos peleando de
 verdad (saltea el guerrero y la apuesta).
 
+## Objetos que se usan (cofres, barriles, santuarios, pozos)
+
+`src/objects.inc` (incluido en `game.c`), como `D2Game/src/OBJECTS` de D2MOO:
+
+- **Al crearlos** (`OBJECTS_InitHandler` y el `InitFn` de `objects.txt`): los
+  cofres tienen trampa con `MonLvl/8+5` % y los que se pueden cerrar
+  (`Lockable`) salen cerrados con `MonLvl/2+8` %; las urnas y los cadáveres,
+  trampa con el mismo %; el santuario sale de `shrines.txt` según `Parm0`
+  (vida, maná, o 90% de los que duran y 10% de los mágicos, con su
+  `LevelMin`); el pozo trae `2*Parm2` cargas; 1 de cada 14 de los
+  `PreOperate` (urnas, barriles) ya está roto.
+- **Con A** (las `OperateFn`, cartel "A: Arcón" con el nombre del juego):
+  el cofre cerrado pide una llave y la gasta (la Asesina no la necesita; sin
+  llave dice "necesito una llave"); el cerrado tira dos veces la clase de
+  tesoro y el abierto una, con 25% de nada; la clase es `Act N Chest A/B/C`
+  según el tercio de niveles de monstruos del acto en que cae el nivel. Los
+  ataúdes sueltan algo seguro, las urnas y los barriles 21% (el barril se
+  patea), los cadáveres y escondites una tirada; ataúdes y barriles sueltan
+  un monstruo el 18% de las veces (`OBJRGN_GetTrapMonsterId`: zombis o
+  momias, si no esqueletos, si no la cimitarra voladora, que en el Acto 1
+  no sale). Los barriles que explotan les pegan a los de alrededor (de 1/32
+  a 1/8 de la vida que les queda, `OBJEVAL_ApplyTrapObjectDamage`) y hacen
+  explotar a los de al lado. Los estantes dan un arma o armadura superior
+  del nivel de la zona menos uno; las bibliotecas, un pergamino o una pila
+  de 5 (en lugar del tomo). Los cuerpos que arden de las mesetas del Acto 4
+  (`JackInTheBox`, `OperateFunction48`) sueltan algo 9 de cada 10 veces; la
+  otra se prenden, a los 20 cuadros queman a los que están a 2 y a los 25
+  sueltan. Las almohadillas del Santuario Arcano (`TeleportPad1..4`,
+  `OperateFunction27`) llevan al lado de la otra de su clase en la misma
+  sala de 12x12 (o en una de al lado), siempre que se usen.
+- **Trampas**: saltan a los 35 cuadros: rayo, saeta de fuego, nube de veneno,
+  nova, fuego en el piso o monstruos.
+- **Santuarios**: los de vida, maná y recarga llenan; los que duran (armadura,
+  combate, resistencias, habilidad, recarga de maná, estamina, experiencia)
+  valen uno a la vez (`shrine_kind` del jugador, por `shrine_props`); portal,
+  gema, fuego, monstruoso, explosivo y veneno. Vuelven a andar a los minutos
+  de `shrines.txt` (1200 cuadros cada uno). Los **pozos** curan la mitad de
+  vida, maná y estamina, sacan el veneno y el frío, y recuperan una carga a
+  los `Parm0` cuadros.
+- **Reparto**: en cada sala (las piezas de los calabozos; afuera, celdas de
+  8x8) salen los `ObjGrp0..7` de `levels.txt` con su `ObjPrb`, el objeto de
+  `objgroup.txt` y su `PopulateFn` con la densidad (`DENSITY * (ancho*alto
+  >> 7) >> 8`), en racimos los barriles y las urnas, hasta 10 santuarios y 4
+  pozos por nivel, lejos entre sí. La sala del waypoint queda vacía. El
+  `TrappedSoulPlaceholder` del Acto 4 no se ve: pone un racimo de almas
+  atrapadas (`InitFunction46`: la primera en su lugar, las otras a saltos de
+  10 a 18 subtiles), y el `JackInTheBox` sale uno por sala (`PopulateFn9`).
+- **Lo que ya se usó** se recuerda en la partida por acto, clase y lugar: las
+  tiradas salen de la semilla del mundo y de cada sala, así que al volver a
+  armar una zona salen los mismos objetos, igual de abiertos (lo de fuera de
+  la zona cuenta como ocupado al repartir, para que no dependa de la vecina).
+
+Los bots abren al pasar cofres, ataúdes, urnas, barriles y cadáveres a menos
+de 6 subtiles si no hay monstruos cerca (`at_open_objects`; los cerrados si
+tienen llave; al que no llegan en 6 s lo dejan).
+
+Un racimo de barriles o de cestas puede cerrar un pasillo (en el Jail, en
+el Spider Forest): se ponen con las reglas del original
+(`COLLIDE_MASK_PLACEMENT`) y hay que romperlos para pasar. `D2_ZONETEST`
+camina a través de los que se rompen o se abren y dejan de tapar
+(`obj_passable`).
+
+Pruebas: `D2_OBJ_TEST=1` informa lo que hay en cada zona; `=2` además usa
+cada uno en la zona del J1 y revisa la llave, que lo usado no se vuelva a
+usar y que al armar la zona de nuevo siga igual (`objetos bien/MAL`); `=3`
+con `D2_OBJ_SHOTS=prefijo` deja capturas de uno de cada clase (con el cartel
+y abriéndose).
+
+## El nivel de las vacas
+
+`src/cows.inc` y la granja en `world.c` (`ZK_COWS`), como el original:
+
+- **La pierna:** el cuerpo de Wirt en Tristram (`OperateFn` 33) suelta la
+  Pierna de Wirt y, de a una cada 10 cuadros, de 10 a 19 pilas de oro
+  (`OBJECTS_OperateFunction33_WirtsBody` y el caso `OBJECT_WIRTSBODY` de las
+  misiones). Una vez por partida.
+- **El portal:** la pierna con los pergaminos de portal en el cubo abre un
+  portal rojo al lado del jugador (`ACT1Q4_CreateCowPortal`): solo en el
+  Campamento de las Pícaras, con Baal muerto (`baal_q` 4 o más), si ese
+  personaje no mató al Rey Vaca, y uno por partida. Si no, "imposible" y un
+  mensaje que dice por qué (el original solo hace el sonido). El original
+  pide el Tomo de Portal; el port no lo tiene (los pergaminos se apilan de a
+  20), así que la receta usa la pila y gasta un pergamino. La receta sale en
+  la guía del cubo ("Varios").
+- **La granja** (Moo Moo Farm, Id 39): un páramo del Acto 1 de 80x80 con
+  los bordes cerrados y sin caminos, río ni waypoint, con una pieza de cada
+  relleno de `DRLGOUTWILD_SpawnSpecialPresets`: el vivac (`bivouac.ds1`, con
+  el Rey Vaca en el medio por su marca de `monpreset.txt`), el estanque, un
+  corral, dos de pantano y dos de piedras. El portal llega a una celda que
+  sale de la semilla de la zona y queda libre. Las vacas andan en manada
+  (`MinGrp`..`MaxGrp` de monstats: 5 a 10) y los grupos son los del Blood
+  Moor por su `MonDen` (800 contra 520): unas 240 vacas, la misma escala del
+  resto del port (el original pone unas cuatro veces más en todos los
+  niveles).
+- **El Rey Vaca:** al morir, los que están en la granja ya no pueden abrir
+  el portal (se guarda: `cowking 1`) y deja 8 pociones de aguante
+  (`ACT1Q4_UnitIterate_SetCustom6Flag`). El conjunto del Rey Vaca solo cae
+  de las vacas (`ITEMDROPFLAG_HELLBOVINE`: `items_drop_from_bovine`).
+
+Prueba: `D2_COWTEST=1` (ver la tabla de variables).
+
 ## Controles
 
 La tabla completa está en el [README](../README.md#controles).
+
+### Qué hace A
+
+En orden: levanta el objeto del suelo que tenga al lado (si no hay un
+monstruo a `MELEE_RANGE`), abre los waypoints, habla con un NPC, usa lo de
+las misiones, abre un cofre o un barril, usa la escalera o el portal y, si
+no, ataca (o usa la habilidad del botón). Con un monstruo pegado, A pega
+antes que abrir los waypoints, hablar, abrir un cofre o tomar la escalera
+(antes, al lado del waypoint del River of Flame o de Hadriel, A abría y
+cerraba el panel o el diálogo y no se le podía pegar al que atacaba: los
+bots de `--autotest act4` se quedaban ahí hasta que se pasaba el tiempo).
+Lo de las misiones se usa aunque haya monstruos cerca. En el pueblo, si un
+portal está más cerca que el NPC, A entra al portal y el cartel dice lo
+mismo (`portal_first`: Anya camina junto a su portal rojo al templo y A le
+hablaba a ella).
+
+Los bots de las pruebas van primero por el que revive, levanta muertos o
+pare crías (la madre vil mientras le queden: `units_find_reviver`) si la
+pelea dura más de 3 segundos.
 
 ### Estamina
 

@@ -14,8 +14,8 @@ void charanim_set_animdata(const AnimData *ad)
     s_animdata = ad;
 }
 
-/* Un DCC; si al lado está la versión editada (.d2rw, la que arma
-   tools/sprites_import.py con las hojas PNG de editar/), esa; si no está el
+/* Un DCC; si al lado hay una versión editada (.d2rw: los cuadros en crudo,
+   el formato de `d2fmt raw`; no viene en el paquete), esa; si no está el
    DCC, el DC6 del mismo nombre (Tyrael tiene sus piezas en DC6) */
 static int load_sprite(Sprite *s, const char *path)
 {

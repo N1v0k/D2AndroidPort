@@ -6,8 +6,9 @@
 #                               propio Diablo II: Resurrected los archivos que
 #                               usa el port (los de archivos.txt, no el juego
 #                               entero). Windows: más adelante
-#   publicar/parche-brujo/      la skin personal del Brujo, aparte
 #   publicar/*.zip              lo mismo comprimido, para las descargas
+#
+# La skin personal del Brujo (sus dibujos editados, .d2rw) no se publica.
 #
 # Antes: compilar build-pi (ver package-batocera.sh) y los importadores
 # (scripts/build-importador.sh). Los que falten se avisan y se saltan.
@@ -16,11 +17,10 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 pub="$root/publicar"
 port="$pub/diablo2-port"
-patch="$pub/parche-brujo"
 imp="${IMPORTADORES:-$HOME/build-importador/bin}"
 
 [ -d "$pub" ] && rm -rf "$pub"
-mkdir -p "$port" "$patch"
+mkdir -p "$port"
 
 # El paquete de Batocera sin los archivos del juego (con la lista que usa el importador)
 OUT="$port/batocera/ports" SIN_DATOS=1 bash "$root/scripts/package-batocera.sh" >/dev/null
@@ -57,18 +57,8 @@ EOF
 fi
 cp "$root/README.md" "$root/LICENSE" "$root/THIRD-PARTY-NOTICES.md" "$port/" # las instrucciones (en inglés) y las licencias
 
-# El parche del Brujo: sus dibujos editados (.d2rw), con las carpetas. Los
-# íconos de habilidades (waskillicon.d2rw) no van: salen de los del
-# Resurrected (tools/hd_icons.py) y sin ellos el port arma los suyos
-( cd "$root" && find data/global/chars/wk -name '*.d2rw' | sort ) > "$patch/archivos.txt"
-tar -C "$root" -cf - -T "$patch/archivos.txt" | tar -C "$patch" -xf -
-rm "$patch/archivos.txt"
-cp "$root/docs/publicar/README-warlock.md" "$patch/README.md"
-cp "$root/docs/publicar/instalar-brujo.sh" "$patch/instalar.sh"
-chmod +x "$patch/instalar.sh"
-
-# Que no se cuele nada del juego (solo los .d2rw del parche, que son dibujos)
-leaks=$(cd "$pub" && find . -type f \( -path '*/data/*' ! -name '*.d2rw' \) | head -5)
+# Que no se cuele nada del juego ni dibujos editados
+leaks=$(cd "$pub" && find . -type f \( -path '*/data/*' -o -name '*.d2rw' \) | head -5)
 if [ -n "$leaks" ]; then
     echo "ERROR: hay archivos del juego en publicar/:"
     echo "$leaks"
@@ -78,7 +68,7 @@ fi
 # Los .zip (los permisos de ejecución quedan en el zip)
 ( cd "$pub" && python3 - <<'EOF'
 import os, zipfile
-for name in ('diablo2-port', 'parche-brujo'):
+for name in ('diablo2-port',):
     with zipfile.ZipFile(name + '.zip', 'w', zipfile.ZIP_DEFLATED) as z:
         for base, dirs, files in os.walk(name):
             dirs.sort()
@@ -90,6 +80,6 @@ for name in ('diablo2-port', 'parche-brujo'):
                     z.writestr(info, fh.read())
 EOF
 )
-du -sh "$port" "$patch" "$pub"/*.zip
+du -sh "$port" "$pub"/*.zip
 [ ${#missing[@]} -eq 0 ] || echo "Faltan importadores (compilar con scripts/build-importador.sh): ${missing[*]}"
 echo "Listo: $pub"

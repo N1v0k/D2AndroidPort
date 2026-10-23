@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 
 static uint32_t tile_key(int orientation, int style, int seq)
@@ -108,12 +109,32 @@ typedef struct {
 static PrepDt1  s_prep[MAP_PREP];
 static unsigned s_prep_order;
 static int      s_dt1_ready, s_dt1_loaded; /* para D2_ZONES: los que llegaron preparados y los que se leyeron al armar */
+static int      s_dt1_deferred;            /* y las piezas que esperaron sus DT1 */
+static double   s_stamp_ms[3];             /* D2_ZONES: estampar, y de eso leer los DS1 y los DT1 */
+static double   coll_now_ms(void);
 
-void map_dt1_loads(int *ready, int *loaded)
+void map_stamp_times(double *stamp, double *ds1, double *dt1)
+{
+    *stamp = s_stamp_ms[0];
+    *ds1 = s_stamp_ms[1];
+    *dt1 = s_stamp_ms[2];
+    s_stamp_ms[0] = s_stamp_ms[1] = s_stamp_ms[2] = 0;
+}
+
+int map_prep_busy(void)
+{
+    int n = 0;
+    for (int k = 0; k < MAP_PREP; k++)
+        n += job_flag_get(&s_prep[k].state) == PREP_LOADING;
+    return n;
+}
+
+void map_dt1_loads(int *ready, int *loaded, int *deferred)
 {
     *ready = s_dt1_ready;
     *loaded = s_dt1_loaded;
-    s_dt1_ready = s_dt1_loaded = 0;
+    *deferred = s_dt1_deferred;
+    s_dt1_ready = s_dt1_loaded = s_dt1_deferred = 0;
 }
 
 static void prep_job(void *ptr, int arg)
@@ -170,7 +191,8 @@ void map_prepare_dt1(const Map *m, const char *dt1)
     snprintf(slot->path, sizeof slot->path, "%s", path);
     slot->order = ++s_prep_order;
     job_flag_set(&slot->state, PREP_LOADING);
-    jobs_push(prep_job, slot, 0);
+    if (!jobs_push_first(prep_job, slot, 0)) /* (adelante de los gráficos; con la cola llena, otra vez) */
+        job_flag_set(&slot->state, PREP_FREE);
 }
 
 /* Si ese DT1 ya se preparó, queda en el lugar idx del mapa (0); si se está
@@ -220,7 +242,10 @@ static int get_dt1(Map *m, const char *path)
     }
 
     if (prep_take(m, idx, path) != 0) {
-        if (dt1_prepare(path, &m->dt1[idx], &m->dt1_keys[idx], &m->dt1_kmin[idx], &m->dt1_kmax[idx], &m->dt1_bytes[idx]) != 0) {
+        double t0 = coll_now_ms();
+        int bad = dt1_prepare(path, &m->dt1[idx], &m->dt1_keys[idx], &m->dt1_kmin[idx], &m->dt1_kmax[idx], &m->dt1_bytes[idx]);
+        s_stamp_ms[2] += coll_now_ms() - t0;
+        if (bad != 0) {
             fprintf(stderr, "falta el tileset %s\n", path);
             return -1;
         }
@@ -289,8 +314,25 @@ static const Dt1Tile *find_tile(const Map *m, const int *dt1s, int ndt1, int ori
             total += t->rarity > 0 ? t->rarity : 0;
         }
     }
-    if (!first || total == 0)
-        return first;
+    if (!first)
+        return NULL;
+    if (total == 0) {
+        /* Todas con rareza 0: en el primer DT1 que la tiene, la que está más
+           adelante en el archivo (el original muestra esa: la biblioteca de
+           D2CMP las devuelve al revés y DRLGROOMTILE_GetTileCache se queda
+           con la primera). Algunos DT1 repiten la clave con una versión casi
+           vacía antes: en Harrogath (buildingses.dt1) se veían dos huecos
+           negros en el piso al lado de Qual-Kehk */
+        const Dt1Tile *last = first;
+        for (int k = 0, found = 0; k < ndt1 && !found; k++)
+            for (int i = 0; i < count[k]; i++) {
+                const Dt1Tile *t = &m->dt1[dt1s[k]].tiles[m->dt1_keys[dt1s[k]][start[k] + i]];
+                if (!found || t > last)
+                    last = t;
+                found = 1;
+            }
+        return last;
+    }
 
     int pick = (int)(seed % (uint32_t)total);
     for (int k = 0; k < ndt1; k++)
@@ -319,6 +361,7 @@ int map_create(Map *m, int width, int height)
     m->ch = (height + MAP_CHUNK - 1) / MAP_CHUNK;
     m->chunks = calloc((size_t)(m->cw * m->ch), sizeof *m->chunks);
     m->zone = -1;
+    m->piece_to = -1;
     if (!m->chunks) {
         map_free(m);
         return -1;
@@ -341,6 +384,8 @@ int map_begin_zone(Map *m, int zone, int x0, int y0, int x1, int y1)
             if (!*c)
                 return -1;
             (*c)->zone = zone;
+            for (int k = 0; k < MAP_CHUNK_SUB * MAP_CHUNK_SUB; k++) /* (armándose en partes: no se pisa hasta la colisión) */
+                (*c)->coll[k] = COLL_MASK_INVALID;
         }
     return 0;
 }
@@ -425,9 +470,91 @@ int map_stamp(Map *m, const char *ds1_path, int ox, int oy)
     return map_stamp_lib(m, ds1_path, ox, oy, NULL, 0);
 }
 
+double map_now_ms(void)
+{
+    return coll_now_ms();
+}
+
+int map_piece_now(Map *m)
+{
+    int k = m->piece++;
+    if (k < m->piece_from || (m->piece_to >= 0 && k >= m->piece_to)) {
+        m->pieces_skipped++;
+        return 0;
+    }
+    if ((m->piece_until > 0 && k > m->piece_from && coll_now_ms() > m->piece_until) || /* (por lo menos una por pasada) */
+        (m->piece_cap > 0 && k - m->piece_from >= m->piece_cap)) {
+        m->piece_to = k;
+        m->pieces_skipped++;
+        return 0;
+    }
+    return 1;
+}
+
 int map_stamp_lib(Map *m, const char *ds1_path, int ox, int oy, const char *const *dt1_paths, int num_dt1)
 {
+    return map_piece_now(m) ? map_stamp_lib_now(m, ds1_path, ox, oy, dt1_paths, num_dt1) : 0;
+}
+
+/* ¿Ese DT1 (ya pasado por dt1_path) está en el mapa o preparado? */
+static int dt1_have(const Map *m, const char *path)
+{
+    for (int i = 0; i < m->num_dt1; i++)
+        if (strcmp(m->dt1_path[i], path) == 0)
+            return 1;
+    for (int k = 0; k < MAP_PREP; k++)
+        if (job_flag_get(&s_prep[k].state) == PREP_READY && strcmp(s_prep[k].path, path) == 0)
+            return 1;
+    return 0;
+}
+
+/* En una pasada con dt1_defer: los DT1 de la pieza que faltan se piden al
+   hilo de trabajos y la pieza queda para la próxima pasada (1) */
+static int dt1_deferred(Map *m, const char *const *paths, int n)
+{
+    if (!m->dt1_defer || m->piece_until <= 0 || !jobs_running())
+        return 0;
+    int missing = 0;
+    for (int i = 0; i < n; i++) {
+        char path[256];
+        dt1_path(paths[i], path, sizeof path);
+        const char *base = strrchr(path, '/');
+        if (strcmp(base ? base + 1 : path, "warp.dt1") == 0 || dt1_have(m, path))
+            continue;
+        map_prepare_dt1(m, path);
+        missing++;
+    }
+    if (!missing)
+        return 0;
+    m->piece_to = m->piece - 1;
+    m->pieces_skipped++;
+    s_dt1_deferred++;
+    return 1;
+}
+
+/* La pieza que se estampa: su piso en blanco (FillBlanks; NULL = sin) y sus
+   celdas (cw x ch: sin el borde que se encima con la vecina) */
+typedef struct {
+    const Dt1Tile *blank;
+    int            cw, ch;
+} StampPiece;
+
+static void stamp_cells(Map *m, const Ds1 *ds1p, const int *dt1s, int ndt1, int sx, int sy, int sw, int sh, int ox, int oy,
+                        const StampPiece *sp);
+
+static int (*s_stamp_rules)(const char *ds1_path, int *kill, int *blank);
+
+void map_set_stamp_rules(int (*fn)(const char *ds1_path, int *kill, int *blank))
+{
+    s_stamp_rules = fn;
+}
+
+int map_stamp_lib_now(Map *m, const char *ds1_path, int ox, int oy, const char *const *dt1_paths, int num_dt1)
+{
+    if (dt1_paths && dt1_deferred(m, dt1_paths, num_dt1))
+        return 0;
     s_version++;
+    double t0 = coll_now_ms();
     size_t n;
     uint8_t *d = fs_read(ds1_path, &n);
     Ds1 ds1;
@@ -437,6 +564,11 @@ int map_stamp_lib(Map *m, const char *ds1_path, int ox, int oy, const char *cons
         return -1;
     }
     free(d);
+    s_stamp_ms[1] += coll_now_ms() - t0;
+    if (!dt1_paths && dt1_deferred(m, (const char *const *)ds1.files, ds1.num_files)) {
+        ds1_free(&ds1);
+        return 0;
+    }
 
     int dt1s[MAP_MAX_DT1], ndt1 = 0;
     for (int i = 0; i < (dt1_paths ? num_dt1 : ds1.num_files); i++) {
@@ -471,28 +603,95 @@ int map_stamp_lib(Map *m, const char *ds1_path, int ox, int oy, const char *cons
                 printf("\n");
             }
     }
-    for (int y = 0; y < ds1.height; y++) {
-        for (int x = 0; x < ds1.width; x++) {
-            int mx = ox + x, my = oy + y;
+    /* Una pieza de lvlprest.txt (DRLGPRESET_AddPresetRoomMapTiles): con
+       KillEdge sin su última fila y columna; con FillBlanks, el piso en
+       blanco de Blank.dt1 donde no tiene piso, aunque el DS1 no lo liste (el
+       original la carga en todas las salas, DRLGROOMTILE_LoadDT1FilesForRoom).
+       Con ella, los pisos 30.0 y 30.1 del DS1 también se encuentran: ocultos,
+       no se caminan. */
+    int kill = 0, blank = 0, piece = s_stamp_rules && s_stamp_rules(ds1_path, &kill, &blank);
+    StampPiece sp = { NULL, piece ? ds1.width - 1 : ds1.width, piece ? ds1.height - 1 : ds1.height };
+    if (blank > 0) {
+        char path[256];
+        dt1_path("data/global/tiles/act1/outdoors/blank.dt1", path, sizeof path);
+        int f = get_dt1(m, path), have = 0;
+        for (int i = 0; i < ndt1; i++)
+            have |= dt1s[i] == f;
+        if (f >= 0 && !have && ndt1 < MAP_MAX_DT1)
+            dt1s[ndt1++] = f;
+        if (f >= 0)
+            sp.blank = find_tile(m, &f, 1, ORI_FLOOR, 30, blank - 1, 0);
+    }
+    stamp_cells(m, &ds1, dt1s, ndt1, 0, 0, kill ? sp.cw : ds1.width, kill ? sp.ch : ds1.height, ox, oy, &sp);
+    ds1_free(&ds1);
+    s_stamp_ms[0] += coll_now_ms() - t0;
+    return 0;
+}
+
+/* Lo del DS1 en el rectángulo (sx, sy, sw, sh) de sus celdas, con su esquina
+   en el tile (ox, oy): los pisos, las paredes, las sombras y los objetos (las
+   celdas vacías no pisan lo que había). sp: la pieza (NULL = todo el
+   rectángulo, sin piso en blanco) */
+static void stamp_cells(Map *m, const Ds1 *ds1p, const int *dt1s, int ndt1, int sx, int sy, int sw, int sh, int ox, int oy,
+                        const StampPiece *sp)
+{
+    const Ds1 ds1 = *ds1p;
+    int nf = ds1.num_floors < MAP_FLOORS ? ds1.num_floors : MAP_FLOORS;
+    int nw = ds1.num_walls < MAP_WALLS ? ds1.num_walls : MAP_WALLS;
+    for (int y = sy; y < sy + sh && y < ds1.height; y++) {
+        for (int x = sx; x < sx + sw && x < ds1.width; x++) {
+            int mx = ox + x - sx, my = oy + y - sy;
             MapChunk *ch = own_chunk(m, mx, my);
             if (!ch)
                 continue; /* fuera del mapa o de otra zona */
-            int c = map_cell(mx, my);
+            int c = map_cell(mx, my), own = !sp || (x - sx < sp->cw && y - sy < sp->ch); /* (no el borde que se encima) */
             for (int l = 0; l < nf; l++) {
                 const Ds1Cell *cell = ds1_floor(&ds1, l, x, y);
                 if (cell->prop1 == 0)
                     continue;
                 const Dt1Tile *t = find_tile(m, dt1s, ndt1, ORI_FLOOR, cell->style, cell->sequence, hash3(mx, my, l));
                 wall_info(m, mx, my, l, cell, t, 1);
-                if (!t)
+                {
+                    static int ix = -2, iy;
+                    if (ix == -2 && (ix = -1, getenv("D2_TILE_INFO")))
+                        sscanf(getenv("D2_TILE_INFO"), "%d,%d", &ix, &iy);
+                    if (ix >= 0 && abs(mx - ix) <= 1 && abs(my - iy) <= 1) { /* D2_TILE_INFO="tx,ty": el piso de ahí y de al lado */
+                        int nb = t ? (t->pending ? t->nblocks : t->nblocks) : -1;
+                        printf("piso del tile (%d, %d) capa %d: estilo %d secuencia %d%s, %s (rareza %d, %d bloques)\n", mx,
+                               my, l, cell->style, cell->sequence, cell->hidden ? " oculto" : "", t ? "baldosa" : "SIN baldosa",
+                               t ? t->rarity : 0, nb);
+                        uint32_t key = tile_key(ORI_FLOOR, cell->style, cell->sequence);
+                        for (int k = 0; k < ndt1; k++) { /* las candidatas, en el orden en que se buscan */
+                            int f = dt1s[k], first, cnt = key < m->dt1_kmin[f] || key > m->dt1_kmax[f] ? 0 : dt1_range(m, f, key, &first);
+                            for (int i = 0; i < cnt; i++) {
+                                const Dt1Tile *c = &m->dt1[f].tiles[m->dt1_keys[f][first + i]];
+                                printf("    candidata %d de %s: rareza %d, %d bloques%s\n", k, m->dt1_path[f], c->rarity,
+                                       c->nblocks, c == t ? " (la elegida)" : "");
+                            }
+                        }
+                    }
+                }
+                if (!t) {
+                    static int debug = -1; /* D2_MISSING_TILES: los pisos que no están en los DT1 de la pieza */
+                    if (debug < 0)
+                        debug = getenv("D2_MISSING_TILES") != NULL;
+                    if (debug && !cell->hidden)
+                        printf("falta el piso estilo %d secuencia %d (capa %d) en el tile (%d, %d), %d DT1\n", cell->style,
+                               cell->sequence, l, mx, my, ndt1);
                     continue;
+                }
                 /* Oculto (o el piso en blanco, estilo 30, secuencia 0 o 1): no se
                    dibuja pero cuenta para la colisión (DRLGROOMTILE_LoadInitRoomTiles) */
                 int hide = cell->hidden || (cell->style == 30 && cell->sequence <= 1);
                 ch->floor[l][c] = hide ? NULL : t;
                 ch->hidden_floor[l][c] = hide ? t : NULL;
                 ch->floor_coll[l][c] = cell_coll(cell, 0);
+                if (own)
+                    ch->blank[c] = NULL; /* (lo de otra pieza que estaba acá) */
             }
+            /* FillBlanks: sin piso en la capa 0, dentro de la pieza */
+            if (sp && sp->blank && own && (nf == 0 || ds1_floor(&ds1, 0, x, y)->prop1 == 0))
+                ch->blank[c] = sp->blank;
             for (int l = 0; l < nw; l++) {
                 const Ds1Cell *cell = ds1_wall(&ds1, l, x, y);
                 if (cell->prop1 != 0 && (cell->type == ORI_SPECIAL_1 || cell->type == ORI_SPECIAL_2)) {
@@ -510,9 +709,18 @@ int map_stamp_lib(Map *m, const char *ds1_path, int ox, int oy, const char *cons
                 const Dt1Tile *t =
                     find_tile(m, dt1s, ndt1, cell->type, cell->style, cell->sequence, hash3(mx, my, 10 + l));
                 wall_info(m, mx, my, l, cell, t, 0);
+                int door = cell->type == ORI_LEFT_DOOR || cell->type == ORI_RIGHT_DOOR;
+                if (door && (t || cell->hidden)) { /* lo que sale de esa puerta (DRLGROOMTILE_AddTilePresetUnits: tipo 3) */
+                    MapObject *grown = realloc(m->objects, (size_t)(m->num_objects + 1) * sizeof *grown);
+                    if (grown) {
+                        m->objects = grown;
+                        m->objects[m->num_objects++] =
+                            (MapObject){ 3, cell->style << 8 | cell->sequence << 1 | (cell->type == ORI_RIGHT_DOOR) | cell->hidden << 16,
+                                         ds1.act, (float)(mx * TILE_SUB), (float)(my * TILE_SUB) };
+                    }
+                }
                 if (!t)
                     continue;
-                int door = cell->type == ORI_LEFT_DOOR || cell->type == ORI_RIGHT_DOOR;
                 if (cell->hidden) { /* invisible: no se dibuja pero cuenta para la colisión */
                     if (exit)
                         continue; /* la salida oculta es solo el salto */
@@ -546,7 +754,9 @@ int map_stamp_lib(Map *m, const char *ds1_path, int ox, int oy, const char *cons
             m->objects = grown;
             for (int i = 0; i < ds1.num_objects; i++) {
                 const Ds1Object *o = &ds1.objects[i];
-                float x = ox * TILE_SUB + o->x + 0.5f, y = oy * TILE_SUB + o->y + 0.5f;
+                if (o->x < sx * TILE_SUB || o->x >= (sx + sw) * TILE_SUB || o->y < sy * TILE_SUB || o->y >= (sy + sh) * TILE_SUB)
+                    continue;
+                float x = (ox - sx) * TILE_SUB + o->x + 0.5f, y = (oy - sy) * TILE_SUB + o->y + 0.5f;
                 if (!own_chunk(m, (int)(x / TILE_SUB), (int)(y / TILE_SUB)))
                     continue;
                 MapObject *mo = &m->objects[m->num_objects++];
@@ -558,12 +768,48 @@ int map_stamp_lib(Map *m, const char *ds1_path, int ox, int oy, const char *cons
             }
         }
     }
-    ds1_free(&ds1);
+}
+
+int map_stamp_part_now(Map *m, const Ds1 *ds1, int sx, int sy, int w, int h, int ox, int oy, const char *const *dt1_paths,
+                       int num_dt1)
+{
+    s_version++;
+    int dt1s[MAP_MAX_DT1], ndt1 = 0;
+    for (int i = 0; i < num_dt1; i++) {
+        char path[256];
+        dt1_path(dt1_paths[i], path, sizeof path);
+        int f = get_dt1(m, path);
+        if (f >= 0 && ndt1 < MAP_MAX_DT1)
+            dt1s[ndt1++] = f;
+    }
+    stamp_cells(m, ds1, dt1s, ndt1, sx, sy, w, h, ox, oy, NULL);
     return 0;
 }
 
-void map_fill_floor(Map *m, const char *dt1_file, int style, int seq, int x0, int y0, int w, int h)
+int map_plain_floor(const Map *m, int x, int y, int style, int seq)
 {
+    const MapChunk *c = map_chunk(m, x, y);
+    if (!c)
+        return 0;
+    int i = map_cell(x, y);
+    const Dt1Tile *t = c->floor[0][i];
+    if (!t || !((t->main_index == 0 && t->sub_index == 0) || (t->main_index == style && t->sub_index == seq)))
+        return 0;
+    for (int l = 1; l < MAP_FLOORS; l++)
+        if (c->floor[l][i] || c->hidden_floor[l][i])
+            return 0;
+    for (int l = 0; l < MAP_WALLS; l++)
+        if (c->wall[l][i] || c->hidden_wall[l][i])
+            return 0;
+    return 1;
+}
+
+/* (coll NULL: las marcas de la celda quedan como estaban; en el Acto 1 se
+   rellena encima de celdas ya estampadas y ponerlas en 0 cambiaba su colisión) */
+static void fill_floor(Map *m, const char *dt1_file, int style, int seq, const uint8_t *coll, int x0, int y0, int w, int h)
+{
+    if (!map_piece_now(m) || dt1_deferred(m, &dt1_file, 1))
+        return;
     s_version++;
     int f = get_dt1(m, dt1_file);
     if (f < 0)
@@ -571,9 +817,23 @@ void map_fill_floor(Map *m, const char *dt1_file, int style, int seq, int x0, in
     for (int y = y0; y < y0 + h; y++)
         for (int x = x0; x < x0 + w; x++) {
             MapChunk *ch = own_chunk(m, x, y);
-            if (ch)
+            if (ch) {
                 ch->floor[0][map_cell(x, y)] = find_tile(m, &f, 1, ORI_FLOOR, style, seq, hash3(x, y, 0));
+                ch->blank[map_cell(x, y)] = NULL;
+                if (coll)
+                    ch->floor_coll[0][map_cell(x, y)] = *coll;
+            }
         }
+}
+
+void map_fill_floor(Map *m, const char *dt1_file, int style, int seq, int x0, int y0, int w, int h)
+{
+    fill_floor(m, dt1_file, style, seq, NULL, x0, y0, w, h);
+}
+
+void map_fill_floor_coll(Map *m, const char *dt1_file, int style, int seq, uint8_t coll, int x0, int y0, int w, int h)
+{
+    fill_floor(m, dt1_file, style, seq, &coll, x0, y0, w, h);
 }
 
 /* Suma a la colisión de la baldosa (lx, ly) sus 25 marcas de subtile y las
@@ -588,9 +848,149 @@ static void coll_add_tile(MapChunk *ch, int lx, int ly, const Dt1Tile *t, uint8_
     }
 }
 
+/* Lo que mira volume_cuts, copiado del mapa a una grilla alrededor de un
+   pedazo (en la Pi, leer cada subtile con map_coll hacía la mitad del armado
+   de una zona): por subtile, si no se camina (VG_BLOCK), si tiene grosor
+   (VG_VOL) y si entra la cruz del jugador (VG_STAND). Al sacar un grosor se
+   saca también acá, así cada pregunta ve lo mismo que veía en el mapa. */
+enum { VG_BLOCK = 1, VG_VOL = 2, VG_STAND = 4 };
+typedef struct {
+    uint8_t *g;
+    int      x0, y0, w, h;
+} VolGrid;
+
+static uint8_t vg_at(const VolGrid *v, int x, int y)
+{
+    return v->g[(y - v->y0) * v->w + (x - v->x0)];
+}
+
+/* ¿Entra la cruz del jugador (foot_blocked del juego)? */
+static int vol_standable(const VolGrid *v, int x, int y)
+{
+    return (vg_at(v, x, y) & VG_STAND) != 0;
+}
+
+/* ¿Se puede parar en el centro, con el grosor que hay? */
+static int vol_ok(const VolGrid *v, int x, int y)
+{
+    return (vg_at(v, x, y) & (VG_STAND | VG_VOL)) == VG_STAND;
+}
+
+/* ¿El grosor de (vx, vy) cierra un paso que el original deja pasar? Se le
+   saca: se ve un poco encimado ahí, pero no se traba nadie. */
+static int volume_cuts(const VolGrid *m, int vx, int vy)
+{
+    /* En diagonal por una de sus esquinas, entre dos subtiles donde se para,
+       con el otro costado donde no: se pasa justo por la esquina (al lado de
+       un tótem del Great Marsh, los bots no llegaban a la Flayer Jungle) */
+    for (int c = 0; c < 4; c++) {
+        int ex = c & 1 ? 1 : -1, ey = c & 2 ? 1 : -1;
+        if (vol_ok(m, vx + ex, vy) && vol_ok(m, vx, vy + ey) && !vol_ok(m, vx + ex, vy + ey))
+            return 1;
+    }
+    /* Un subtile donde se paraba (delante de la punta de una esquina): sus
+       vecinos tienen que seguir unidos sin pasar por él, cerca */
+    if (!vol_standable(m, vx, vy))
+        return 0;
+    uint8_t ok[5][5], seen[5][5];
+    int q[25][2], n = 0, want = 0;
+    for (int y = 0; y < 5; y++)
+        for (int x = 0; x < 5; x++) {
+            ok[y][x] = vol_ok(m, vx - 2 + x, vy - 2 + y);
+            seen[y][x] = 0;
+            if (ok[y][x] && abs(x - 2) <= 1 && abs(y - 2) <= 1) {
+                want++;
+                if (!n) {
+                    seen[y][x] = 1;
+                    q[n][0] = x;
+                    q[n++][1] = y;
+                }
+            }
+        }
+    int got = 0;
+    for (int k = 0; k < n; k++) {
+        int x = q[k][0], y = q[k][1];
+        got += abs(x - 2) <= 1 && abs(y - 2) <= 1;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++) {
+                int nx = x + dx, ny = y + dy;
+                if ((!dx && !dy) || nx < 0 || ny < 0 || nx >= 5 || ny >= 5 || !ok[ny][nx] || seen[ny][nx])
+                    continue;
+                /* En diagonal: por un costado donde se para, o con los dos
+                   tapados sin grosor (el paso entero por la esquina) */
+                if (dx && dy && !(ok[y][nx] && ok[ny][x]) &&
+                    (ok[y][nx] || ok[ny][x] || (vg_at(m, vx - 2 + nx, vy - 2 + y) & VG_VOL) ||
+                     (vg_at(m, vx - 2 + x, vy - 2 + ny) & VG_VOL)))
+                    continue;
+                seen[ny][nx] = 1;
+                q[n][0] = nx;
+                q[n++][1] = ny;
+            }
+    }
+    return got < want;
+}
+
+/* La grilla de un pedazo y 3 subtiles alrededor (lo más lejos que mira
+   volume_cuts, con la cruz del jugador), copiada de cómo está el mapa */
+#define VOL_WIN (MAP_CHUNK_SUB + 6)
+
+static void vol_fill(const Map *m, VolGrid *v)
+{
+    /* lo que no tiene pedazo es COLL_MASK_INVALID para map_coll: no se camina, sin grosor */
+    memset(v->g, VG_BLOCK, (size_t)v->w * (size_t)v->h);
+    int cxa = (v->x0 + MAP_CHUNK_SUB) / MAP_CHUNK_SUB - 1, cxb = (v->x0 + v->w - 1) / MAP_CHUNK_SUB;
+    int cya = (v->y0 + MAP_CHUNK_SUB) / MAP_CHUNK_SUB - 1, cyb = (v->y0 + v->h - 1) / MAP_CHUNK_SUB;
+    for (int cy = cya; cy <= cyb; cy++)
+        for (int cx = cxa; cx <= cxb; cx++) {
+            const MapChunk *ch = cx >= 0 && cy >= 0 && cx < m->cw && cy < m->ch ? m->chunks[cy * m->cw + cx] : NULL;
+            if (!ch)
+                continue;
+            int bx = cx * MAP_CHUNK_SUB, by = cy * MAP_CHUNK_SUB;
+            int xa = bx > v->x0 ? bx : v->x0, xb = bx + MAP_CHUNK_SUB < v->x0 + v->w ? bx + MAP_CHUNK_SUB : v->x0 + v->w;
+            int ya = by > v->y0 ? by : v->y0, yb = by + MAP_CHUNK_SUB < v->y0 + v->h ? by + MAP_CHUNK_SUB : v->y0 + v->h;
+            for (int y = ya; y < yb; y++) {
+                const uint16_t *src = &ch->coll[(y - by) * MAP_CHUNK_SUB + xa - bx];
+                uint8_t *dst = &v->g[(y - v->y0) * v->w + xa - v->x0];
+                for (int k = 0; k < xb - xa; k++)
+                    dst[k] = (uint8_t)((src[k] & COLL_MASK_PLAYER_PATH ? VG_BLOCK : 0) | (src[k] & COLL_VOLUME ? VG_VOL : 0));
+            }
+        }
+    for (int y = 1; y < v->h - 1; y++)
+        for (int x = 1; x < v->w - 1; x++) {
+            uint8_t *g = &v->g[y * v->w + x];
+            if (!((g[0] | g[-1] | g[1] | g[-v->w] | g[v->w]) & VG_BLOCK))
+                g[0] |= VG_STAND;
+        }
+}
+
+/* Lo que tardó la última map_build_collision (D2_ZONES): las marcas de las
+   baldosas, el grosor de las paredes (dt1_volume) y el recorte (volume_cuts) */
+static double s_coll_ms[3];
+
+static double coll_now_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1e6;
+}
+
+void map_collision_times(double *tiles, double *volume, double *cuts)
+{
+    *tiles = s_coll_ms[0];
+    *volume = s_coll_ms[1];
+    *cuts = s_coll_ms[2];
+}
+
 void map_build_collision(Map *m, int zone)
 {
-    for (int i = 0; i < m->cw * m->ch; i++) {
+    map_build_collision_part(m, zone, 0);
+    map_build_collision_part(m, zone, 1);
+}
+
+void map_build_collision_part(Map *m, int zone, int part)
+{
+    double t0 = coll_now_ms();
+    for (int i = 0; part == 0 && i < m->cw * m->ch; i++) {
         MapChunk *ch = m->chunks[i];
         if (!ch || (zone >= 0 && ch->zone != zone))
             continue;
@@ -606,6 +1006,10 @@ void map_build_collision(Map *m, int zone)
                         coll_add_tile(ch, lx, ly, t, ch->floor_coll[l][c]);
                     has_floor |= t != NULL;
                 }
+                if (ch->blank[c]) { /* FillBlanks: sumado a lo que haya */
+                    coll_add_tile(ch, lx, ly, ch->blank[c], 0);
+                    has_floor = 1;
+                }
                 int has_wall = 0;
                 for (int l = 0; l < MAP_WALLS; l++) {
                     const Dt1Tile *t = ch->wall[l][c] ? ch->wall[l][c] : ch->hidden_wall[l][c];
@@ -619,16 +1023,72 @@ void map_build_collision(Map *m, int zone)
                     coll_add_tile(ch, lx, ly, ch->shadow[c], 0);
                 /* Sin piso ni pared es el vacío fuera del mapa: como un subtile
                    fuera de las salas del original (COLLIDE_MASK_INVALID). Con una
-                   pared sobre el piso en blanco (estilo 30, que no está en los DT1
-                   del calabozo) vale lo de la pared, como en el original, que
-                   arranca la sala en 0 y le suma lo de cada baldosa: por ahí se
-                   sale de la sala de llegada del Maggot Lair */
+                   pared y sin piso vale lo de la pared, como en el original, que
+                   arranca la sala en 0 y le suma lo de cada baldosa (en las
+                   piezas de lvlprest.txt no pasa: FillBlanks pone el piso en
+                   blanco) */
                 if (!has_floor && !has_wall)
                     for (int sy = 0; sy < TILE_SUB; sy++)
                         for (int sx = 0; sx < TILE_SUB; sx++)
                             ch->coll[(ly * TILE_SUB + sy) * MAP_CHUNK_SUB + lx * TILE_SUB + sx] = COLL_MASK_INVALID;
             }
     }
+    /* El grosor de las paredes dibujadas (no está en el original): después,
+       porque puede caer en el pedazo de al lado. Solo paredes, esquinas y
+       columnas: no las puertas (el arco tapa el hueco por donde se pasa) ni
+       los árboles (la copa) */
+    double t1 = coll_now_ms();
+    if (part == 0) {
+        s_coll_ms[0] = t1 - t0;
+        return;
+    }
+    uint8_t *has_vol = calloc((size_t)m->cw * (size_t)m->ch, 1); /* los pedazos que recibieron grosor (NULL: todos) */
+    for (int i = 0; i < m->cw * m->ch; i++) {
+        MapChunk *ch = m->chunks[i];
+        if (!ch || (zone >= 0 && ch->zone != zone))
+            continue;
+        int tx0 = (i % m->cw) * MAP_CHUNK, ty0 = (i / m->cw) * MAP_CHUNK;
+        for (int c = 0; c < MAP_CHUNK_TILES; c++)
+            for (int l = 0; l < MAP_WALLS * 2; l++) {
+                const Dt1Tile *t = l < MAP_WALLS ? ch->wall[l][c] : ch->wall_extra[l - MAP_WALLS][c];
+                if (!t || t->orientation < ORI_LEFT_WALL ||
+                    (t->orientation > ORI_SOUTH_CORNER && t->orientation != ORI_PILLAR))
+                    continue;
+                uint64_t v = dt1_volume(t);
+                for (int b = 0; v; b++, v >>= 1)
+                    if (v & 1) {
+                        int sx = (tx0 + c % MAP_CHUNK) * TILE_SUB + b % 6, sy = (ty0 + c / MAP_CHUNK) * TILE_SUB + b / 6;
+                        map_set_coll(m, sx, sy, COLL_VOLUME);
+                        if (has_vol && sx / TILE_SUB < m->width && sy / TILE_SUB < m->height)
+                            has_vol[(sy / MAP_CHUNK_SUB) * m->cw + sx / MAP_CHUNK_SUB] = 1;
+                    }
+            }
+    }
+    /* El grosor que cierra un paso se saca (volume_cuts), en el mismo orden:
+       pedazo por pedazo, solo los que tienen grosor, cada uno con su grilla
+       copiada del mapa tal como va quedando (con lo ya sacado en los de
+       antes). En la Pi, una grilla de toda la zona era lo que más tardaba
+       (Arcane Sanctuary no tiene grosor y la grilla era de 926x926). */
+    double t2 = coll_now_ms();
+    s_coll_ms[1] = t2 - t1;
+    for (int i = 0; i < m->cw * m->ch; i++) {
+        MapChunk *ch = m->chunks[i];
+        if (!ch || (zone >= 0 && ch->zone != zone) || (has_vol && !has_vol[i]))
+            continue;
+        int sx0 = (i % m->cw) * MAP_CHUNK_SUB, sy0 = (i / m->cw) * MAP_CHUNK_SUB;
+        uint8_t g[VOL_WIN * VOL_WIN];
+        VolGrid v = { g, sx0 - 3, sy0 - 3, VOL_WIN, VOL_WIN };
+        vol_fill(m, &v);
+        for (int k = 0; k < MAP_CHUNK_SUB * MAP_CHUNK_SUB; k++) {
+            int sx = sx0 + k % MAP_CHUNK_SUB, sy = sy0 + k / MAP_CHUNK_SUB;
+            if ((ch->coll[k] & COLL_VOLUME) && volume_cuts(&v, sx, sy)) {
+                ch->coll[k] &= (uint16_t)~COLL_VOLUME;
+                g[(sy - v.y0) * v.w + (sx - v.x0)] &= (uint8_t)~VG_VOL;
+            }
+        }
+    }
+    free(has_vol);
+    s_coll_ms[2] = coll_now_ms() - t2;
 }
 
 int map_load(Map *m, const char *ds1_path)
@@ -679,6 +1139,39 @@ uint16_t map_coll(const Map *m, int sx, int sy)
 int map_blocked(const Map *m, int sx, int sy)
 {
     return (map_coll(m, sx, sy) & COLL_MASK_PLAYER_PATH) != 0;
+}
+
+float map_clearance2(const Map *m, float x, float y)
+{
+    float best = MAP_BODY_CLEAR * MAP_BODY_CLEAR;
+    int fx = (int)floorf(x), fy = (int)floorf(y);
+    /* Casi siempre los 9 subtiles están en el mismo pedazo: se leen directo
+       (en la Pi se llama cientos de veces por tick) */
+    const uint16_t *rows = NULL;
+    if (fx >= 1 && fy >= 1 && (fx - 1) / MAP_CHUNK_SUB == (fx + 1) / MAP_CHUNK_SUB &&
+        (fy - 1) / MAP_CHUNK_SUB == (fy + 1) / MAP_CHUNK_SUB) {
+        const MapChunk *c = map_chunk(m, fx / TILE_SUB, fy / TILE_SUB);
+        if (!c)
+            return 0.0f; /* (todo COLL_MASK_INVALID: pegado a algo que no se camina) */
+        if ((fx + 1) / TILE_SUB < m->width && (fy + 1) / TILE_SUB < m->height)
+            rows = c->coll;
+    }
+    for (int sy = fy - 1; sy <= fy + 1; sy++)
+        for (int sx = fx - 1; sx <= fx + 1; sx++) {
+            uint16_t cl = rows ? rows[(sy % MAP_CHUNK_SUB) * MAP_CHUNK_SUB + sx % MAP_CHUNK_SUB] : map_coll(m, sx, sy);
+            if (!(cl & (COLL_MASK_PLAYER_PATH | COLL_VOLUME)))
+                continue;
+            float dx = x < sx ? sx - x : x > sx + 1 ? x - (sx + 1) : 0.0f;
+            float dy = y < sy ? sy - y : y > sy + 1 ? y - (sy + 1) : 0.0f;
+            if (dx * dx + dy * dy < best)
+                best = dx * dx + dy * dy;
+        }
+    return best;
+}
+
+int map_too_close(const Map *m, float x, float y)
+{
+    return map_clearance2(m, x, y) < MAP_BODY_CLEAR * MAP_BODY_CLEAR - 0.001f;
 }
 
 void map_set_coll(Map *m, int sx, int sy, uint16_t bits)

@@ -55,4 +55,13 @@ void audio_get_volume(int *sfx, int *music);
 
 void audio_render(int16_t *out, int frames); /* estéreo intercalado; solo en AUDIO_MANUAL */
 
+/* El sonido de una cinemática (cinema.c): mientras está abierto lo demás
+   queda en pausa. Se le pasa estéreo intercalado (-1..1) a AUDIO_RATE;
+   devuelve cuántos cuadros entraron (el resto, la próxima vez).
+   audio_movie_begin devuelve 1 si hay placa de sonido. */
+int  audio_movie_begin(void);
+int  audio_movie_push(const float *lr, int frames);
+int  audio_movie_queued(void); /* cuadros que faltan sonar */
+void audio_movie_end(void);
+
 #endif

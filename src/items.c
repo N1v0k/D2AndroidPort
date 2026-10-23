@@ -4,6 +4,7 @@
 #include "fmt/formats.h"
 #include "fmt/fs.h"
 #include "font.h"
+#include "jobs.h"
 #include "strings.h"
 #include "video.h"
 #include "lang.h"
@@ -14,26 +15,28 @@
 #include <string.h>
 
 #define MAX_TYPES  1200
-#define MAX_GROUND 512
+#define MAX_GROUND 2048 /* (con los cofres cae mucho más; lleno, se pisa el más viejo) */
 #define MAX_GFX    640
 #define POTION_DROP_CUT 35 /* % de las pociones del botín que no salen */
 #define POTION_NECK     35 /* % de arriba del dibujo de una poción que es el cuello (sin líquido) */
 #define POTION_EMPTY_LIGHT 9 /* qué tan oscuro queda lo que ya se tomó (tabla de luz) */
 
 static uint8_t text_col(int c);
+static void    rare_names_init(void);
 
 typedef struct {
-    Item  item;
-    float x, y;
-    int   anim_acc;
-    int   used;
+    Item     item;
+    float    x, y;
+    int      anim_acc;
+    int      used;
+    uint32_t born; /* cuándo cayó (lleno, se pisa el más viejo) */
 } GroundItem;
 
 /* Gráficos de objetos (animación de caída e inventario), cargados al usarlos */
 typedef struct {
     char   name[16];
     Sprite sprite;
-    int    ok;
+    int    state; /* 0 sin pedir, 2 cargándose, 1 listo, -1 no está (job_flag_get) */
 } ItemGfx;
 
 #define MAX_ITYPES 160
@@ -66,6 +69,7 @@ typedef struct {
     int         nmods;
     PropRow     mod[3];
     char        itype[7][5], etype[5][5];
+    short       itype_ix[7], etype_ix[5]; /* esos tipos en s_itypes (itype_index): -1 vacío o desconocido */
 } Affix;
 
 /* Un único (uniqueitems.txt) */
@@ -135,6 +139,9 @@ static ItemType    s_types[MAX_TYPES];
 static int         s_num_types;
 static IType       s_itypes[MAX_ITYPES];
 static int         s_num_itypes;
+/* De cada tipo, un bit por cada tipo que es (él y de los que desciende, lo
+   que contesta type_is): los afijos lo preguntan miles de veces por objeto */
+static uint8_t     s_itype_isa[MAX_ITYPES][(MAX_ITYPES + 7) / 8];
 static Affix       s_affix[MAX_AFFIX];
 static int         s_num_affix;
 static UniqueDef   s_uniques[MAX_UNIQUES];
@@ -211,7 +218,8 @@ static void load_kind(const TxtTable *t, ItemKind kind)
         snprintf(it->code, sizeof it->code, "%s", code);
         it->kind = kind;
         const char *namestr = txt_get(t, r, txt_col(t, "namestr"));
-        it->name = str_get(namestr);
+        /* sin texto, str_get devuelve la clave: es de la tabla, que se suelta al terminar (una copia) */
+        it->name = str_exists(namestr) ? str_get(namestr) : strdup(namestr);
         it->gender = str_gender(namestr);
         copy_lower(it->type, sizeof it->type, txt_get(t, r, txt_col(t, "type")));
         copy_lower(it->type2, sizeof it->type2, txt_get(t, r, txt_col(t, "type2")));
@@ -231,9 +239,16 @@ static void load_kind(const TxtTable *t, ItemKind kind)
             it->gfx[sizeof it->gfx - 1] = '\0';
         }
         it->cost = txt_get_int(t, r, "cost", 1);
+        if (txt_col(t, "BetterGem") >= 0) { /* misc.txt: la gema que sigue (el santuario de gema) */
+            copy_lower(it->better_gem, sizeof it->better_gem, txt_get(t, r, txt_col(t, "BetterGem")));
+            if (strcmp(it->better_gem, "non") == 0)
+                it->better_gem[0] = '\0';
+        }
         it->stackable = txt_get_int(t, r, "stackable", 0) == 1;
         it->max_stack = txt_get_int(t, r, "maxstack", 0);
         it->spawn_stack = txt_get_int(t, r, "spawnstack", it->max_stack);
+        if (strcmp(code, "key") == 0) /* pedido del usuario: de a 20 por casilla (el original, 12) */
+            it->max_stack = KEY_STACK;
         it->min_mis_dmg = txt_get_int(t, r, "minmisdam", 0);
         it->max_mis_dmg = txt_get_int(t, r, "maxmisdam", 0);
         it->str_bonus = txt_get_int(t, r, "StrBonus", 0);
@@ -249,6 +264,10 @@ static void load_kind(const TxtTable *t, ItemKind kind)
             it->tier = ul[0] && strcmp(ul, code) == 0 ? 2 : ub[0] && strcmp(ub, code) == 0 ? 1 : 0;
             snprintf(it->ubercode, sizeof it->ubercode, "%s", ub);
             snprintf(it->ultracode, sizeof it->ultracode, "%s", ul);
+            const char *nu = txt_col(t, "NightmareUpgrade") >= 0 ? txt_get(t, r, txt_col(t, "NightmareUpgrade")) : "";
+            const char *hu = txt_col(t, "HellUpgrade") >= 0 ? txt_get(t, r, txt_col(t, "HellUpgrade")) : "";
+            snprintf(it->nm_upgrade, sizeof it->nm_upgrade, "%s", strcmp(nu, "xxx") ? nu : "");
+            snprintf(it->hell_upgrade, sizeof it->hell_upgrade, "%s", strcmp(hu, "xxx") ? hu : "");
         }
         it->drop_sound = audio_find(txt_get(t, r, txt_col(t, "dropsound")));
         it->use_sound = audio_find(txt_get(t, r, txt_col(t, "usesound")));
@@ -258,7 +277,9 @@ static void load_kind(const TxtTable *t, ItemKind kind)
             { "AkaraMin", "AkaraMax" }, { "CharsiMin", "CharsiMax" }, { "GheedMin", "GheedMax" },
             { "FaraMin", "FaraMax" }, { "LysanderMin", "LysanderMax" }, { "DrognanMin", "DrognanMax" },
             { "ElzixMin", "ElzixMax" }, { "OrmusMin", "OrmusMax" }, { "AlkorMin", "AlkorMax" },
-            { "AshearaMin", "AshearaMax" }, { "HratliMin", "HratliMax" },
+            { "AshearaMin", "AshearaMax" }, { "HratliMin", "HratliMax" }, { "HalbuMin", "HalbuMax" },
+            { "JamellaMin", "JamellaMax" }, { "MalahMin", "MalahMax" }, { "LarzukMin", "LarzukMax" },
+            { "AnyaMin", "AnyaMax" },
         };
         for (int v = 0; v < VENDOR_COUNT; v++) {
             int lo = txt_get_int(t, r, vendor_cols[v][0], 0), hi = txt_get_int(t, r, vendor_cols[v][1], 0);
@@ -398,6 +419,47 @@ static int type_is(const char *type, const char *want, int depth)
     return 0;
 }
 
+/* El primer tipo con ese código (el que mira type_is), -1 si no hay */
+static int itype_index(const char *code)
+{
+    for (int i = 0; i < s_num_itypes; i++)
+        if (strcmp(s_itypes[i].code, code) == 0)
+            return i;
+    return -1;
+}
+
+/* Marca en s_itype_isa[root] los tipos que type_is encuentra desde `type`
+   (por el mismo camino y hasta la misma profundidad) */
+static void isa_mark(int root, const char *type, int depth)
+{
+    if (!type[0] || depth > 8)
+        return;
+    for (int j = 0; j < s_num_itypes; j++)
+        if (strcmp(s_itypes[j].code, type) == 0)
+            s_itype_isa[root][j / 8] |= (uint8_t)(1u << (j % 8));
+    int i = itype_index(type);
+    if (i >= 0) {
+        isa_mark(root, s_itypes[i].equiv[0], depth + 1);
+        isa_mark(root, s_itypes[i].equiv[1], depth + 1);
+    }
+}
+
+static void build_isa(void)
+{
+    memset(s_itype_isa, 0, sizeof s_itype_isa);
+    for (int i = 0; i < s_num_itypes; i++)
+        isa_mark(i, s_itypes[i].code, 0);
+}
+
+/* type_is con los tipos ya buscados (itype_index); si alguno no está en
+   itemtypes.txt, compara los textos como type_is */
+static int type_is_ix(const char *type, int tix, const char *want, int wix)
+{
+    if (tix < 0 || wix < 0)
+        return type_is(type, want, 0);
+    return (s_itype_isa[tix][wix / 8] >> (wix % 8)) & 1;
+}
+
 int items_itype_exists(const char *type)
 {
     return type && type[0] && itype_of(type) != NULL;
@@ -499,11 +561,13 @@ static void load_affixes(const TxtTable *t, int suffix)
             char col[8];
             snprintf(col, sizeof col, "itype%d", k + 1);
             copy_lower(a.itype[k], sizeof a.itype[k], txt_get(t, r, txt_col(t, col)));
+            a.itype_ix[k] = (short)itype_index(a.itype[k]);
         }
         for (int k = 0; k < 5; k++) {
             char col[8];
             snprintf(col, sizeof col, "etype%d", k + 1);
             copy_lower(a.etype[k], sizeof a.etype[k], txt_get(t, r, txt_col(t, col)));
+            a.etype_ix[k] = (short)itype_index(a.etype[k]);
         }
         a.key = strdup(txt_get(t, r, txt_col(t, "Name")));
         s_affix[s_num_affix++] = a;
@@ -754,6 +818,7 @@ int items_init(void)
     s_num_affix = 0;
     if (load_table(&ty, "itemtypes") == 0)
         load_itypes(&ty);
+    build_isa();
     resolve_types();
     if (load_table(&pre, "magicprefix") == 0)
         load_affixes(&pre, 0);
@@ -770,6 +835,7 @@ int items_init(void)
     load_runewords();
     load_gems();
     load_ratio();
+    rare_names_init();
     return r ? -1 : 0;
 }
 
@@ -799,6 +865,8 @@ Item items_make(const ItemType *t)
         it.amount = t->spawn_stack > 0 ? t->spawn_stack : t->max_stack;
     if (items_is_potion(t)) /* las pociones tienen varios tragos */
         it.amount = POTION_CHARGES;
+    if (t && strcmp(t->code, "tsc") == 0) /* un Pergamino de Portal (se apilan: amount es cuántos) */
+        it.amount = 1;
     if (t && t->var_inv > 0) /* anillos, amuletos, joyas y talismanes: uno de sus dibujos */
         it.gfx = (uint8_t)(1 + rnd() % (uint32_t)t->var_inv);
     return it;
@@ -845,15 +913,16 @@ static void apply_row(Item *it, const PropRow *r)
 
 /* ---- Objetos mágicos ---- */
 
-static int affix_fits(const Affix *a, const ItemType *t, int ilvl)
+/* tix: el tipo del objeto en s_itypes (itype_index(t->type)) */
+static int affix_fits(const Affix *a, const ItemType *t, int tix, int ilvl)
 {
     if (a->level > ilvl || (a->maxlevel > 0 && ilvl > a->maxlevel))
         return 0;
     int any = 0;
     for (int k = 0; k < 7 && !any; k++)
-        any = a->itype[k][0] && type_is(t->type, a->itype[k], 0);
+        any = a->itype[k][0] && type_is_ix(t->type, tix, a->itype[k], a->itype_ix[k]);
     for (int k = 0; k < 5 && any; k++)
-        if (a->etype[k][0] && type_is(t->type, a->etype[k], 0))
+        if (a->etype[k][0] && type_is_ix(t->type, tix, a->etype[k], a->etype_ix[k]))
             any = 0;
     return any;
 }
@@ -862,13 +931,13 @@ static int affix_fits(const Affix *a, const ItemType *t, int ilvl)
    tiene: used_groups); -1 si ninguno sirve */
 static int pick_affix(const ItemType *t, int ilvl, int suffix, const int *used_groups, int nused)
 {
-    int total = 0;
+    int total = 0, tix = itype_index(t->type);
     for (int i = 0; i < s_num_affix; i++) {
         const Affix *a = &s_affix[i];
         int clash = 0;
         for (int k = 0; k < nused && !clash; k++)
             clash = a->group && a->group == used_groups[k];
-        if (a->suffix == suffix && !clash && a->freq > 0 && affix_fits(a, t, ilvl))
+        if (a->suffix == suffix && !clash && a->freq > 0 && affix_fits(a, t, tix, ilvl))
             total += a->freq;
     }
     if (total == 0)
@@ -879,7 +948,7 @@ static int pick_affix(const ItemType *t, int ilvl, int suffix, const int *used_g
         int clash = 0;
         for (int k = 0; k < nused && !clash; k++)
             clash = a->group && a->group == used_groups[k];
-        if (a->suffix == suffix && !clash && a->freq > 0 && affix_fits(a, t, ilvl)) {
+        if (a->suffix == suffix && !clash && a->freq > 0 && affix_fits(a, t, tix, ilvl)) {
             pick -= a->freq;
             if (pick < 0)
                 return i;
@@ -945,15 +1014,18 @@ static void load_rare_names(const char *table, char **out, int *count)
     txt_free(&t);
 }
 
+/* Al empezar (items_init): no se lee nada del disco jugando */
+static void rare_names_init(void)
+{
+    load_rare_names("rareprefix", s_rare_pre, &s_num_rare_pre);
+    load_rare_names("raresuffix", s_rare_suf, &s_num_rare_suf);
+}
+
 int items_make_rare(Item *it, int ilvl)
 {
     const ItemType *t = it->type;
     if (!can_be_magic(t))
         return 0;
-    if (!s_num_rare_pre) {
-        load_rare_names("rareprefix", s_rare_pre, &s_num_rare_pre);
-        load_rare_names("raresuffix", s_rare_suf, &s_num_rare_suf);
-    }
     Item save = *it;
     int want = 3 + (int)(rnd() % 4), got = 0, npre = 0, nsuf = 0, groups[8], ngroups = 0;
     it->num_stats = 0;
@@ -1116,7 +1188,7 @@ int items_make_unique(Item *it, int ilvl)
 
 int items_quest_unique(Item *it)
 {
-    static const char *const k_codes[] = { "vip", "msf", "hst", "qf1", "qf2" };
+    static const char *const k_codes[] = { "vip", "msf", "hst", "qf1", "qf2", "hfh" };
     for (unsigned k = 0; it->type && k < sizeof k_codes / sizeof k_codes[0]; k++)
         if (strcmp(it->type->code, k_codes[k]) == 0) {
             int lvl = it->ilvl;
@@ -1127,20 +1199,34 @@ int items_quest_unique(Item *it)
     return 0;
 }
 
+/* Lo que suelta una vaca (ITEMDROPFLAG_HELLBOVINE): el conjunto del Rey Vaca
+   solo cae de ellas (ITEMS_RollSetItem: nSetId 29) */
+static int s_bovine_drop;
+
+void items_drop_from_bovine(int on)
+{
+    s_bovine_drop = on;
+}
+
+static int set_item_ok(const SetItemDef *d, const ItemType *t, int ilvl)
+{
+    return strcmp(d->code, t->code) == 0 && d->lvl <= ilvl &&
+           (s_bovine_drop || strcmp(d->set_key, "Cow King's Leathers") != 0);
+}
+
 int items_make_set(Item *it, int ilvl)
 {
     if (!it->type)
         return 0;
     int total = 0;
     for (int i = 0; i < s_num_setitems; i++)
-        if (strcmp(s_setitems[i].code, it->type->code) == 0 && s_setitems[i].lvl <= ilvl)
+        if (set_item_ok(&s_setitems[i], it->type, ilvl))
             total += s_setitems[i].rarity > 0 ? s_setitems[i].rarity : 1;
     if (total == 0)
         return 0;
     int pick = (int)(rnd() % (uint32_t)total), u = -1;
     for (int i = 0; i < s_num_setitems && u < 0; i++)
-        if (strcmp(s_setitems[i].code, it->type->code) == 0 && s_setitems[i].lvl <= ilvl &&
-            (pick -= s_setitems[i].rarity > 0 ? s_setitems[i].rarity : 1) < 0)
+        if (set_item_ok(&s_setitems[i], it->type, ilvl) && (pick -= s_setitems[i].rarity > 0 ? s_setitems[i].rarity : 1) < 0)
             u = i;
     if (u < 0)
         return 0;
@@ -1174,6 +1260,20 @@ void items_add_sockets(Item *it, int ilvl)
     most = most > 3 ? 3 : most; /* en Normal, hasta 3 (como el original) */
     if (most > 0)
         it->sockets = (uint8_t)(1 + rnd() % (uint32_t)most);
+}
+
+/* La recompensa de Larzuk (A5Q1): los comunes y superiores, todos los
+   engarces que admiten según su nivel; los demás, uno. 0 si no admite */
+int items_larzuk_sockets(Item *it)
+{
+    if (!it->type || (it->type->kind != ITEM_WEAPON && it->type->kind != ITEM_ARMOR) || it->type->stackable || it->sockets)
+        return 0;
+    int most = max_sockets(it->type, it->ilvl);
+    if (most <= 0)
+        return 0;
+    int plain = it->quality == QUALITY_NORMAL || it->quality == QUALITY_SUPERIOR || it->quality == QUALITY_LOW;
+    it->sockets = (uint8_t)(plain ? most : 1);
+    return it->sockets;
 }
 
 /* "Superior": un poco más de daño o de defensa */
@@ -1752,8 +1852,15 @@ int items_price(const Item *it, int selling)
     int q = it->quality < 9 ? it->quality : 0;
     price = price * k_mult[q] + (q ? 40 + 20 * q : 0) * it->num_stats;
     price += 50 * it->sockets;
-    if (items_is_potion(it->type) && it->amount > 0 && it->amount < POTION_CHARGES)
-        price = price * it->amount / POTION_CHARGES; /* empezada: lo que le queda */
+    /* Pociones: por los tragos (una empezada vale lo que le queda; una pila,
+       las que tiene). Llaves: por cuántas (el precio es el de 12, su pila del
+       original) */
+    if (items_is_potion(it->type) && it->amount > 0 && it->amount != POTION_CHARGES)
+        price = price * it->amount / POTION_CHARGES;
+    else if (it->type && strcmp(it->type->code, "key") == 0)
+        price = price * it->amount / 12;
+    else if (it->type && strcmp(it->type->code, "tsc") == 0 && it->amount > 1) /* una pila de pergaminos */
+        price = price * it->amount;
     if (selling)
         price /= 4;
     return price > 0 ? price : 1;
@@ -1775,6 +1882,10 @@ static int supported(const ItemType *t)
     if (t->kind == ITEM_ARMOR)
         return t->slot != SLOT_NONE;
     if (t->slot == SLOT_RING1 || t->slot == SLOT_AMULET || t->charm || t->socket_filler)
+        return 1;
+    /* las llaves (para los cofres cerrados) y el Pergamino de Portal (el
+       tomo no: pedido del usuario, los pergaminos se apilan de a TP_STACK) */
+    if (strcmp(t->code, "key") == 0 || strcmp(t->code, "tsc") == 0)
         return 1;
     return strcmp(t->type, "hpot") == 0 || strcmp(t->type, "mpot") == 0 || strcmp(t->type, "rpot") == 0 ||
            strcmp(t->type, "spot") == 0 || t->ammo || strcmp(t->code, "box") == 0;
@@ -1809,6 +1920,7 @@ typedef struct {
 } TcMods;
 
 static int s_mf; /* búsqueda de magia de la tirada en curso */
+static int s_force_quality; /* QUALITY_* que se pide en la tirada en curso (0 = la que salga) */
 
 /* Una probabilidad de calidad como la del original: (ratio - diferencia de
    niveles / divisor) * 128, con la búsqueda de magia y lo de la clase de
@@ -1885,7 +1997,9 @@ static void add_drop(const char *code, int mlvl, const TcMods *m, Item *out, int
         return; /* menos pociones que el original (cada una tiene varios tragos) */
     Item it = items_make(t);
     it.ilvl = (uint8_t)(mlvl > 0 && mlvl < 256 ? mlvl : 1);
-    switch (roll_quality(t, mlvl, m)) {
+    /* la calidad pedida (los cofres brillantes, los estantes) si el objeto la puede tener */
+    int q = s_force_quality && !t->always_normal && can_be_magic(t) ? s_force_quality : roll_quality(t, mlvl, m);
+    switch (q) {
     case QUALITY_UNIQUE: /* si no hay un único de ese objeto, sale raro (como el original) */
         if (items_make_unique(&it, mlvl) || items_make_rare(&it, mlvl))
             break;
@@ -1984,6 +2098,14 @@ int items_roll_drop(const char *treasure_class, int monster_level, int mf, Item 
     return n;
 }
 
+int items_roll_drop_quality(const char *treasure_class, int item_level, int mf, int quality, Item *out, int max)
+{
+    s_force_quality = quality;
+    int n = items_roll_drop(treasure_class, item_level, mf, out, max);
+    s_force_quality = 0;
+    return n;
+}
+
 const char *items_label(const Item *it, char *buf, size_t cap)
 {
     if (!it->type)
@@ -2061,6 +2183,8 @@ static int items_from_text_v2(const char *text, Item *it)
     it->sockets = (uint8_t)sockets;
     if (items_is_potion(t) && it->amount <= 0)
         it->amount = POTION_CHARGES;
+    if (strcmp(t->code, "tsc") == 0 && it->amount <= 0) /* de antes de las pilas: uno */
+        it->amount = 1;
     text += used;
     for (int i = 0; i < nsock; i++) {
         char sc[8];
@@ -2125,6 +2249,8 @@ int items_from_text(const char *text, Item *it)
     it->quality = (uint8_t)(quality == QUALITY_MAGIC || quality == QUALITY_RARE ? quality : QUALITY_NORMAL);
     if (items_is_potion(t) && it->amount <= 0) /* de antes de las cargas: llena */
         it->amount = POTION_CHARGES;
+    if (strcmp(t->code, "tsc") == 0 && it->amount <= 0) /* de antes de las pilas: uno */
+        it->amount = 1;
     text += used;
     for (int i = 0; i < n; i++) {
         int st, v;
@@ -2154,24 +2280,37 @@ int items_from_text(const char *text, Item *it)
 
 /* ---- Gráficos ---- */
 
+static void gfx_load(void *ptr, int arg)
+{
+    (void)arg;
+    ItemGfx *g = ptr;
+    char path[96];
+    snprintf(path, sizeof path, "data/global/items/%s.dc6", g->name);
+    size_t n;
+    uint8_t *d = fs_read(path, &n);
+    job_flag_set(&g->state, d && dc6_load(d, n, &g->sprite) == 0 ? 1 : -1);
+    free(d);
+}
+
+/* Solo se dibujan: la primera vez se piden al hilo de trabajos (en la Pi
+   leer cada uno de la tarjeta trababa el cuadro) y mientras no se ven */
 static const Sprite *get_gfx(const char *name)
 {
     if (!name[0])
         return NULL;
-    for (int i = 0; i < s_num_gfx; i++)
+    ItemGfx *g = NULL;
+    for (int i = 0; i < s_num_gfx && !g; i++)
         if (strcmp(s_gfx[i].name, name) == 0)
-            return s_gfx[i].ok ? &s_gfx[i].sprite : NULL;
-    if (s_num_gfx == MAX_GFX)
-        return NULL;
-    ItemGfx *g = &s_gfx[s_num_gfx++];
-    snprintf(g->name, sizeof g->name, "%s", name);
-    char path[96];
-    snprintf(path, sizeof path, "data/global/items/%s.dc6", name);
-    size_t n;
-    uint8_t *d = fs_read(path, &n);
-    g->ok = d && dc6_load(d, n, &g->sprite) == 0;
-    free(d);
-    return g->ok ? &g->sprite : NULL;
+            g = &s_gfx[i];
+    if (!g) {
+        if (s_num_gfx == MAX_GFX)
+            return NULL;
+        g = &s_gfx[s_num_gfx++];
+        snprintf(g->name, sizeof g->name, "%s", name);
+        job_flag_set(&g->state, 2);
+        jobs_push(gfx_load, g, 0);
+    }
+    return job_flag_get(&g->state) == 1 ? &g->sprite : NULL;
 }
 
 void items_inv_size(const ItemType *t, int *w, int *h)
@@ -2230,11 +2369,12 @@ void items_draw_item(const Item *it, int x, int y)
     const SpriteFrame *f = &s->frames[0];
     int dx = x + (bw - f->width) / 2, dy = y + (bh - f->height) / 2;
     fb_blit_spans(f->pixels, f->spans, f->width, f->height, dx, dy);
-    if (items_is_potion(t) && it->amount > 0 && it->amount < POTION_CHARGES) {
+    int top = it->amount % POTION_CHARGES; /* (en una pila, la de arriba) */
+    if (items_is_potion(t) && it->amount > 0 && top > 0) {
         /* Empezada: la parte del líquido que ya se tomó (de arriba, debajo
            del cuello del frasco) queda oscura, un tercio por trago */
         int neck = f->height * POTION_NECK / 100, liquid = f->height - neck;
-        int rows = liquid * (POTION_CHARGES - it->amount) / POTION_CHARGES;
+        int rows = liquid * (POTION_CHARGES - top) / POTION_CHARGES;
         if (rows > 0)
             fb_blit_remap(f->pixels + neck * f->width, f->width, rows, dx, dy + neck, g_light[POTION_EMPTY_LIGHT]);
     }
@@ -2244,20 +2384,26 @@ void items_draw_item(const Item *it, int x, int y)
 
 int items_ground_add(const Item *it, float x, float y)
 {
+    static uint32_t s_born;
     int slot = -1;
     for (int i = 0; i < MAX_GROUND; i++)
         if (!s_ground[i].used) {
             slot = i;
             break;
         }
-    if (slot < 0)
-        slot = (int)(rnd() % MAX_GROUND); /* lleno: se pisa uno cualquiera */
+    if (slot < 0) { /* lleno: se pisa el más viejo */
+        slot = 0;
+        for (int i = 1; i < MAX_GROUND; i++)
+            if (s_ground[i].born < s_ground[slot].born)
+                slot = i;
+    }
     GroundItem *g = &s_ground[slot];
     g->item = *it;
     g->x = x;
     g->y = y;
     g->anim_acc = 0;
     g->used = 1;
+    g->born = ++s_born;
     if (slot >= s_ground_top)
         s_ground_top = slot + 1;
     return slot;

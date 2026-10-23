@@ -51,6 +51,7 @@ add_executable(d2port
   src/missiles.c
   src/overlays.c
   src/audio.c
+  src/cinema.c
   src/units.c
   src/menu.c
   src/game.c

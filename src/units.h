@@ -21,7 +21,7 @@ typedef struct {
     int   in_town; /* en el pueblo no se los ataca */
     int   defense; /* para la probabilidad de que le peguen */
     int   level;
-    int   amplified; /* maldecido (lo de Griswold): recibe el doble de daño físico */
+    int   amplified; /* maldecido: % de más del daño físico que recibe (lo de Griswold, 100; Decrepitud, 50) */
     /* Lo que le hacen en el tick */
     int   damage;
     int   curse_ticks;               /* lo maldicen por tantos ticks */
@@ -35,7 +35,19 @@ typedef struct {
     int   aura_slow;                 /* % que lo frena un aura (la Congelación sagrada de Duriel) */
     float body;                      /* lo que su cuerpo es más ancho que el de un jugador (los gólems) */
     int   life_pct;                  /* % de vida que le queda (los fetiches se alejan si está entero) */
+    /* Los del Acto 4 (monai4.inc) */
+    int   freeze_ticks;              /* lo congelan (el toque frío de Diablo): ni se mueve ni ataca */
+    int   curse, curse_lvl, curse_len; /* A4C_*: lo maldice un Caballero del Olvido (y la que ya tiene) */
+    int   mana_drained;              /* le frenan el maná (el abrazo de los Gropers): ticks que le quedan */
+    int   still;                     /* un jugador quieto (PLRMODE_NEUTRAL: ni camina ni ataca): la burla de Baal */
+    int   more_mana;                 /* un jugador con tanto maná como vida o más (las súcubos le echan Blood Mana) */
+    int   player;                    /* 1 = un jugador (los blancos que siguen son mercenarias, señuelos y esbirros) */
+    int   shout;                     /* tiene el Grito (Madawc no grita si el jugador ya lo tiene) */
 } UnitTarget;
+
+/* Las maldiciones de los monstruos sobre los jugadores (MonCurseCast: las
+   seis del Nigromante; y las dos de las súcubos) */
+enum { A4C_NONE, A4C_AMPLIFY, A4C_WEAKEN, A4C_IRONMAIDEN, A4C_LIFETAP, A4C_DECREPIFY, A4C_LOWERRES, A4C_DEFENSE, A4C_BLOODMANA, A4C_COUNT };
 
 /* Lo que le dan las auras del Paladín a un aliado (la mercenaria, la
    Valquiria, los convertidos): se pone en cada tick */
@@ -92,12 +104,20 @@ int  units_loading(void);
 
 /* Crea las unidades que traen los DS1 recién estampados (m->objects) y
    marca sus colisiones. `level_of(x, y)` dice el nivel de monstruos de cada
-   lugar (0 = pueblo). */
-int  units_spawn_presets(Map *m, int (*level_of)(float x, float y));
+   lugar (0 = pueblo). De a partes: desde la `from`, hasta `cap` (0 = sin
+   tope) o hasta pasarse `ms` milisegundos (0 = sin hora), por lo menos una;
+   devuelve la que sigue (m->num_objects: ya están todas). */
+int  units_spawn_presets(Map *m, int (*level_of)(float x, float y), int from, int cap, double ms);
 
 /* Crea un monstruo enemigo de monstats.txt (por ejemplo "fallen1") */
 int  units_spawn_monster(const char *id, float x, float y, int level);
+int  units_spawn_superunique(const char *name, float x, float y, int level); /* uno de superuniques.txt con su escolta: su unidad, -1 = no */
+int  units_monstats_int(const char *id, const char *col, int def); /* una columna de monstats.txt (def si no está) */
+void units_set_difficulty(int diff); /* los monstruos que salen de ahora en más (0 Normal, 1 Pesadilla, 2 Infierno) */
+int  units_difficulty_int(const char *col, int def); /* una columna de difficultylevels.txt en esa dificultad */
 int  units_spawn_npc(const char *id, float x, float y); /* un NPC con el que se habla (Caín en el campamento) */
+int  units_spawn_neutral(const char *id, float x, float y, int level); /* ni enemigo ni NPC (los presos del Acto 5) */
+void units_walk_to(int i, float x, float y); /* un neutral va hacia ahí (los presos, a su portal) en vez de pasear */
 
 /* Quién sale en los grupos que marcan los DS1 (place_group50, place_champion,
    place_unique_pack): un monstruo de la zona de ese lugar */
@@ -108,6 +128,7 @@ int  units_count(void);
 void units_position(int i, float alpha, float *x, float *y); /* en subtiles */
 void units_draw(int i, int x, int y);                         /* (x, y) = pies en pantalla */
 int  units_is_corpse(int i);
+int  units_riding(int i); /* un diablillo montado en su bestia de asedio (se dibuja encima) */
 
 /* 1 si en (x, y) hay un NPC, animal o monstruo vivo a menos de `radius`
    + su tamaño; units_blocking_at además devuelve dónde está */
@@ -127,17 +148,39 @@ int  units_spawn_object(const char *cls, float x, float y, const char *mode);
 void units_object_mode(int i, const char *mode, const char *next);
 void units_object_unblock(Map *m, int i); /* deja de tapar el paso (la puerta de Tyrael cuando muere Duriel) */
 
+/* Los objetos que se usan (cofres, barriles, santuarios: objects.inc). Se
+   ponen como los de un DS1 (marcan su colisión); -1 si no se pudo. */
+int  units_place_object(Map *m, const char *cls, float x, float y);
+int  units_place_object_row(Map *m, int row, float x, float y); /* por su fila de objects.txt (sin buscar la clase) */
+int  units_object_row(int i);      /* su fila de objects.txt (0 = no es un objeto) */
+int  units_object_cur_mode(int i); /* el modo de ahora: 0 quieto (nu), 1 abriéndose (op), 2 abierto (on) */
+int  units_object_state(int i);    /* lo que guarda objects.inc (InteractType del original) */
+void units_object_set_state(int i, int state);
+void units_object_finish(int i);   /* la animación del modo de ahora, ya terminada */
+/* objects.txt: la fila de una clase o de un *ID, y sus columnas */
+int         units_objects_find(const char *cls);
+int         units_objects_row_of_id(int id);
+int         units_objects_int(int row, const char *col, int def);
+const char *units_objects_str(int row, const char *col);
+
 /* Combate */
 int         units_find_enemy(float x, float y, float range); /* el monstruo vivo más cercano, o -1 */
+/* El primero que toca un proyectil de tamaño msize en los subtiles que
+   recorrió (cells, en orden; missiles_touches), sin los de skip; -1 si nadie */
+int         units_find_enemy_path(const int (*cells)[2], int n, int msize, const int *skip, int nskip);
+int         units_foot(int i);               /* su tamaño contra los proyectiles y las paredes (SizeX: 1..3) */
 int         units_find_melee(float x, float y, float range); /* igual, para pegarle cuerpo a cuerpo (a los tentáculos, desde más lejos) */
 void        units_set_level_query(int (*level_id_at)(float x, float y)); /* el Id de levels.txt de un lugar */
-int         units_find_reviver(float x, float y, float range); /* el más cercano que revive o levanta muertos */
+int         units_find_reviver(float x, float y, float range); /* el más cercano que revive, levanta muertos o pare crías */
+void        units_set_ancients(int on); /* el rito de los Antiguos empezado: pelean (a5quest.inc) */
+int         units_baal_left(void);      /* 1 una vez cuando Baal llegó al portal de la Cámara */
 int         units_alive_enemy(int i);
 int         units_damage(int i, int amount); /* devuelve la experiencia si lo mató */
 void        units_check_anims(void);         /* depuración: avisa las animaciones que faltan */
 const char *units_display_name(int i);       /* nombre traducido */
 void        units_health(int i, int *hp, int *max_hp);
 const char *units_treasure_class(int i);     /* para el botín (treasureclassex.txt) */
+void        units_debug_stats(int i, char *buf, size_t cap); /* pruebas: nivel, vida, daño, experiencia, resistencias... */
 int         units_level(int i);
 float       units_radius(int i);             /* tamaño del cuerpo, en subtiles */
 int         units_resist(int i, int elem, int amount); /* el daño que le llega después de su resistencia */
@@ -153,6 +196,10 @@ int         units_is_ranged(int i);          /* dispara de lejos (arqueras, cham
 /* Habilidades de los jugadores (radio en subtiles, duración en ticks) */
 int  units_scare(float x, float y, float radius, int ticks); /* huyen; devuelve cuántos */
 int  units_enemies_near(float x, float y, float radius, int *out, int max); /* los monstruos vivos a esa distancia */
+/* Los monstruos vivos que pueden estar a menos de r de (x, y): los del
+   cuadrado de lado 2r, de menor a mayor (la distancia la mide el que llama);
+   -1 si son más de max: ahí hay que mirar todas las unidades */
+int  units_enemies_around(float x, float y, float r, int *out, int max);
 typedef struct {
     int def_flat; /* defensa que se le resta (Percepción) */
     int def_pct, dmg_pct, ar_pct; /* % de defensa, daño y puntería (negativos) */
@@ -289,6 +336,7 @@ int  units_nec_attract(int i, float radius, int ticks);
 int  units_nec_cursed(int i);  /* NC_* (0 = ninguna) */
 int  units_lifetap(int i);     /* % de Robar vida (0 = no) */
 void units_chill(int i, int ticks);                     /* frío: va a la mitad de velocidad */
+void units_heal(int i, int hp);                         /* le suma vida, hasta la que tiene de máximo */
 int  units_poison(int i, int total, int ticks, int owner); /* veneno: `total` de daño en `ticks`; 1 si lo envenenó */
 int  units_bleed(int i, int total, int ticks, int owner);  /* heridas abiertas: lo mismo, daño físico */
 /* El Profanador del Brujo: une las almas de los monstruos de un grupo; lo
@@ -296,7 +344,9 @@ int  units_bleed(int i, int total, int ticks, int owner);  /* heridas abiertas: 
    experiencia es de `owner`) */
 void units_link(int i, int group, int pct, int owner, int ticks);
 int  units_linked(int i); /* el grupo (0 = ninguno) */
-/* Monstruos que mató el veneno, para darle la experiencia a `owner` */
+/* Monstruos que mató el veneno, para darle la experiencia a `owner` (UNITS_KILL_ALLY:
+   los mató un aliado sin dueño, un bárbaro del Acto 5: sueltan lo suyo y no hay experiencia) */
+#define UNITS_KILL_ALLY (-2)
 int  units_pop_kill(int *unit, int *owner, int *exp);
 enum { UNIT_CHILLED = 1, UNIT_POISONED = 2, UNIT_STUNNED = 4, UNIT_CURSED = 8, UNIT_SCARED = 16, UNIT_SLOWMIS = 32 };
 int  units_status(int i); /* UNIT_* (para teñirlos al dibujar) */

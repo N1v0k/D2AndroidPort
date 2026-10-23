@@ -2,6 +2,7 @@
 
 #include "fmt/formats.h"
 #include "fmt/fs.h"
+#include "jobs.h"
 #include "video.h"
 
 #include <SDL.h>
@@ -9,35 +10,65 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_UI 96
+#define MAX_UI 160
 
+enum { UI_LOADING, UI_READY, UI_MISSING };
 typedef struct {
     char   path[48];
     Sprite sprite;
-    int    ok;
+    int    state; /* UI_* (job_flag_get/set): lo pone el hilo que lo lee */
 } UiImage;
 
 static UiImage s_images[MAX_UI];
 static int     s_count;
 
-static const Sprite *get(const char *path)
+static void load_job(void *ptr, int arg)
+{
+    (void)arg;
+    UiImage *im = ptr;
+    char file[96];
+    snprintf(file, sizeof file, "data/global/ui/%s.dc6", im->path);
+    size_t n;
+    uint8_t *d = fs_read(file, &n);
+    int ok = d && dc6_load(d, n, &im->sprite) == 0;
+    free(d);
+    if (!ok)
+        fprintf(stderr, "falta ui/%s.dc6\n", im->path);
+    job_flag_set(&im->state, ok ? UI_READY : UI_MISSING);
+}
+
+/* El de ese nombre; si no estaba, se lee en el hilo de trabajos (en la Pi
+   el panel de los waypoints tardaba 18 ms en el hilo del juego) en su turno
+   (LOAD_QUEUE) o adelante de lo que espera (LOAD_FIRST), o en este hilo
+   (LOAD_NOW, y sin el hilo de trabajos) */
+enum { LOAD_QUEUE, LOAD_FIRST, LOAD_NOW };
+static UiImage *find(const char *path, int how)
 {
     for (int i = 0; i < s_count; i++)
         if (strcmp(s_images[i].path, path) == 0)
-            return s_images[i].ok ? &s_images[i].sprite : NULL;
+            return &s_images[i];
     if (s_count == MAX_UI)
         return NULL;
     UiImage *im = &s_images[s_count++];
     snprintf(im->path, sizeof im->path, "%s", path);
-    char file[96];
-    snprintf(file, sizeof file, "data/global/ui/%s.dc6", path);
-    size_t n;
-    uint8_t *d = fs_read(file, &n);
-    im->ok = d && dc6_load(d, n, &im->sprite) == 0;
-    free(d);
-    if (!im->ok)
-        fprintf(stderr, "falta ui/%s.dc6\n", path);
-    return im->ok ? &im->sprite : NULL;
+    job_flag_set(&im->state, UI_LOADING);
+    if (how == LOAD_QUEUE)
+        jobs_push(load_job, im, 0);
+    else if (how == LOAD_NOW || !jobs_push_first(load_job, im, 0))
+        load_job(im, 0);
+    return im;
+}
+
+/* Mientras se lee no está: ese cuadro se dibuja sin él */
+static const Sprite *get(const char *path)
+{
+    const UiImage *im = find(path, LOAD_FIRST);
+    return im && job_flag_get(&im->state) == UI_READY ? &im->sprite : NULL;
+}
+
+void ui_preload(const char *path)
+{
+    find(path, LOAD_QUEUE);
 }
 
 static const SpriteFrame *frame_of(const char *path, int frame)
@@ -185,6 +216,7 @@ void ui_loading(int step, int steps)
     memcpy(saved, g_fb.pal, sizeof saved);
     if (have_pal)
         memcpy(g_fb.pal, pal, sizeof pal);
+    find("loading/loadingscreen_blank", LOAD_NOW); /* (se muestra ya, mientras carga) */
     int frames = ui_frame_count("loading/loadingscreen_blank");
     int f = steps > 1 ? step * (frames - 1) / (steps - 1) : frames - 1;
     f = f < 0 ? 0 : f >= frames ? frames - 1 : f;

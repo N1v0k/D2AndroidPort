@@ -89,7 +89,7 @@
 
 #define MAX_LEVELS 48
 #define MAX_ZONES  MAP_ZONES
-#define MAX_WARPS  96
+#define MAX_WARPS  128 /* (los del mapa, los de las misiones y los portales al pueblo) */
 #define MAX_LINKS  32
 #define MAX_CELLS  12
 #define MARKER_STYLE 8 /* los especiales con este estilo o más son marcas, no saltos */
@@ -106,6 +106,9 @@ enum {
     ZK_HAREM1, ZK_PALACE, ZK_ARCANE, ZK_DURIEL, /* el palacio, el Santuario Arcano y la guarida de Duriel */
     ZK_DOCK, ZK_JUNGLE, ZK_KURAST, ZK_CAUSEWAY, ZK_TRAVINCAL, /* el Acto 3 (world3.inc: Zone.floor de la selva y Kurast = cuál) */
     ZK_A3MAZE, ZK_A3PRESET, /* sus calabozos de salas y los de una sola pieza (Zone.floor = el Id de levels.txt) */
+    ZK_FORTRESS, ZK_MESA, ZK_RIVER, ZK_SANCTUM, /* el Acto 4 (world4.inc: Zone.floor de las mesetas = cuál) */
+    ZK_HARROGATH, ZK_SIEGE, ZK_BARRICADE, /* el Acto 5 (world5.inc: Zone.floor de las barricadas = BARR_*) */
+    ZK_COWS, /* la Granja Muu Muu del Acto 1 (solo por el portal del cubo) */
 };
 
 /* Las zonas del desierto (Zone.floor de ZK_DESERT), en el orden en que se encadenan */
@@ -137,6 +140,7 @@ static TxtTable  s_levels_txt; /* levels.txt: los nombres de los monstruos apunt
 static TxtTable  s_lvlwarp_txt; /* lvlwarp.txt: qué saltos son trampillas */
 static uint32_t  s_seed;
 static int       s_act = 1; /* el acto armado (un mundo por acto) */
+static int       s_world_diff; /* la dificultad (world_set_difficulty): los monstruos de los niveles */
 
 /* Lo que decide world_layout y usan las zonas al armarse */
 static int s_moor_row, s_plains_row, s_dark_row, s_marsh_row, s_tamoe_col, s_grave_c0;
@@ -145,7 +149,7 @@ static int s_pack_x, s_pack_y, s_pack_h;
 
 /* Zonas de cada tipo (para unirlas con saltos) */
 static int z_town, z_moor, z_plains, z_graves, z_den, z_stony, z_passage, z_dark, z_marsh, z_tamoe, z_monastery,
-    z_barracks, z_jail[4], z_cloister, z_cat[5], z_tristram, z_tower, z_cellar[6];
+    z_barracks, z_jail[4], z_cloister, z_cat[5], z_tristram, z_tower, z_cellar[6], z_cows = -1;
 static int z_desert[DZ_COUNT], z_canyon;
 static int s_staff_tomb, s_boss_tomb; /* las tumbas de Tal Rasha (Id 66..72): la verdadera y la de Kaa */
 static int s_lut_north; /* Lut Gholein con la salida al norte (el Rocky Waste arriba); si no, al oeste */
@@ -156,6 +160,22 @@ static uint32_t rnd(void)
 {
     s_rng = s_rng * 1664525u + 1013904223u;
     return s_rng >> 8;
+}
+
+/* Las salas de la última zona armada: en los calabozos, cada pieza de la
+   grilla (como las salas del original, donde se reparten los objetos) */
+#define MAX_ROOMS 400
+static int s_rooms[MAX_ROOMS][4], s_num_rooms, s_rooms_zone = -1;
+
+static void room_add(int x, int y, int w, int h)
+{
+    if (s_num_rooms < MAX_ROOMS) {
+        s_rooms[s_num_rooms][0] = x;
+        s_rooms[s_num_rooms][1] = y;
+        s_rooms[s_num_rooms][2] = w;
+        s_rooms[s_num_rooms][3] = h;
+        s_num_rooms++;
+    }
 }
 
 static int file_exists(const char *path)
@@ -213,7 +233,8 @@ static int add_warp(Map *m, int first, int x0, int y0, int w, int h, int style, 
         if (s->y > ty1) ty1 = s->y;
     }
     if (tx1 < 0) {
-        fprintf(stderr, "no encontré el salto de %s a %s\n", s_zones[from].name, s_zones[to].name);
+        if (!m->pieces_skipped) /* (en el armado en partes, su pieza va en otra pasada) */
+            fprintf(stderr, "no encontré el salto de %s a %s\n", s_zones[from].name, s_zones[to].name);
         return -1;
     }
     Warp *wp = &s_warps[s_num_warps++];
@@ -362,6 +383,167 @@ static void warp_margins(const Map *m, int zone)
                 printf("  la boca de %s a %s se usa con A (al llegar se quedaba encerrado)\n", zone_level(zone) ? zone_level(zone)->name : "?",
                        zone_level(w->to) ? zone_level(w->to)->name : "?");
         }
+    }
+}
+
+/* ---- Las uniones entre zonas vecinas ----
+   El original no las tiene: las zonas de afuera son niveles pegados y se
+   camina de uno al otro por donde se pueda. Las nuestras son para armar la
+   vecina a tiempo y para que los bots sepan por dónde cruzar, y se ponen al
+   armar el mundo, sin colisión: en la selva del Acto 3 las del río van en
+   el medio del borde, sobre el agua, y cada orilla puede seguir del otro
+   lado o no (semilla 43: la orilla sur del Great Marsh entra 5 subtiles al
+   Spider Forest y ahí hay árboles; el bot iba a ese rincón y volvía). Con
+   las dos zonas armadas, el punto se corre al cruce que más entra a las dos
+   (sin salir de cada una; a la par, el más cercano). Solo mira baldosas: no
+   cambia con el orden en que se arman las zonas ni con barriles rotos. */
+
+/* A cada lado del punto, hasta dónde se busca el cruce a lo largo del borde;
+   hasta cuántos subtiles se cuenta lo que alcanza cada lado sin salir de su
+   zona (los rincones vistos: 117 en la semilla 43, 3199 en la 6, donde la
+   orilla este del río del Spider Forest solo se une por el Flayer Jungle; el
+   muelle entero alcanza unos 8700) */
+#define CROSS_SPAN  80
+#define CROSS_REACH 6000
+#define CROSS_RUNS  6 /* los cruces que se prueban, de más cerca a más lejos */
+
+/* ¿Entra ahí el pie en cruz del jugador, con solo las baldosas? (los
+   barriles que se rompen y las puertas que se abren no cierran un cruce) */
+static int cross_stand(const Map *m, int x, int y)
+{
+    static const int dx[5] = { 0, -1, 1, 0, 0 }, dy[5] = { 0, 0, 0, -1, 1 };
+    for (int k = 0; k < 5; k++)
+        if (map_coll(m, x + dx[k], y + dy[k]) & (COLL_WALL | COLL_NOPLAYER))
+            return 0;
+    return 1;
+}
+
+/* Cuántos subtiles se alcanzan desde (x, y) sin salir de la zona z, hasta
+   CROSS_REACH (-1 sin memoria) */
+static int cross_open(const Map *m, int z, int x, int y)
+{
+    const Zone *zz = &s_zones[z];
+    int x0 = zz->x0 * TILE_SUB, y0 = zz->y0 * TILE_SUB, w = (zz->x1 - zz->x0) * TILE_SUB, h = (zz->y1 - zz->y0) * TILE_SUB;
+    if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h || !cross_stand(m, x, y))
+        return 0;
+    uint8_t *seen = calloc((size_t)w * (size_t)h / 8 + 1, 1); /* (también los que no se pisan: se miran una vez) */
+    int *queue = malloc(CROSS_REACH * sizeof *queue);
+    if (!seen || !queue) {
+        free(seen);
+        free(queue);
+        return -1;
+    }
+    int qh = 0, qt = 0, i0 = (y - y0) * w + (x - x0);
+    seen[i0 >> 3] |= (uint8_t)(1u << (i0 & 7));
+    queue[qt++] = i0;
+    while (qh < qt && qt < CROSS_REACH) {
+        int c = queue[qh++], cx = c % w, cy = c / w;
+        for (int dy = -1; dy <= 1 && qt < CROSS_REACH; dy++)
+            for (int dx = -1; dx <= 1 && qt < CROSS_REACH; dx++) {
+                int nx = cx + dx, ny = cy + dy, n = ny * w + nx;
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h || (seen[n >> 3] >> (n & 7) & 1))
+                    continue;
+                seen[n >> 3] |= (uint8_t)(1u << (n & 7));
+                if (cross_stand(m, x0 + nx, y0 + ny))
+                    queue[qt++] = n;
+            }
+    }
+    free(seen);
+    free(queue);
+    return qt;
+}
+
+static void link_settle(const Map *m, WorldLink *wl)
+{
+    double t_start = map_now_ms();
+    const Zone *za = &s_zones[wl->a], *zb = &s_zones[wl->b];
+    /* El borde que comparten y que pasa por el punto: vertical (x = bord) u
+       horizontal (y = bord); `lo` la zona de antes (oeste o norte) */
+    int vert = -1, bord = 0, lo = -1;
+    if (za->x1 == zb->x0 || zb->x1 == za->x0) {
+        lo = za->x1 == zb->x0 ? wl->a : wl->b;
+        bord = s_zones[lo].x1 * TILE_SUB;
+        vert = fabsf(wl->x - (float)bord) <= 2.0f ? 1 : -1;
+    }
+    if (vert < 0 && (za->y1 == zb->y0 || zb->y1 == za->y0)) {
+        lo = za->y1 == zb->y0 ? wl->a : wl->b;
+        bord = s_zones[lo].y1 * TILE_SUB;
+        vert = fabsf(wl->y - (float)bord) <= 2.0f ? 0 : -1;
+    }
+    wl->cross = -2;
+    if (vert < 0)
+        return; /* (no está sobre un borde compartido: queda como está) */
+    int hi = lo == wl->a ? wl->b : wl->a;
+    /* Lo que tienen en común a lo largo del borde (en subtiles), y en eso los
+       cruces: tramos seguidos donde el pie entra a los dos lados (el de `lo`
+       en bord - 1, el otro en bord) */
+    int t_lo = (vert ? (za->y0 > zb->y0 ? za->y0 : zb->y0) : (za->x0 > zb->x0 ? za->x0 : zb->x0)) * TILE_SUB;
+    int t_hi = (vert ? (za->y1 < zb->y1 ? za->y1 : zb->y1) : (za->x1 < zb->x1 ? za->x1 : zb->x1)) * TILE_SUB;
+    int t0 = (int)(vert ? wl->y : wl->x), from = t0 - CROSS_SPAN > t_lo ? t0 - CROSS_SPAN : t_lo;
+    int to = t0 + CROSS_SPAN < t_hi - 1 ? t0 + CROSS_SPAN : t_hi - 1;
+    int run0[2 * CROSS_SPAN + 1], run1[2 * CROSS_SPAN + 1], nruns = 0;
+    for (int t = from; t <= to; t++) {
+        int ok = vert ? cross_stand(m, bord - 1, t) && cross_stand(m, bord, t) : cross_stand(m, t, bord - 1) && cross_stand(m, t, bord);
+        if (ok && nruns > 0 && run1[nruns - 1] == t - 1)
+            run1[nruns - 1] = t;
+        else if (ok) {
+            run0[nruns] = run1[nruns] = t;
+            nruns++;
+        }
+    }
+    /* De más cerca a más lejos del punto, el que más alcanza del lado que
+       menos alcanza (un rincón pierde contra el paso de verdad; a la par, el
+       más cercano). Si los dos lados llegan al tope, ese. */
+    int best = -1, best_reach = 0;
+    uint8_t tried[2 * CROSS_SPAN + 1] = { 0 };
+    for (int k = 0; k < CROSS_RUNS && best_reach < CROSS_REACH; k++) {
+        int pick = -1, pd = 1 << 30;
+        for (int r = 0; r < nruns; r++) {
+            int d = t0 < run0[r] ? run0[r] - t0 : t0 > run1[r] ? t0 - run1[r] : 0;
+            if (!tried[r] && d < pd)
+                pick = r, pd = d;
+        }
+        if (pick < 0)
+            break;
+        tried[pick] = 1;
+        int t = t0 < run0[pick] ? run0[pick] : t0 > run1[pick] ? run1[pick] : t0;
+        int a = cross_open(m, lo, vert ? bord - 1 : t, vert ? t : bord - 1);
+        int b = a > best_reach ? cross_open(m, hi, vert ? bord : t, vert ? t : bord) : 0;
+        if (a < 0 || b < 0) { /* sin memoria: se vuelve a mirar la próxima vez */
+            wl->cross = 0;
+            return;
+        }
+        if ((a < b ? a : b) > best_reach) {
+            best = pick;
+            best_reach = a < b ? a : b;
+        }
+    }
+    if (best >= 0 && (t0 < run0[best] || t0 > run1[best])) { /* al medio de ese cruce */
+        float t = (float)(run0[best] + run1[best]) / 2.0f + 0.5f;
+        if (getenv("D2_ZONES") || getenv("D2_WARPS"))
+            printf("  unión %s - %s: el cruce de (%.0f, %.0f) pasa a (%.0f, %.0f)\n", zone_level(wl->a) ? zone_level(wl->a)->name : "?",
+                   zone_level(wl->b) ? zone_level(wl->b)->name : "?", wl->x, wl->y, vert ? (float)bord : t,
+                   vert ? t : (float)bord);
+        wl->x = vert ? (float)bord : t;
+        wl->y = vert ? t : (float)bord;
+    }
+    wl->cross = best >= 0 ? 1 : -1;
+    if (best < 0 && (getenv("D2_ZONES") || getenv("D2_WARPS")))
+        printf("  unión %s - %s en (%.0f, %.0f): sin cruce que entre a las dos\n", zone_level(wl->a) ? zone_level(wl->a)->name : "?",
+               zone_level(wl->b) ? zone_level(wl->b)->name : "?", wl->x, wl->y);
+    if (getenv("D2_ZONES"))
+        printf("  unión %s - %s: cruce mirado en %.2f ms\n", zone_level(wl->a) ? zone_level(wl->a)->name : "?",
+               zone_level(wl->b) ? zone_level(wl->b)->name : "?", map_now_ms() - t_start);
+}
+
+/* Las uniones de la zona recién armada con las vecinas que ya lo están */
+static void links_settle(const Map *m, int z)
+{
+    for (int i = 0; i < s_num_links; i++) {
+        WorldLink *wl = &s_links[i];
+        int other = wl->a == z ? wl->b : wl->b == z ? wl->a : -1;
+        if (other >= 0 && wl->cross == 0 && s_zones[other].loaded)
+            link_settle(m, wl);
     }
 }
 
@@ -1030,6 +1212,7 @@ static void maze_build(Map *m, int zone, const MazeStyle *st, int ox, int oy, in
         }
         int first = m->num_specials, rx = ox + x * st->rw, ry = oy + y * st->rh;
         map_stamp(m, path, rx, ry);
+        room_add(rx, ry, st->rw, st->rh);
         if (sp && sp->to == VIS_WARP)
             vis_warps(m, first, rx, ry, st->rw + 1, st->rh + 1, zone);
         else if (sp && sp->to >= 0)
@@ -1063,6 +1246,54 @@ static int add_zone(int kind, int floor, int x0, int y0, int x1, int y1)
 }
 
 /* Un nivel de la zona, con sus datos de levels.txt (por LevelName) */
+/* Lo de la dificultad de un nivel (su fila de levels.txt), como
+   MONSTERREGION_InitializeAll: el nivel de los monstruos (MonLvlEx(N) y
+   MonLvlEx(H) en Pesadilla e Infierno: la expansión), cuáles salen (nmon1..
+   en esas dos) y los jefes al azar (umon solo en Normal: en las otras, de
+   los mismos del nivel; MONSTERCHOOSE_GetPresetMonsterId) */
+static void level_fill_diff(Level *l, int row)
+{
+    const TxtTable *t = &s_levels_txt;
+    static const char *const k_suf[3] = { "", "(N)", "(H)" };
+    const char *suf = k_suf[s_world_diff];
+    char col[16];
+    if (s_world_diff == 0) /* (los del Acto 5 solo existen en la expansión: su MonLvlEx; la Cámara tiene MonLvl 0) */
+        l->mon_level = txt_get_int(t, row, l->id >= 109 ? "MonLvlEx" : "MonLvl", 1);
+    else
+        l->mon_level = txt_get_int(t, row, s_world_diff == 1 ? "MonLvlEx(N)" : "MonLvlEx(H)", 1);
+    memset(l->monsters, 0, sizeof l->monsters);
+    memset(l->umons, 0, sizeof l->umons);
+    l->num_mon = l->num_umon = 0;
+    /* (en Normal, de mon1 a mon5, como siempre en el port; las listas de
+       Pesadilla e Infierno llegan a 10) */
+    int max = s_world_diff ? LEVEL_MAX_MONSTERS : 5;
+    for (int k = 0; k < max; k++) {
+        snprintf(col, sizeof col, "%smon%d", s_world_diff ? "n" : "", k + 1);
+        const char *id = txt_get(t, row, txt_col(t, col));
+        if (id && id[0])
+            l->monsters[l->num_mon++] = id;
+    }
+    for (int k = 0; k < 10; k++) {
+        const char *id = NULL;
+        if (s_world_diff == 0) {
+            snprintf(col, sizeof col, "umon%d", k + 1);
+            id = txt_get(t, row, txt_col(t, col));
+        } else if (k < l->num_mon) {
+            id = l->monsters[k];
+        }
+        if (id && id[0])
+            l->umons[l->num_umon++] = id;
+    }
+    snprintf(col, sizeof col, "MonUMin%s", suf);
+    l->umin = txt_get_int(t, row, col, 0);
+    snprintf(col, sizeof col, "MonUMax%s", suf);
+    l->umax = txt_get_int(t, row, col, 0);
+    int pick_n = txt_get_int(t, row, "NumMon", 0);
+    l->num_mon = pick_n > 0 && pick_n < l->num_mon ? pick_n : l->num_mon;
+    if (l->town)
+        l->num_mon = l->num_umon = l->umin = l->umax = 0;
+}
+
 static void add_level(const char *name, int zone, int x0, int y0, int x1, int y1, int groups, int dark)
 {
     if (s_num_levels >= MAX_LEVELS || zone < 0)
@@ -1094,9 +1325,8 @@ static void add_level(const char *name, int zone, int x0, int y0, int x1, int y1
         fprintf(stderr, "levels.txt no tiene %s\n", name);
         return;
     }
-    l->mon_level = txt_get_int(t, row, "MonLvl", 1);
-    l->sound_env = txt_get_int(t, row, "SoundEnv", 2);
     l->id = txt_get_int(t, row, "Id", 0);
+    l->sound_env = txt_get_int(t, row, "SoundEnv", 2);
     for (int k = 0; k < 8; k++) {
         char col[8], wid[12];
         snprintf(col, sizeof col, "Vis%d", k);
@@ -1111,27 +1341,30 @@ static void add_level(const char *name, int zone, int x0, int y0, int x1, int y1
     int wp = txt_get_int(t, row, "Waypoint", 255);
     l->waypoint = wp == 255 ? -1 : wp;
     l->town = strcmp(name, "Rogue Encampment") == 0 || strcmp(name, "Lut Gholein") == 0 ||
-              strcmp(name, "Kurast Docktown") == 0;
-    for (int k = 0; k < LEVEL_MAX_MONSTERS; k++) {
-        char col[8];
-        snprintf(col, sizeof col, "mon%d", k + 1);
-        const char *id = txt_get(t, row, txt_col(t, col));
-        if (id && id[0])
-            l->monsters[l->num_mon++] = id;
+              strcmp(name, "Kurast Docktown") == 0 || strcmp(name, "The Pandemonium Fortress") == 0 ||
+              strcmp(name, "Harrogath") == 0;
+    level_fill_diff(l, row);
+    for (int k = 0; k < 8; k++) {
+        char col[12];
+        snprintf(col, sizeof col, "ObjGrp%d", k);
+        l->objgrp[k] = (uint8_t)txt_get_int(t, row, col, 0);
+        snprintf(col, sizeof col, "ObjPrb%d", k);
+        l->objprb[k] = (uint8_t)txt_get_int(t, row, col, 0);
     }
-    for (int k = 0; k < 10; k++) {
-        char col[8];
-        snprintf(col, sizeof col, "umon%d", k + 1);
-        const char *id = txt_get(t, row, txt_col(t, col));
-        if (id && id[0])
-            l->umons[l->num_umon++] = id;
+}
+
+/* Lo que cambia la dificultad en todos los niveles del mundo armado */
+void world_set_difficulty(int diff)
+{
+    s_world_diff = diff < 0 ? 0 : diff > 2 ? 2 : diff;
+    const TxtTable *t = &s_levels_txt;
+    for (int i = 0; i < s_num_levels; i++) {
+        char id[12];
+        snprintf(id, sizeof id, "%d", s_levels[i].id);
+        int row = t->rows && s_levels[i].id > 0 ? txt_find_row(t, txt_col(t, "Id"), id) : -1;
+        if (row >= 0)
+            level_fill_diff(&s_levels[i], row);
     }
-    l->umin = txt_get_int(t, row, "MonUMin", 0);
-    l->umax = txt_get_int(t, row, "MonUMax", 0);
-    int pick_n = txt_get_int(t, row, "NumMon", 0);
-    l->num_mon = pick_n > 0 && pick_n < l->num_mon ? pick_n : l->num_mon;
-    if (l->town)
-        l->num_mon = l->num_umon = l->umin = l->umax = 0;
 }
 
 static void add_jump(int a, int b)
@@ -1149,7 +1382,7 @@ static void add_jump(int a, int b)
 static void add_link(int a, int b, float x, float y)
 {
     if (a >= 0 && b >= 0 && s_num_links < MAX_LINKS)
-        s_links[s_num_links++] = (WorldLink){ a, b, x, y };
+        s_links[s_num_links++] = (WorldLink){ a, b, x, y, 0 };
 }
 
 /* Lugar para un calabozo en las filas de abajo */
@@ -1308,9 +1541,10 @@ static void zone_add_opening(Zone *z, int side, int cell)
 }
 
 /* El paso entre dos zonas que se tocan: en el medio del tramo que comparten
-   (como el original: la celda del medio y la siguiente), del lado que mira
-   a la otra */
-static void desert_openings(int za, int zb)
+   (como el original: en el desierto la celda del medio y la siguiente, en
+   las mesetas del Acto 4 solo la del medio: `cells`), del lado que mira a
+   la otra */
+static void desert_openings(int za, int zb, int cells)
 {
     Zone *a = &s_zones[za], *b = &s_zones[zb];
     int sa, sb, lo, hi, mid, oa;
@@ -1324,7 +1558,7 @@ static void desert_openings(int za, int zb)
         oa = mid - a->y0 / CELL;
         zone_add_opening(b, sb, mid - b->y0 / CELL);
         px = (float)((sa == 1 ? a->x1 : a->x0) * TILE_SUB);
-        py = (float)((mid + 1) * CELL * TILE_SUB);
+        py = (float)((mid * CELL + cells * CELL / 2) * TILE_SUB);
     } else { /* arriba o abajo */
         lo = a->x0 > b->x0 ? a->x0 : b->x0;
         hi = a->x1 < b->x1 ? a->x1 : b->x1;
@@ -1333,7 +1567,7 @@ static void desert_openings(int za, int zb)
         mid = lo / CELL + (hi - lo) / CELL / 2;
         oa = mid - a->x0 / CELL;
         zone_add_opening(b, sb, mid - b->x0 / CELL);
-        px = (float)((mid + 1) * CELL * TILE_SUB);
+        px = (float)((mid * CELL + cells * CELL / 2) * TILE_SUB);
         py = (float)((sa == 2 ? a->y1 : a->y0) * TILE_SUB);
     }
     zone_add_opening(a, sa, oa);
@@ -1483,6 +1717,7 @@ static void build_palace(Map *m, int z)
         snprintf(path, sizeof path, TILES2 "palace/%s%s%s.ds1", base, k_ring[k].ex, var);
         int rx = zone->x0 + k_ring[k].x * 16, ry = zone->y0 + k_ring[k].y * 16, first = m->num_specials;
         map_stamp(m, path, rx, ry);
+        room_add(rx, ry, 16, 16);
         vis_warps(m, first, rx, ry, 17, 17, z);
     }
 }
@@ -1490,21 +1725,30 @@ static void build_palace(Map *m, int z)
 /* El Santuario Arcano (DRLGMAZE_PlaceArcaneSanctuary): la sala del medio con
    el waypoint y el portal, y cuatro brazos de 15 salas que dan la vuelta
    (adelante, a la izquierda, adelante cuatro, a la derecha, una punta,
-   atrás...), cada brazo con su dibujo (sanctnew, sanctnew1...). El Invocador
-   en una punta (SummN/E/S/W), la más lejana de las abiertas hacia ese lado. */
+   atrás...), cada brazo con su dibujo (sanctnew, sanctnew1...). Cada sala
+   nueva se une con todas las vecinas que ya estaban (DRLGMAZE_MergeMazeRooms
+   con el Merge 1000 de lvlmaze.txt: siempre); de cada pieza de 13x13 van
+   12x12 y donde no tienen piso, el piso en blanco 30.1 que no se camina (el
+   vacío debajo de los arcos), como toda pieza (stamp_rules). El
+   Invocador (SummN/E/S/W) reemplaza la última sala armada que tenga una sola
+   salida, hacia el lado que salió. */
+static int  prest_lib_mask(uint32_t mask, int z, char paths[34][96]); /* world3.inc */
+static void prest_tables_load(void);
+
 static void build_arcane(Map *m, int z)
 {
     static const int k_dx[4] = { -1, 0, 1, 0 }, k_dy[4] = { 0, -1, 0, 1 }; /* ALTDIR: oeste, norte, este, sur */
     static const int k_bit[4] = { EX_W, EX_N, EX_E, EX_S };
     const Zone *zone = &s_zones[z];
-    uint8_t ex[ARC_N][ARC_N];
+    uint8_t ex[ARC_N][ARC_N], side[ARC_N][ARC_N];
     int8_t br[ARC_N][ARC_N];
-    int dist[ARC_N][ARC_N];
+    int order[ARC_N * ARC_N], n = 0; /* las salas en el orden en que se arman */
     memset(ex, 0, sizeof ex);
+    memset(side, 0, sizeof side);
     memset(br, -1, sizeof br);
-    memset(dist, 0, sizeof dist);
     int nrand = (int)(rnd() & 3), c = ARC_N / 2;
     br[c][c] = 4;
+    order[n++] = c * ARC_N + c;
     for (int b = 0; b < 4; b++) {
         int px = c, py = c;
         for (int i = 0; i < 15 && px >= 0; i++) {
@@ -1516,42 +1760,68 @@ static void build_arcane(Map *m, int z)
                     px = -1; /* (no pasa: los brazos no se tocan) */
                 continue;
             }
-            ex[py][px] |= (uint8_t)k_bit[d];
-            ex[ny][nx] |= (uint8_t)k_bit[(d + 2) % 4];
             br[ny][nx] = (int8_t)b;
-            dist[ny][nx] = dist[py][px] + 1;
+            side[ny][nx] = i == 8 || i == 12; /* (sin nPickedFile: Files es 0, el primer dibujo) */
+            order[n++] = ny * ARC_N + nx;
+            for (int k = 0; k < 4; k++) { /* la de atrás y las otras vecinas */
+                int ax = nx + k_dx[k], ay = ny + k_dy[k];
+                if (ax >= 0 && ay >= 0 && ax < ARC_N && ay < ARC_N && br[ay][ax] != -1) {
+                    ex[ny][nx] |= (uint8_t)k_bit[k];
+                    ex[ay][ax] |= (uint8_t)k_bit[(k + 2) % 4];
+                }
+            }
             if (i != 8 && i != 12) {
                 px = nx;
                 py = ny;
             }
         }
     }
-    /* el Invocador: nAct2ArcaneSummonerIds (abierta al norte, al este, al sur o al oeste) */
+    /* el Invocador (DRLGMAZE_ScanReplaceSpecialPreset con nAct2ArcaneSummonerIds):
+       la sala abierta solo al norte, al este, al sur o al oeste (la lista del
+       nivel empieza por la última armada); si no hay, una nueva pegada (sin
+       unirse a las otras vecinas) a la última armada que tenga lugar */
     static const int k_summ[4] = { EX_N, EX_E, EX_S, EX_W };
-    int sx = -1, sy = -1;
-    for (int t = 0; t < 4 && sx < 0; t++)
-        for (int y = 0; y < ARC_N; y++)
-            for (int x = 0; x < ARC_N; x++)
-                if (br[y][x] >= 0 && br[y][x] < 4 && ex[y][x] == k_summ[(nrand + t) % 4] &&
-                    (sx < 0 || dist[y][x] > dist[sy][sx]))
-                    sx = x, sy = y;
+    static const int k_summ_dir[4] = { 3, 0, 1, 2 }; /* de qué lado de esa sala va la nueva */
+    int t = (int)(rnd() & 3), sx = -1, sy = -1;
+    for (int k = n - 1; k >= 0 && sx < 0; k--)
+        if (br[order[k] / ARC_N][order[k] % ARC_N] < 4 && ex[order[k] / ARC_N][order[k] % ARC_N] == k_summ[t])
+            sx = order[k] % ARC_N, sy = order[k] / ARC_N;
+    for (int k = n - 1; k >= 0 && sx < 0; k--) {
+        int x = order[k] % ARC_N, y = order[k] / ARC_N, d = k_summ_dir[t];
+        int nx = x + k_dx[d], ny = y + k_dy[d];
+        if (nx < 0 || ny < 0 || nx >= ARC_N || ny >= ARC_N || br[ny][nx] != -1)
+            continue;
+        br[ny][nx] = br[y][x];
+        ex[ny][nx] = (uint8_t)k_bit[(d + 2) % 4];
+        ex[y][x] |= (uint8_t)k_bit[d];
+        sx = nx, sy = ny;
+    }
+    /* Los DT1 de las piezas: los del Dt1Mask que tienen todas en lvlprest.txt
+       (1: Sanctuary.dt1), Blank (el piso en blanco 30.1) e InvisWal */
+    char lib[34][96];
+    const char *libp[34];
+    prest_tables_load();
+    int nlib = prest_lib_mask(1u, z, lib);
+    for (int k = 0; k < nlib; k++)
+        libp[k] = lib[k];
     for (int y = 0; y < ARC_N; y++)
         for (int x = 0; x < ARC_N; x++) {
             if (br[y][x] < 0)
                 continue;
             char letters[8], path[96];
             exit_letters(letters, ex[y][x]);
-            if (br[y][x] == 4) {
-                snprintf(path, sizeof path, TILES2 "arcane/sanctnsew4.ds1");
-            } else if (x == sx && y == sy) {
+            if (x == sx && y == sy) {
                 snprintf(path, sizeof path, TILES2 "arcane/summ%s.ds1", letters);
+            } else if (br[y][x] == 4 && x == c && y == c) {
+                snprintf(path, sizeof path, TILES2 "arcane/sanctnsew4.ds1");
             } else {
-                int v = (nrand + br[y][x]) % 4, single = (ex[y][x] & (ex[y][x] - 1)) == 0;
+                int v = side[y][x] ? 0 : (nrand + br[y][x]) % 4, single = (ex[y][x] & (ex[y][x] - 1)) == 0;
                 snprintf(path, sizeof path, TILES2 "arcane/sanct%s%s.ds1", letters, single || v == 0 ? "" : v == 1 ? "1" : v == 2 ? "2" : "3");
                 if (!file_exists(path))
                     snprintf(path, sizeof path, TILES2 "arcane/sanct%s.ds1", letters);
             }
-            map_stamp(m, path, zone->x0 + x * ARC_ROOM, zone->y0 + y * ARC_ROOM);
+            map_stamp_lib(m, path, zone->x0 + x * ARC_ROOM, zone->y0 + y * ARC_ROOM, nlib ? libp : NULL, nlib);
+            room_add(zone->x0 + x * ARC_ROOM, zone->y0 + y * ARC_ROOM, ARC_ROOM, ARC_ROOM);
         }
 }
 
@@ -1644,7 +1914,7 @@ static int layout_act2(Map *m)
     else
         add_link(z_town, z_desert[DZ_ROCKY], (float)(lx * TILE_SUB), (float)((ly + 13) * TILE_SUB));
     for (int k = 1; k < DZ_COUNT; k++)
-        desert_openings(z_desert[k - 1], z_desert[k]);
+        desert_openings(z_desert[k - 1], z_desert[k], 2);
     if (getenv("D2_DEBUG")) {
         printf("mundo del Acto 2 de %dx%d tiles (Lut Gholein %s), %d zonas; la tumba verdadera es la %d y Kaa está en la %d\n",
                width, height, s_lut_north ? "con salida al norte" : "con salida al oeste", s_num_zones,
@@ -1659,13 +1929,17 @@ static int layout_act2(Map *m)
 }
 
 #include "world3.inc"
+#include "world4.inc"
+#include "world5.inc"
 
 int world_layout(Map *m, uint32_t seed, int act)
 {
     s_seed = seed ? seed : 1;
     s_rng = s_seed;
-    s_act = act >= 1 && act <= 3 ? act : 1;
+    s_act = act >= 1 && act <= 5 ? act : 1;
     s_num_levels = s_num_zones = s_num_warps = s_num_links = s_num_jumps = 0;
+    map_set_stamp_rules(getenv("D2_NO_STAMP_RULES") ? NULL : stamp_rules); /* (depuración: sin KillEdge ni FillBlanks) */
+    z_cows = -1;
     if (!s_levels_txt.rows) {
         size_t n;
         uint8_t *d = fs_read("data/global/excel/levels.txt", &n);
@@ -1681,6 +1955,10 @@ int world_layout(Map *m, uint32_t seed, int act)
         return layout_act2(m);
     if (s_act == 3)
         return layout_act3(m);
+    if (s_act == 4)
+        return layout_act4(m);
+    if (s_act == 5)
+        return layout_act5(m);
 
     /* Pasillos entre las zonas exteriores, en filas al azar (la del Blood
        Moor no puede ser la del pueblo) */
@@ -1752,6 +2030,10 @@ int world_layout(Map *m, uint32_t seed, int act)
     for (int k = 1; k <= 4; k++)
         z_cellar[k] = add_maze(ZK_CELLAR, k, cellar_names[k - 1], &k_crypt, 4, 4, 6);
     z_cellar[5] = add_preset(ZK_COUNTESS, cellar_names[4], 31, 31, 4, 1);
+    /* La Granja Muu Muu (Id 39): un páramo cerrado de 80x80 al que solo se
+       llega por el portal rojo del cubo (cows.inc). Los grupos, como los del
+       Blood Moor por su MonDen (800 contra 520) */
+    z_cows = add_preset(ZK_COWS, "Moo Moo Farm", WILD, WILD, 22 * 800 / 520, 0);
 
     int width = s_zones[z_tamoe].x1 > PACK_W ? s_zones[z_tamoe].x1 : PACK_W;
     int height = s_pack_y + s_pack_h;
@@ -1801,6 +2083,26 @@ static const WildFill k_fill_stony = { k_stones, COUNT(k_stones), k_fences, COUN
 static const WildFill k_fill_wood = { k_stones, COUNT(k_stones), k_trees, COUNT(k_trees), 14, 3 };
 static const WildFill k_fill_marsh = { k_swamp, COUNT(k_swamp), k_marsh_big, COUNT(k_marsh_big), 8, 2 };
 static const WildFill k_fill_rural = { k_rural, COUNT(k_rural), k_fences, COUNT(k_fences), 6, 3 };
+
+/* La celda de la Granja Muu Muu donde llega el portal rojo: sale de la
+   semilla de la zona (se sabe antes de armarla) y queda libre de piezas */
+static void cow_arrival_cell(int *cx, int *cy)
+{
+    uint32_t h = s_zones[z_cows].seed * 2654435761u;
+    *cx = 1 + (int)((h >> 8) % (uint32_t)(WILD_CELLS - 2));
+    *cy = 1 + (int)((h >> 20) % (uint32_t)(WILD_CELLS - 2));
+}
+
+int world_cow_arrival(float *x, float *y)
+{
+    if (z_cows < 0)
+        return -1;
+    int cx, cy;
+    cow_arrival_cell(&cx, &cy);
+    *x = (float)((s_zones[z_cows].x0 + cx * CELL + CELL / 2) * TILE_SUB) + 0.5f;
+    *y = (float)((s_zones[z_cows].y0 + cy * CELL + CELL / 2) * TILE_SUB) + 0.5f;
+    return 0;
+}
 
 static void build_wild(Map *m, int z)
 {
@@ -1872,9 +2174,26 @@ static void build_wild(Map *m, int z)
         wild_borders(m, &w);
         map_stamp(m, GRAVE_DS1, zone->x0 + CELL, zone->y0 + CELL);
         break;
+    case ZK_COWS: { /* DRLGOUTWILD_SpawnSpecialPresets: una pieza de cada uno, sin río, caminos ni waypoint */
+        int acx, acy;
+        cow_arrival_cell(&acx, &acy);
+        wild_borders(m, &w);
+        w.used[acy][acx] = 1; /* (ahí llega el portal) */
+        wild_place(m, &w, TILES "outdoors/bivouac.ds1", 2, 2, 1, -1, -1); /* con el Rey Vaca en el medio */
+        wild_place(m, &w, TILES "outdoors/pond1.ds1", 1, 1, 1, -1, -1);
+        wild_place(m, &w, rnd() % 2 ? TILES "outdoors/corral1.ds1" : TILES "outdoors/corral2.ds1", 1, 1, 1, -1, -1);
+        wild_place(m, &w, TILES "outdoors/swamp3.ds1", 1, 1, 1, -1, -1);
+        wild_place(m, &w, TILES "outdoors/swamp5.ds1", 2, 2, 1, -1, -1);
+        char path[128]; /* Stone Fill 1 y 2: los tres primeros y los tres siguientes de k_stones */
+        snprintf(path, sizeof path, TILES "outdoors/%s.ds1", pick(k_stones, 3));
+        wild_place(m, &w, path, 1, 1, 1, -1, -1);
+        snprintf(path, sizeof path, TILES "outdoors/%s.ds1", pick(k_stones + 3, 3));
+        wild_place(m, &w, path, 1, 1, 1, -1, -1);
+        break;
+    }
     }
     /* Los caminos de tierra entre las entradas y los lugares, como el original */
-    if (zone->kind != ZK_GRAVES) {
+    if (zone->kind != ZK_GRAVES && zone->kind != ZK_COWS) {
         uint64_t t0 = SDL_GetPerformanceCounter();
         wild_paths(m, &w);
         if (getenv("D2_PATH_DEBUG"))
@@ -2214,22 +2533,25 @@ static void stamp_preset(Map *m, int z, const char *path, int x, int y, int w, i
         add_warp(m, first, x, y, w, h, style, z, to);
 }
 
-int world_zone_build(Map *m, int z)
+/* El armado en partes: la zona a medias, cuántas piezas ya se estamparon y
+   si ya están todas (1: falta la colisión, 2: falta el grosor de las paredes) */
+static int s_bz_zone = -1, s_bz_done, s_bz_stamped;
+
+/* Una pasada del generador de la zona: con la misma semilla decide lo
+   mismo cada vez, y estampa las piezas que map_piece_now deja */
+static void zone_generate(Map *m, int z)
 {
-    if (z < 0 || z >= s_num_zones)
-        return -1;
     Zone *zone = &s_zones[z];
-    if (zone->loaded)
-        return 0;
-    if (map_begin_zone(m, z, zone->x0, zone->y0, zone->x1, zone->y1) != 0)
-        return -1;
     s_rng = zone->seed;
+    s_num_rooms = 0;
+    s_rooms_zone = z;
     int x = zone->x0, y = zone->y0;
     switch (zone->kind) {
     case ZK_TOWN:
         map_stamp(m, TOWN_DS1, 0, OUT_Y + TOWN_CELL0 * CELL);
         break;
     case ZK_MOOR: case ZK_PLAINS: case ZK_STONY: case ZK_DARKWOOD: case ZK_MARSH: case ZK_TAMOE: case ZK_GRAVES:
+    case ZK_COWS:
         build_wild(m, z);
         break;
     case ZK_DEN: case ZK_PASSAGE: case ZK_BARRACKS: case ZK_JAIL: case ZK_CATACOMBS: case ZK_CELLAR:
@@ -2308,8 +2630,33 @@ int world_zone_build(Map *m, int z)
     case ZK_A3MAZE:
         build_act3_maze(m, z);
         break;
-    case ZK_A3PRESET:
-        prest_stamp(m, z, k_act3_presets[act3_preset(zone->floor)].def, -1, x, y);
+    case ZK_A3PRESET: {
+        int def = k_act3_presets[act3_preset(zone->floor)].def;
+        if (zone->floor == 114 && rnd() % 2 == 0) /* el Frozen River: River A o River B */
+            def = 1039;
+        prest_stamp(m, z, def, -1, x, y);
+        break;
+    }
+    case ZK_FORTRESS:
+        prest_stamp(m, z, LP_FORTRESS, 0, x, y);
+        break;
+    case ZK_HARROGATH:
+        prest_stamp(m, z, LP_HARROGATH, 0, x, y);
+        break;
+    case ZK_SIEGE:
+        build_siege(m, z);
+        break;
+    case ZK_BARRICADE:
+        build_barricade(m, z);
+        break;
+    case ZK_MESA:
+        build_mesa(m, z);
+        break;
+    case ZK_RIVER:
+        build_river(m, z);
+        break;
+    case ZK_SANCTUM:
+        build_sanctum(m, z);
         break;
     case ZK_SERPENT: { /* el templo de la víbora: una sola sala con el altar */
         int first = m->num_specials;
@@ -2318,14 +2665,70 @@ int world_zone_build(Map *m, int z)
         break;
     }
     }
-    map_build_collision(m, z);
+}
+
+int world_zone_build_step(Map *m, int z, double budget_ms)
+{
+    if (z < 0 || z >= s_num_zones)
+        return -1;
+    Zone *zone = &s_zones[z];
+    if (zone->loaded)
+        return 1;
+    if (s_bz_zone >= 0 && s_bz_zone != z && world_zone_build_step(m, s_bz_zone, 0) < 0) /* (la de antes, entera) */
+        return -1;
+    if (s_bz_zone != z) {
+        if (map_begin_zone(m, z, zone->x0, zone->y0, zone->x1, zone->y1) != 0)
+            return -1;
+        s_bz_zone = z;
+        s_bz_done = s_bz_stamped = 0;
+    }
+    if (!s_bz_stamped) {
+        m->piece = m->pieces_skipped = 0;
+        m->piece_from = s_bz_done;
+        m->piece_to = -1;
+        m->piece_until = budget_ms > 0 ? map_now_ms() + budget_ms : 0;
+        zone_generate(m, z);
+        int stopped = m->piece_to >= 0;
+        s_bz_done = stopped ? m->piece_to : m->piece;
+        m->piece_from = m->pieces_skipped = 0;
+        m->piece_to = -1;
+        m->piece_until = 0;
+        if (stopped)
+            return 0;
+        s_bz_stamped = 1;
+        if (budget_ms > 0)
+            return 0; /* la colisión, en las próximas dos */
+    }
+    if (s_bz_stamped == 1) {
+        map_build_collision_part(m, z, 0);
+        s_bz_stamped = 2;
+        if (budget_ms > 0)
+            return 0;
+    }
+    map_build_collision_part(m, z, 1);
     warp_margins(m, z);
+    links_settle(m, z);
     zone->loaded = 1;
-    return 0;
+    s_bz_zone = -1;
+    return 1;
+}
+
+int world_zone_build(Map *m, int z)
+{
+    return world_zone_build_step(m, z, 0) < 0 ? -1 : 0;
+}
+
+int world_zone_building(void)
+{
+    return s_bz_zone;
 }
 
 void world_zone_free(Map *m, int z)
 {
+    if (z >= 0 && z == s_bz_zone) { /* a medio armar: se tira lo que haya */
+        s_bz_zone = -1;
+        s_zones[z].loaded = 1;
+    }
     if (z < 0 || z >= s_num_zones || !s_zones[z].loaded)
         return;
     map_free_zone(m, z);
@@ -2361,6 +2764,30 @@ int world_zone_loaded(int z)
 int world_zone_is_town(int z)
 {
     return z == z_town;
+}
+
+int world_zone_rooms(int zone, int (*rect)[4], int max)
+{
+    int n = 0;
+    if (zone == s_rooms_zone && s_num_rooms > 0) {
+        for (int i = 0; i < s_num_rooms && n < max; i++, n++)
+            memcpy(rect[n], s_rooms[i], sizeof rect[n]);
+        return n;
+    }
+    /* afuera (y los de una sola pieza), celdas de 8x8 como las salas del original */
+    for (int i = 0; i < s_num_levels; i++) {
+        const Level *lv = &s_levels[i];
+        if (lv->zone != zone || lv->town)
+            continue;
+        for (int y = lv->y0; y < lv->y1; y += CELL)
+            for (int x = lv->x0; x < lv->x1 && n < max; x += CELL, n++) {
+                rect[n][0] = x;
+                rect[n][1] = y;
+                rect[n][2] = x + CELL <= lv->x1 ? CELL : lv->x1 - x;
+                rect[n][3] = y + CELL <= lv->y1 ? CELL : lv->y1 - y;
+            }
+    }
+    return n;
 }
 
 const char *world_zone_name(int z)

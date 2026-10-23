@@ -390,6 +390,39 @@ Los atajos (marcados con `shortcut:` en el código):
 - el Invocador en la punta de uno de los brazos (`SummN/S/E/W`);
 - waypoint en el centro.
 
+Corregido el 2026-10-23 (el usuario: "zonas muy mal armadas, los sprites no
+coinciden con el camino", "debería ser un camino zigzagueante y se pasa
+recto"), mirando `DrlgMaze.cpp`, `DrlgRoomTile.cpp` y `ObjMode.cpp`:
+
+- **Merge** (`DRLGMAZE_MergeMazeRooms`, Merge 1000 de `lvlmaze.txt`): cada
+  sala nueva se une con todas las vecinas que ya estaban, no solo con la de
+  atrás; el dibujo de cada pieza sale de todas sus salidas.
+- **KillEdge** (`DRLGROOMTILE_LoadInitRoomTiles`): de cada pieza de 13x13
+  van 12x12; la fila y la columna 13 pisaban el borde de la vecina.
+- **FillBlanks**: las celdas sin piso llevan oculto el piso en blanco 30.1
+  de `Blank.dt1` (que el original carga en todas las salas), que no se
+  camina. Sin eso se caminaba sobre el vacío debajo de los arcos (en
+  `sanctew3` se cruzaba en línea recta el patio que hay que rodear).
+  Después se hizo general para todas las piezas de `lvlprest.txt` (ver
+  `desarrollo.md`, "Las piezas de lvlprest.txt"): en las cloacas ya no se
+  camina por los escombros detrás de las paredes.
+- **Las almohadillas** (`TeleportPad1..4`, `OperateFunction27`): las piezas
+  de la variante 2 (`sanctnse2`…), las del brazo `(nRand + 2) % 4`, son
+  islas unidas solo por ellas. Con A, lleva al lado de la otra de su clase
+  en la misma sala. Sin ellas no se llegaba a 14 salas de cada partida (ni
+  al Invocador cuando estaba ahí). Los bots las usan: su búsqueda de camino
+  las toma como un salto (`bot_nav_set_jumps`).
+- **El Invocador** (`DRLGMAZE_ScanReplaceSpecialPreset`): `SEED & 3` elige
+  N/E/S/W; reemplaza a la última sala armada con una sola salida hacia ese
+  lado (o una nueva pegada a una sala, sin unirse a las otras vecinas). Las
+  salas 8 y 12 de cada brazo (las de costado) usan el primer dibujo.
+- Verificado en 60 semillas: se llega a todas las salas (con las
+  almohadillas) y a todas las almohadillas caminando, y no queda nada
+  caminable sin dibujo; `--autotest act2` bien en las semillas 1, 2, 3, 7,
+  10, 11, 12, 13, 14 y 21 (en la 1 el Invocador está detrás de las
+  almohadillas), la demostración del Acto 2 en las 7 y 11 y `--autotest
+  act1` en la 7.
+
 **El Invocador:**
 
 - IA "Summoner": Nova helada, bolas de fuego, teletransporte.

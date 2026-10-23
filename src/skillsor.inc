@@ -264,6 +264,8 @@ static int static_field(Player *p, const SkillDef *s, int lvl)
     for (int k = 0; k < n; k++) {
         int hp, max;
         units_health(ids[k], &hp, &max);
+        if (s_dl_static_min > 0 && hp <= max * s_dl_static_min / 100)
+            continue; /* (en Pesadilla no baja de un tercio y en Infierno de la mitad: StaticFieldMin) */
         int dmg = hp * pct / 100;
         if (dmg > hp - 1)
             dmg = hp - 1;
@@ -478,22 +480,20 @@ static int sorc_effect(Player *p, const SkillDef *s, int lvl)
         }
         return mi != NULL;
     }
-    case SK_CHARGED_BOLT: { /* calc1 chispas en abanico que zigzaguean */
+    case SK_CHARGED_BOLT: { /* calc1 chispas hacia el blanco: cada una va por su camino al azar (charged_step) */
         spell_damage(p, s, lvl, ELEM_LTNG, &lo, &hi);
         int n = skill_calc(s, SC_CALC1, lvl, &c);
-        float base = atan2f(ay, ax);
         for (int k = 0; k < n; k++) {
-            float a = base + ((float)(rnd() % 1000) / 1000.0f - 0.5f) * 1.6f;
-            Missile *mi = spell_missile(p, "chargedbolt", p->x, p->y, cosf(a), sinf(a), ELEM_LTNG, lo, hi, 0);
+            Missile *mi = spell_missile(p, "chargedbolt", p->x, p->y, ax, ay, ELEM_LTNG, lo, hi, 0);
             if (!mi)
                 break;
             mi->flags |= MF_CHARGED;
         }
         return n;
     }
-    case SK_LIGHTNING: { /* un rayo que atraviesa a todos */
+    case SK_LIGHTNING: { /* un rayo que atraviesa a todos (lightningbolt, su srvmissile) */
         spell_damage(p, s, lvl, ELEM_LTNG, &lo, &hi);
-        Missile *mi = spell_missile(p, "chainlightning", p->x, p->y, ax, ay, ELEM_LTNG, lo, hi, 0);
+        Missile *mi = spell_missile(p, "lightningbolt", p->x, p->y, ax, ay, ELEM_LTNG, lo, hi, 0);
         if (mi)
             mi->flags |= MF_PIERCE;
         return mi != NULL;
@@ -572,8 +572,7 @@ static int sorc_effect(Player *p, const SkillDef *s, int lvl)
             return mark != NULL;
         mi->flags |= MF_EFFECT | MF_LAND | MF_METEOR;
         mi->life = 60;
-        mi->z = 300.0f;
-        mi->vz = 5.0f;
+        missiles_meteor(mi, "meteorcenter"); /* cae en diagonal en sus últimos cuadros, con la cola */
         mi->radius10 = skill_calc(s, SC_AURARANGE, lvl, &c) * 10;
         /* El fuego que deja (meteorfire): su daño y lo que dura */
         int flo, fhi, fdmin, fdmax, felem;
@@ -843,6 +842,15 @@ static void sorc_missile_end(Missile *mi)
     }
 }
 
+/* Un trozo de hielo de la Ventisca: el dibujo (icestormfall) es el carámbano
+   quieto y el cliente lo baja desde CltParam1 (120 píxeles) hasta el piso en
+   lo que dura (Range, 9 cuadros); al tocarlo daña y explota */
+static void blizzard_fall(Missile *b)
+{
+    b->z = 120.0f;
+    b->vz = b->life > 0 ? 120.0f / (float)b->life : 120.0f;
+}
+
 /* Lo de cada tick que no es chocar: el Orbe, la Ventisca y el Muro de fuego */
 static void sorc_missile_tick(Missile *mi)
 {
@@ -866,7 +874,7 @@ static void sorc_missile_tick(Missile *mi)
     }
     /* El centro de la Ventisca de los sacerdotes (MonBlizzard): sus trozos de hielo (monbliz1..4) */
     if ((mi->flags & MF_BLIZZARD) && mi->owner < 0 && mi->count > 0 && mi->age % mi->count == 0) {
-        float r = mi->radius10 / 10.0f;
+        float r = mi->radius10 / 10.0f - 1.0f; /* (MISSMODE_CreateMissileWithCollisionCheck: hasta el radio menos uno) */
         float x = mi->x + ((float)(rnd() % 1000) / 500.0f - 1.0f) * r, y = mi->y + ((float)(rnd() % 1000) / 500.0f - 1.0f) * r;
         char shard[16];
         snprintf(shard, sizeof shard, "monbliz%d", 1 + (int)(rnd() % 4));
@@ -880,11 +888,12 @@ static void sorc_missile_tick(Missile *mi)
             b->emax = mi->emax;
             b->elen = mi->elen;
             b->radius10 = 20;
+            blizzard_fall(b);
         }
     }
     /* El centro de la Ventisca: cada `count` cuadros un trozo de hielo en un lugar al azar */
     if ((mi->flags & MF_BLIZZARD) && mi->owner >= 0 && mi->count > 0 && mi->age % mi->count == 0) {
-        float r = mi->radius10 / 10.0f;
+        float r = mi->radius10 / 10.0f - 1.0f; /* (MISSMODE_CreateMissileWithCollisionCheck: hasta el radio menos uno) */
         float x = mi->x + ((float)(rnd() % 1000) / 500.0f - 1.0f) * r, y = mi->y + ((float)(rnd() % 1000) / 500.0f - 1.0f) * r;
         if (!map_blocked(&s_map, (int)floorf(x), (int)floorf(y))) {
             static const char *const k_shards[4] = { "blizzard1", "blizzard2", "blizzard3", "blizzard4" };
@@ -892,6 +901,7 @@ static void sorc_missile_tick(Missile *mi)
             if (b) {
                 b->flags |= MF_EFFECT | MF_LAND | MF_NOHIT | MF_CHAIN;
                 b->radius10 = 20;
+                blizzard_fall(b);
             }
         }
     }

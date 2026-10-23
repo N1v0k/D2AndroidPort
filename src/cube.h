@@ -8,7 +8,8 @@
 /* El Cubo Horádrico: las recetas de cubemain.txt (las gemas y las runas que
    suben de calidad, las pociones, los engarces, los mágicos que se vuelven
    a tirar, la artesanía...). Las del original que abren portales o son de
-   misiones de otros actos no están. */
+   misiones de otros actos no están (la del portal a las vacas sale en la
+   guía, pero la hace game.c: cows.inc). */
 
 #define CUBE_W 3
 #define CUBE_H 4

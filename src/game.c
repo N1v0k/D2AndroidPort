@@ -100,7 +100,7 @@ typedef struct {
     int         mana_per_level4;  /* maná por nivel, en cuartos de punto */
     float       stamina_per_level;
     float       mana_regen;       /* segundos en llenar el maná */
-    int         exp_next[100];    /* experiencia total para pasar del nivel N al N+1 */
+    uint32_t    exp_next[100];    /* experiencia total para pasar del nivel N al N+1 (sin signo: el 99 pide 3.520 millones) */
     const char *start_items[3];   /* equipo inicial, como en el original */
     const char *code;             /* "bar": la columna de clase de itemtypes.txt */
     const char *abbr;             /* "Bar": en los textos de los NPC ("CharsiIntroBarGossip1") */
@@ -117,7 +117,7 @@ typedef struct {
    flecha de fuego (0) y de flecha fría (1), y los guerreros del desierto de
    Greiz con Plegaria (6), Desafío (7) o Puntería bendecida (8). Cada
    jugador puede tener uno. */
-#define MERC_TYPES  18 /* los Id de hireling.txt: 0..17 (los Lobos de Hierro son 15, 16 y 17) */
+#define MERC_TYPES  39 /* los Id de hireling.txt: 0..38, de las tres dificultades (en Normal, los Lobos de Hierro son 15, 16 y 17; los bárbaros de Qual-Kehk, 24, 25 y 36) */
 #define MERC_ROWS   4
 #define MERC_OFFERS 4
 #define MERC_NAMES  41 /* merc01 .. merc41 de mercenaries.json (si falta hireling.txt) */
@@ -132,14 +132,54 @@ typedef struct {
 #define BAG_W       10
 #define BAG_H       4
 #define BAG_MAX     40
+/* El cofre (pedido del usuario): pestañas de 10x6 en el lugar del equipo,
+   como el cubo (así entra también con dos jugadores). Una por cada acto al
+   que se llegó y las que se compran: la primera STASH_PRICE y cada una el
+   triple que la anterior. */
+#define STASH_W       10
+#define STASH_H       6
+#define STASH_CELLS   (STASH_W * STASH_H)
+#define STASH_ACTS    5  /* una por acto */
+#define STASH_BUY_MAX 5  /* y hasta 5 compradas */
+#define STASH_TABS    (STASH_ACTS + STASH_BUY_MAX)
+#define STASH_PRICE   50000
 #define BELT_SLOTS  4  /* sin cinturón equipado: una fila de 4 */
 #define GAMBLE_ITEMS 14 /* lo que hay para apostar (D2GAME_STORES_FillGamble) */
-#define NPC_TALKERS 26 /* los que hablan (k_npc_vo): los 6 del campamento, los 12 de Lut Gholein, Tyrael y los 7 de Kurast */
-#define QUEST_LINES 47 /* comentarios de las etapas de las misiones (k_talk_lines) */
+#define DIFF_RAW    4096 /* lo de otra dificultad en la partida guardada (las líneas tal cual) */
+#define NPC_TALKERS 37 /* los que hablan (k_npc_vo): los 6 del campamento, los 12 de Lut Gholein, Tyrael, los 7 de Kurast, 4 del Acto 4, 6 de Harrogath y Tyrael en la Cámara */
+#define QUEST_LINES 65 /* comentarios de las etapas de las misiones (k_talk_lines) */
 /* Las piezas del Báculo que Caín ya comentó (Player.staff_seen) y lo demás del Acto 2 (Player.a2_flags) */
 enum { A2_SEEN_SCROLL = 1, A2_SEEN_AMULET = 2, A2_SEEN_STAFF = 4, A2_SEEN_CUBE = 8, A2_SEEN_HORADRIC = 16 };
-enum { A2F_SEWERS = 1, A2F_BOOK = 2, A2F_TOMBS_TOLD = 4 }; /* (el 4: Jerhyn ya contó lo de las Siete Tumbas) */
-enum { A3F_HRATLI = 1 }; /* Player.a3_flags: Hratli ya se presentó en el muelle (A3Q0) y está en su fragua */
+enum { A2F_SEWERS = 1, A2F_BOOK = 2, A2F_TOMBS_TOLD = 4, A2F_SAILED = 8 }; /* (el 4: Jerhyn ya contó lo de las Siete Tumbas;
+                                                                  el 8: ya navegó al este, el A2COMPLETED del original) */
+/* Player.a3_flags (las misiones del Acto 3, a3quest.inc) */
+enum {
+    A3F_HRATLI = 1, /* Hratli ya se presentó en el muelle (A3Q0) y está en su fragua */
+    A3F_LK = 2, A3F_GM = 4, A3F_FJ = 8, A3F_CAUSEWAY = 16, /* el grupo llegó ahí: ya se puede pedir la misión */
+    A3F_SEEN_EYE = 32, A3F_SEEN_BRAIN = 64, A3F_SEEN_HEART = 128, A3F_SEEN_FLAIL = 256, /* las que Caín comentó */
+    A3F_LIFE = 512,     /* ya tomó la Poción de la vida */
+    A3F_HIRED = 1024,   /* ya usó el mercenario gratis de Asheara */
+    A3F_HELLGATE = 2048, /* ya cruzó el portal rojo: el A3COMPLETED del original (su cinemática) */
+};
+/* Player.a4_flags (las misiones del Acto 4, a4quest.inc) */
+enum {
+    A4F_STONE = 1,        /* la Piedra de Mefisto ya está sobre la Forja */
+    A4F_Q1_TOLD = 2,      /* Tyrael y Caín ya comentaron El Ángel Caído (después del pedido) */
+    A4F_Q1_EARLY = 4,     /* ... y que volvió sin matar a Izual */
+    A4F_Q2_TOLD = 8,      /* ... El Final del Terror */
+    A4F_PORTAL = 16,      /* Tyrael ya abrió el portal del final */
+    A4F_CAIN_IZUAL = 32,  /* Caín ya comentó lo de Izual */
+    A4F_CAIN_DIABLO = 64, /* ... y lo de Diablo */
+    A4F_END = 128,        /* ya vio el epílogo */
+};
+/* Player.a5_flags (las misiones del Acto 5, a5quest.inc) */
+enum {
+    A5F_RESIST = 1,      /* leyó el Pergamino de Resistencia (+10 a todas) */
+    A5F_ANYA_TOLD = 2,   /* Anya ya agradeció (después del rescate) */
+    A5F_PORTAL = 4,      /* Anya ya abrió el portal al templo */
+    A5F_END = 8,         /* ya vio el final (d2x_out) */
+    A5F_ANCIENTS = 16,   /* los Antiguos ya hablaron (empieza la víspera de la destrucción) */
+};
 #define GOSSIP_MAX  15 /* frases sueltas por NPC ("AkaraGossip1".."AkaraGossip15") */
 
 typedef struct {
@@ -173,7 +213,8 @@ typedef struct {
     int     stats_dirty;               /* entró o salió un talismán de la mochila: recalcular */
     float   heal_acc;
     float   replenish_acc;      /* regeneración de vida de los objetos */
-    int     level_num, exp;
+    int     level_num;
+    uint32_t exp; /* (sin signo, como el original: el nivel 99 pide 3.520 millones) */
     int     target;         /* monstruo al que está atacando */
     int     attack_skill;   /* habilidad del ataque o lanzamiento en curso (-1 = ataque normal) */
     int     hits_total, hits_done; /* golpes del ataque en curso (Estocada da 3) */
@@ -185,10 +226,14 @@ typedef struct {
     int     aura_slow;      /* lo que lo frena un aura de un monstruo (la Congelación sagrada de Duriel), este tick */
     int     antidote_ticks; /* poción de antídoto: el veneno hace la mitad */
     int     amp_ticks;      /* maldecido por un jefe: recibe el doble de daño físico */
+    int     curse, curse_ticks, curse_lvl; /* A4C_*: la maldición de un Caballero del Olvido (Amplificar va en amp_ticks) */
+    int     frozen_ticks;   /* congelado (el toque frío de Diablo): ni se mueve ni ataca */
+    int     drain_ticks, drain_lvl; /* el abrazo de los Gropers (fingermagecurse): menos regeneración de maná */
     int     thaw_ticks;     /* poción de deshielo: el frío hace la mitad */
     int     map_open;       /* el automapa a la vista */
     float   poison_rate, poison_acc;
     int     dead_ticks;
+    int     gold_lost;      /* el oro que perdió al morir (se avisa al reaparecer) */
     int     levelup_ticks;
 
     /* Objetos */
@@ -202,11 +247,23 @@ typedef struct {
     uint8_t cube_x[CUBE_W * CUBE_H], cube_y[CUBE_W * CUBE_H];
     int     cube_count;
     int     cube_open;              /* el cubo abierto en el inventario (en lugar del equipo) */
+    /* El cofre: cada pestaña, una grilla como la mochila; y el oro guardado
+       (al morir no se pierde) */
+    Item    stash[STASH_TABS][STASH_CELLS];
+    uint8_t stash_x[STASH_TABS][STASH_CELLS], stash_y[STASH_TABS][STASH_CELLS];
+    int     stash_count[STASH_TABS];
+    int     stash_bought;           /* pestañas compradas */
+    int     stash_gold;
+    int     stash_open, stash_tab;  /* abierto en el inventario (en lugar del equipo) y la pestaña que se ve */
+    int     stash_confirm;          /* A en la pestaña "+": con otra A se compra */
+    int     act_max;                /* el acto más alto al que llegó, en cualquier dificultad (una pestaña del cofre por cada uno) */
+    int     act_top;                /* el más alto en esta dificultad (las solapas de los waypoints y del registro) */
     int     gold;
     float   regen_life, regen_mana; /* cuánto curan las pociones por tick */
     int     regen_life_ticks, regen_mana_ticks;
     float   regen_life_acc, regen_mana_acc;
     int     stamina_boost_ticks;    /* poción de estamina: correr no cansa */
+    int     shrine_kind, shrine_ticks, shrine_arg0, shrine_arg1; /* el santuario que dura (Code y Arg de shrines.txt; uno a la vez) */
     int     inv_open;
     int     inv_sel;                /* objeto elegido en el inventario */
     int     dialog_npc;             /* NPC con el que habla (-1 = ninguno) */
@@ -224,11 +281,11 @@ typedef struct {
     int     den_rewarded;           /* ya cobró la recompensa de la Den of Evil */
     int     den_started;            /* Akara ya le pidió limpiar la cueva */
     int     raven_started, raven_done, raven_rewarded; /* Cementerio de las Hermanas (Kashya) */
-    int     npc_met;                /* NPCs que ya se presentaron (un bit por NPC) */
-    uint64_t talk_heard[NPC_TALKERS]; /* comentarios de misión que ya dijo cada NPC (bit por k_talk_lines) */
+    uint64_t npc_met;               /* NPCs que ya se presentaron (un bit por NPC de k_npc_vo) */
+    uint64_t talk_heard[NPC_TALKERS][2]; /* comentarios de misión que ya dijo cada NPC (bit por k_talk_lines) */
     uint8_t talk_next[NPC_TALKERS]; /* la próxima frase suelta de cada NPC */
     uint8_t talk_away[NPC_TALKERS]; /* salió del campamento desde que ese NPC habló de las misiones */
-    int     waypoints;              /* waypoints activados (bit = número de levels.txt; 0 = el pueblo) */
+    uint64_t waypoints;             /* waypoints activados (bit = número de levels.txt; 0 = el pueblo) */
     int     wp_open, wp_sel;        /* panel de waypoints */
     /* Misiones 3 a 6 (ver "Misiones 3 a 6 del Acto 1") */
     int     cain_q;   /* Caín: 1 Akara la pidió, 2 tiene el pergamino, 3 traducido, 4 portal abierto, 5 rescatado, 6 recompensa */
@@ -245,6 +302,20 @@ typedef struct {
     /* Acto 3 (docs/plan-acto3.md, fase 5) */
     int     bird_q, blade_q, will_q, tome_q, temple_q, meph_q; /* A3Q4, A3Q3, A3Q2, A3Q1, A3Q5 y A3Q6 */
     int     a3_flags;   /* A3F_* */
+    /* Acto 4 (docs/plan-acto4.md, fase 5; los estados en a4quest.inc) */
+    int     izual_q, forge_q, diablo_q; /* A4Q1, A4Q3 y A4Q2 */
+    int     a4_flags;   /* A4F_* */
+    /* Acto 5 (docs/plan-acto5.md, fase 5; los estados en a5quest.inc) */
+    int     shenk_q, rescue_q, anya_q, nihl_q, ancients_q, baal_q; /* A5Q1..A5Q6 */
+    int     a5_flags;   /* A5F_* */
+    int     rescued;    /* los bárbaros liberados (de 15) */
+    int     cow_king;   /* mató al Rey Vaca: ya no abre el portal a la granja (A1Q4 QFLAG_CUSTOM6, cows.inc) */
+    /* Las dificultades: la más alta abierta (mató a Baal en la anterior) y,
+       de las que no se juegan ahora, lo suyo de la partida guardada como se
+       leyó (las misiones de arriba son las de s_diff: save_diff) */
+    int     diff_max;
+    char    diff_raw[3][DIFF_RAW];
+    int     imbue_mode; /* la lista de Charsi: 0 imbuir, 1 engarzar (Larzuk), 2 personalizar (Anya) */
     int     act;      /* el acto en el que está (se guarda: al volver a jugar se sigue ahí) */
     uint32_t quest_seen; /* misiones cumplidas que ya vio en el registro (bit (acto - 1) * 6 + misión): arden una vez */
     int     qlog_act, qlog_sel; /* el registro de misiones del panel: acto (0 = elegir al abrirlo) y misión */
@@ -323,6 +394,9 @@ typedef struct {
     int     au_res[3], au_res_max[3];         /* fuego, frío y rayo */
     int     au_elem_min[3], au_elem_max[3];   /* fuego, rayo y frío en los golpes (Fuego, Descarga y Congelación sagrados) */
     int     au_undead_dmg, au_undead_ar;      /* Santuario: contra los no muertos */
+    int     au_got_n;                         /* las auras que lo alcanzan (para sus íconos) */
+    int8_t  au_got_cls[4];
+    int16_t au_got_skill[4];
     int     res_max[3];             /* + al máximo de resistencia (las pasivas de las auras de resistencia) */
     int     hs_ticks, hs_skill, hs_def, hs_block; /* Escudo sagrado */
     int     charge_ticks;           /* Carga: corriendo hacia el monstruo */
@@ -388,7 +462,7 @@ typedef struct {
     char    look_want[64];          /* el aspecto del equipo actual (se carga en otro hilo) */
     int     warp_lock;              /* recién saltó de nivel: espera a que salga del salto de llegada */
     int     lock_from, lock_to;     /* ese salto (zonas) */
-    char    message[48];            /* avisos cortos ("Inventario lleno") */
+    char    message[80];            /* avisos cortos ("Inventario lleno", lo que dice un santuario) */
     int     message_ticks;
     int     step_frame;             /* último cuadro de la caminata en que sonó un paso */
     uint32_t last_block;            /* tick del último bloqueo (la animación no se repite antes de 15 cuadros) */
@@ -415,9 +489,15 @@ enum { PAGE_INVENTORY, PAGE_SKILLS, PAGE_BUTTONS, PAGE_STATS, PAGE_MERC, PAGE_QU
 #define INV_STATS   (INV_SORT + 1) /* el botón de la cruz roja: abre la página de atributos */
 #define INV_CUBE0   (INV_STATS + 1) /* las casillas del cubo abierto */
 #define INV_TRANSMUTE (INV_CUBE0 + CUBE_W * CUBE_H) /* el botón Transmutar */
-#define INV_ENTRIES (INV_TRANSMUTE + 1)
+#define INV_STASH0  (INV_TRANSMUTE + 1)        /* las casillas del cofre abierto */
+#define INV_STAB0   (INV_STASH0 + STASH_CELLS) /* sus pestañas (y la de comprar otra) */
+#define INV_GOLD_IN (INV_STAB0 + STASH_TABS)   /* guardar el oro */
+#define INV_GOLD_OUT (INV_GOLD_IN + 1)         /* sacarlo */
+#define INV_ENTRIES (INV_GOLD_OUT + 1)
 #define CUBE_X      119 /* la grilla del cubo en el panel, donde va el equipo */
 #define CUBE_Y      52
+#define STASH_GX    19  /* la grilla del cofre, debajo de sus pestañas */
+#define STASH_GY    34
 
 /* Solapas de la tienda, como el original (armaduras, armas, varios) más
    una para vender lo de la mochila */
@@ -500,25 +580,49 @@ static int       s_voice_owner = -1; /* jugador cuyo NPC está hablando */
 #define ZONE_RESET_SECONDS 600
 #define ZONE_NEAR          90.0f /* a esta distancia (subtiles) de un paso se arma la zona de al lado */
 #define ZONE_SOON          180.0f /* y a esta, se preparan sus DT1 en el hilo de trabajos */
+#define ZONE_URGENT        30.0f  /* y a esta, si todavía se está armando, se termina de una */
+#define ZONE_BUDGET        20.0   /* ms por tick para armarla en partes (D2_ZONE_BUDGET; 0 = de una) */
+#define ZONE_PREP_WAIT     (2 * TICK_RATE) /* lo que se esperan sus DT1 antes de empezar */
+#define ZONE_DT1_WAIT      (5 * TICK_RATE) /* y después, lo que una pieza espera los suyos (si no, los lee el juego) */
+#define ZONE_SYNC_PIECES   16     /* sin el hilo de trabajos, piezas por tick en vez de ZONE_BUDGET (D2_ZONE_PIECES) */
+#define ZONE_SYNC_PRESETS  64     /* y unidades de los DS1, salas con objetos al azar e intentos de grupos de monstruos */
+#define ZONE_SYNC_ROOMS    8
+#define ZONE_SYNC_GROUPS   16
 #define ZONE_BITS          64
 static uint32_t s_zone_seen[ZONE_BITS]; /* último tick con alguien adentro o cerca */
 static uint64_t s_zone_pinned;          /* en uso en este tick: no se pueden borrar */
 static uint64_t s_zone_prepared;        /* las de al lado que ya pidieron sus DT1 (ZONE_SOON) */
 static int      s_zone_max = ZONE_MAX_LOADED;
 static uint32_t s_zone_reset_ticks = ZONE_RESET_SECONDS * TICK_RATE;
+static double   s_zone_budget = ZONE_BUDGET;
 static int      zone_load(int z);
 static int      zone_at(float x, float y);
 static void     zones_unload_all(void);
 static void     zones_load_all(void);
 static void     depth_audit(void);
 static void     skillfx_clear(void); /* skillfx.inc: sin tótems de otra partida */
+static void     preload_ui(void);
 
 /* Waypoints (el número es la columna Waypoint de levels.txt: 0..8 el Acto
-   1, 9..17 el 2 y 18..26 el 3) y la unidad de cada uno en el mapa (-1 = esa
-   zona no está armada, o es de otro acto) */
-#define WP_ACT   9  /* waypoints por acto (las solapas del panel) */
-#define WP_MAX   27
+   1, 9..17 el 2, 18..26 el 3, 27..29 el 4 y 30..38 el 5) y la unidad de cada
+   uno en el mapa (-1 = esa zona no está armada, o es de otro acto) */
+#define WP_MAX   39
+#define WP_ACTS  5
 #define WP_RANGE 3.5f /* a esta distancia (en subtiles) se activa y se usa */
+/* El primero de cada acto (el del pueblo) y, al final, WP_MAX */
+static const int k_wp_first[WP_ACTS + 1] = { 0, 9, 18, 27, 30, WP_MAX };
+static int wp_first(int act)
+{
+    return k_wp_first[(act >= 1 && act <= WP_ACTS ? act : 1) - 1];
+}
+/* El acto de ese waypoint */
+static int wp_act(int k)
+{
+    int act = 1;
+    while (act < WP_ACTS && k >= k_wp_first[act])
+        act++;
+    return act;
+}
 static const char *const k_wp_levels[WP_MAX] = {
     "Rogue Encampment", "Cold Plains", "Stony Field", "Dark Wood", "Black Marsh",
     "Outer Cloister", "Jail Level 1", "Inner Cloister", "Catacombs Level 2",
@@ -526,8 +630,16 @@ static const char *const k_wp_levels[WP_MAX] = {
     "Lost City", "Palace Cellar Level 1", "Arcane Sanctuary", "Canyon of the Magi",
     "Kurast Docktown", "Spider Forest", "Great Marsh", "Flayer Jungle", "Lower Kurast",
     "Kurast Bazaar", "Upper Kurast", "Travincal", "Durance of Hate Level 2",
+    "The Pandemonium Fortress", "City of the Damned", "River of Flame",
+    "Harrogath", "Rigid Highlands", "Arreat Plateau", "Crystalized Cavern Level 1", "Crystalized Cavern Level 2",
+    "Halls of Death's Calling", "Tundra Wastelands", "Glacial Caves Level 1", "The Worldstone Keep Level 2",
 };
 static int s_wp_unit[WP_MAX];
+/* Los objetos waypoint: los de cada acto se llaman distinto (objpreset.txt) */
+static const char *const k_wp_objects[] = { "WaypointOutsideAct1", "WaypointInsideAct1", "WaypointAct2", "WaypointCellar",
+                                            "SewerWaypoint", "WaypointDesertValley", "WaypointAct3", "TravincalWaypoint",
+                                            "WaypointAct4Town", "WaypointOutsideAct4", "WaypointExp", "WaypointWilderness",
+                                            "WaypointIceCave", "TempleWaypoint", "WaypointBaal" };
 
 /* Diálogos: renglones a la vista y cuánto tarda en subir cada uno */
 #define TALK_LINES      9
@@ -563,6 +675,29 @@ int game_wants_rgb565(void)
     return s_color16 < 0 ? -1 : s_color16;
 }
 static int s_demo;       /* demostración: un bot juega y no se guarda nada */
+/* La campaña de la demostración del menú: los mismos personajes juegan los
+   Actos 1 a 5 en Normal, después en Pesadilla y en Infierno (con
+   D2_DEMO_ACT=N, solo ese acto). Al pasar de dificultad cada personaje
+   sigue como en una partida guardada que se carga en la otra dificultad
+   (s_carry, en memoria: no se escribe nada) */
+static struct {
+    int  on, act, first_diff, first_act, mid;
+    int  result[3][5]; /* 1 bien, -1 mal, 0 no se jugó */
+    long ticks[3][5];
+} s_camp;
+static char  *s_carry[MAX_PLAYERS];
+static size_t s_carry_len[MAX_PLAYERS];
+static void   demo_act_start(int act);
+static int    demo_campaign_next(int r);
+static void   demo_campaign_report(void);
+static int    demo_campaign_ok(void);
+/* La dificultad de la partida (pGame->nDifficulty: 0 Normal, 1 Pesadilla, 2
+   Infierno; docs/plan-dificultades.md). La elige el menú (game_set_difficulty);
+   D2_DIFF=1|2 para las pruebas */
+static int s_diff;
+static const char *const k_diff_names[3] = { "Normal", "Pesadilla", "Infierno" };
+/* Lo de difficultylevels.txt para el jugador (game_set_difficulty) */
+static int s_dl_resist, s_dl_res_floor = -100, s_dl_life_div = 1, s_dl_mana_div = 1, s_dl_static_min, s_dl_curse_div = 1;
 static uint32_t s_anim_ticks; /* para animar el menú de pausa (el juego no avanza) */
 static void draw_pentagram(int x, int y, int size, int dir);
 static void draw_frame(int x, int y, int w, int h, uint8_t c);
@@ -591,6 +726,7 @@ static void look_job_drop(int i);
 static void automap_reset(void);
 static void automap_reveal(const Player *p);
 static void draw_button(const Player *p, int b, int x, int y, int size);
+static void draw_stack_count(const Item *it, int x, int y, int w, int h);
 static void refresh_look(Player *p);
 static void refresh_stats(Player *p);
 static int  pick_up(Player *p, const Item *it);
@@ -614,13 +750,30 @@ static const char *a3_warp_closed(const Warp *w);
 static const char *quest_action(const Player *p, int *unit);
 static int  a3_use_item(Player *p, int i);
 static void a3_zone_loaded(int z);
+static int  a4_npc_quest(Player *p, int who, char *key, size_t cap); /* a4quest.inc */
+static int  a4_npc_news(const Player *p, int who);
+static void a4_zone_loaded(int z);
+static int  a4_seals_left(void);
+static void a5_zone_loaded(int z); /* a5quest.inc */
+static void a5_portal_opened(const Player *p);
+static void a5_player_died(const Player *p);
+static void a5_quest_reset(void);
+static int  a5_use_item(Player *p, int i);
+static const char *a5_warp_closed(const Warp *w);
+static int  a5_npc_quest(Player *p, int who, char *key, size_t cap);
+static int  a5_npc_news(const Player *p, int who);
+static void a5_dialog_closed(const Player *p, int npc);
 static void a3_zone_test_prep(void);
+static int  obj_passable(int u, int *x0, int *y0, int *w, int *h); /* objects.inc */
+static void cow_zone_loaded(int z); /* cows.inc */
+static int  cow_recipe(Player *p);
 static int  is_quest_item(const ItemType *t);
 static int  bag_index_of(const Player *p, const char *code);
 static int  war_kind(int kind);              /* skillwar.inc: las del Brujo */
 static void war_passives(Player *p);
 static int  war_take_damage(Player *p, int dmg);
 static void war_consume_stats(Player *p);
+static int  war_monpet_row(const char *id);
 static void give_quest_item(Player *p, const char *code);
 static void quest_done(const char *quest_key, const char *music);
 static void quest_banner(const char *text, const char *music);
@@ -630,6 +783,10 @@ static int  a2_npc_quest(Player *p, int who, char *key, size_t cap);
 static int  a2_npc_news(const Player *p, int who);
 static int  level_dark(const Level *lv);
 static void party_raise(size_t field, int value);
+static int  party_lacks(size_t field, int bit);
+static double wall_ms(void);
+static void queue_movie(const char *name);
+static const char *s_pending_movie; /* la cinemática del fin de acto que toca (game_take_movie) */
 static void save_party(void);
 static void quest_reset(void);
 static int  quest_interact(Player *p);
@@ -639,7 +796,19 @@ static void quest_page_tick(Player *p, const PlayerInput *pi);
 static void draw_panel_header(const Player *p, const char *title, const char *help);
 static void use_warp(Player *p, const Warp *warp);
 static const Warp *portal_near(const Player *p);
+static int  tp_cast(Player *p, int bag_index);
+static void tp_reset(void);
+static void tp_zone_loaded(int z);
+static void tp_used(const Player *p, const Warp *w);
+static void tp_test(void);
 static int  quest_first(const Player *p);
+static int  warp_closed(const Warp *w);
+static int  tp_open(Player *p);
+static int  shrine_props(const Player *p, ItemProp *pr, int n, int cap); /* objects.inc */
+static int  obj_interact(Player *p);
+static int  obj_first(const Player *p);
+static int  obj_pad_jumps(int x0, int y0, int x1, int y1, BotJump *out, int max);
+static const char *obj_action(const Player *p, int *unit);
 static int  s_stones_lit; /* Piedras Cairn tocadas en orden */
 
 typedef struct {
@@ -647,6 +816,9 @@ typedef struct {
     int           page;
 } TreeCtx;
 static int  bag_add(Player *p, const Item *it);
+static int  stack_fits(const Item *into, const Item *it);
+static void close_ui(Player *p);
+static int  stack_cap(const ItemType *t);
 static void bag_remove(Player *p, int i);
 static void generate_shops(void);
 static int  load_character(Player *p);
@@ -669,7 +841,10 @@ static void prefetch_job(void *ptr, int act)
 {
     (void)ptr;
     char dir[32];
-    snprintf(dir, sizeof dir, "data/global/tiles/act%d", act);
+    if (act == 5) /* (las del Acto 5 son las de la expansión) */
+        snprintf(dir, sizeof dir, "data/global/tiles/expansion");
+    else
+        snprintf(dir, sizeof dir, "data/global/tiles/act%d", act);
     fs_prefetch_dir(dir);
 }
 
@@ -714,14 +889,14 @@ static void load_class_stats(CharClass *c, const TxtTable *cs, const TxtTable *x
 
     int col = txt_col(xp, c->name);
     for (int lv = 0; lv < 100; lv++)
-        c->exp_next[lv] = 0x7FFFFFFF;
+        c->exp_next[lv] = 0xFFFFFFFFu;
     for (int r = 1; r < xp->rows; r++) {
         const char *lv = txt_get(xp, r, 0);
         if (lv[0] < '0' || lv[0] > '9')
             continue; /* la fila "MaxLvl" */
         int l = atoi(lv);
         if (l >= 0 && l < 100)
-            c->exp_next[l] = atoi(txt_get(xp, r, col));
+            c->exp_next[l] = (uint32_t)strtoul(txt_get(xp, r, col), NULL, 10);
     }
 }
 
@@ -784,13 +959,22 @@ static const char *pick_level_monster(float x, float y)
 }
 
 /* Grupos de monstruos al azar en un nivel recién armado. Como en el
-   original, de la lista de levels.txt salen solo NumMon tipos cada vez. */
-static void spawn_zone_monsters(const Level *lv)
+   original, de la lista de levels.txt salen solo NumMon tipos cada vez. Va
+   de a partes (zone_monsters_step): el nivel que se está poblando, sus tipos
+   mezclados y por qué grupo e intento va. */
+static struct {
+    const Level *lv; /* NULL = ninguno */
+    const char  *kinds[LEVEL_MAX_MONSTERS];
+    int          nkinds, bosses, g, tries;
+} s_zm;
+
+static void zone_monsters_begin(const Level *lv)
 {
     int total = level_monster_count(lv);
+    s_zm.lv = NULL;
     if (lv->town || total == 0 || lv->num_mon == 0)
         return;
-    const char *kinds[LEVEL_MAX_MONSTERS];
+    const char **kinds = s_zm.kinds;
     for (int k = 0; k < total; k++)
         kinds[k] = lv->monsters[k];
     for (int k = 0; k < total - 1; k++) { /* mezclar y quedarse con los primeros */
@@ -799,40 +983,86 @@ static void spawn_zone_monsters(const Level *lv)
         kinds[k] = kinds[j];
         kinds[j] = t;
     }
-    int nkinds = lv->num_mon < total ? lv->num_mon : total;
+    s_zm.lv = lv;
+    s_zm.nkinds = lv->num_mon < total ? lv->num_mon : total;
     /* Los jefes al azar del nivel, MonUMin..MonUMax de levels.txt contando los
        de nombre que ya puso (MONSTERCHOOSE_GetBossSpawnType): el mínimo se
        completa a medida que se puebla, y hasta el máximo, con un 6% en cada grupo */
-    int bosses = units_bosses_in((float)(lv->x0 * TILE_SUB), (float)(lv->y0 * TILE_SUB), (float)(lv->x1 * TILE_SUB),
-                                 (float)(lv->y1 * TILE_SUB));
-    for (int g = 0, tries = 0; g < lv->groups && tries < 600; tries++) {
-        float x = (lv->x0 + 3 + (int)(rnd() % (uint32_t)(lv->x1 - lv->x0 - 6))) * (float)TILE_SUB;
-        float y = (lv->y0 + 3 + (int)(rnd() % (uint32_t)(lv->y1 - lv->y0 - 6))) * (float)TILE_SUB;
-        if (blocked_body(x + 0.5f, y + 0.5f))
-            continue;
-        g++;
-        if (lv->num_umon > 0 && ((bosses < lv->umin && (int)(rnd() % 100) < 100 * g / lv->groups) ||
-                                 (bosses < lv->umax && rnd() % 100 <= 5))) {
-            /* (en Normal, de los umon1..umon10 del nivel) */
-            bosses += units_spawn_level_boss(lv->umons[rnd() % (uint32_t)lv->num_umon], x + 0.5f, y + 0.5f, lv->mon_level);
-            continue;
-        }
-        const char *id = kinds[rnd() % (uint32_t)nkinds];
-        /* Los Caídos andan en banda y el chamán va con los suyos (el de
-           Carvers con Carvers); los nidos de cuervos, solos */
-        int shaman = strncmp(id, "fallenshaman", 12) == 0;
-        int band = shaman || strncmp(id, "fallen", 6) == 0;
-        char minion[24];
-        snprintf(minion, sizeof minion, "fallen%s", shaman ? id + 12 : "1");
-        int count = band ? 3 + (int)(rnd() % 3) : strncmp(id, "crownest", 8) == 0 ? 1 : 1 + (int)(rnd() % 3);
-        for (int k = 0; k < count; k++) {
-            float mx = x + (float)((int)(rnd() % 5) - 2), my = y + (float)((int)(rnd() % 5) - 2);
-            if (!blocked_body(mx + 0.5f, my + 0.5f) && world_level_at(mx, my) == lv)
-                units_spawn_monster(shaman && k > 0 ? minion : id, mx + 0.5f, my + 0.5f, lv->mon_level);
-        }
+    s_zm.bosses = units_bosses_in((float)(lv->x0 * TILE_SUB), (float)(lv->y0 * TILE_SUB), (float)(lv->x1 * TILE_SUB),
+                                  (float)(lv->y1 * TILE_SUB));
+    s_zm.g = s_zm.tries = 0;
+}
+
+/* Un intento de poner un grupo; 0 = el nivel ya está */
+static int zone_monsters_try(void)
+{
+    const Level *lv = s_zm.lv;
+    if (s_zm.g >= lv->groups || s_zm.tries >= 600) {
+        if (s_debug || getenv("D2_ZONES"))
+            printf("  %s: %d jefes (MonUMin..MonUMax %d..%d)\n", lv->name, s_zm.bosses, lv->umin, lv->umax);
+        s_zm.lv = NULL;
+        return 0;
     }
-    if (s_debug || getenv("D2_ZONES"))
-        printf("  %s: %d jefes (MonUMin..MonUMax %d..%d)\n", lv->name, bosses, lv->umin, lv->umax);
+    s_zm.tries++;
+    float x = (lv->x0 + 3 + (int)(rnd() % (uint32_t)(lv->x1 - lv->x0 - 6))) * (float)TILE_SUB;
+    float y = (lv->y0 + 3 + (int)(rnd() % (uint32_t)(lv->y1 - lv->y0 - 6))) * (float)TILE_SUB;
+    if (blocked_body(x + 0.5f, y + 0.5f))
+        return 1;
+    int g = ++s_zm.g, nkinds = s_zm.nkinds;
+    const char *const *kinds = s_zm.kinds;
+    if (lv->num_umon > 0 && ((s_zm.bosses < lv->umin && (int)(rnd() % 100) < 100 * g / lv->groups) ||
+                             (s_zm.bosses < lv->umax && rnd() % 100 <= 5))) {
+        /* (en Normal, de los umon1..umon10 del nivel) */
+        s_zm.bosses += units_spawn_level_boss(lv->umons[rnd() % (uint32_t)lv->num_umon], x + 0.5f, y + 0.5f, lv->mon_level);
+        return 1;
+    }
+    const char *id = kinds[rnd() % (uint32_t)nkinds];
+    /* Los Caídos andan en banda y el chamán va con los suyos (el de
+       Carvers con Carvers); los nidos de cuervos, solos */
+    int shaman = strncmp(id, "fallenshaman", 12) == 0;
+    int band = shaman || strncmp(id, "fallen", 6) == 0;
+    char minion[24];
+    snprintf(minion, sizeof minion, "fallen%s", shaman ? id + 12 : "1");
+    int count = band ? 3 + (int)(rnd() % 3) : strncmp(id, "crownest", 8) == 0 ? 1 : 1 + (int)(rnd() % 3);
+    int herd = strcmp(id, "hellbovine") == 0, spread = 5;
+    if (herd) { /* las vacas, en manada: MinGrp..MaxGrp de monstats (5 a 10), como en el original */
+        int lo = units_monstats_int(id, "MinGrp", 5), hi = units_monstats_int(id, "MaxGrp", 10);
+        count = lo + (hi > lo ? (int)(rnd() % (uint32_t)(hi - lo + 1)) : 0);
+        spread = 7;
+    }
+    for (int k = 0; k < count; k++) {
+        float mx = x + (float)((int)(rnd() % (uint32_t)spread) - spread / 2),
+              my = y + (float)((int)(rnd() % (uint32_t)spread) - spread / 2);
+        if (!blocked_body(mx + 0.5f, my + 0.5f) && world_level_at(mx, my) == lv)
+            units_spawn_monster(shaman && k > 0 ? minion : id, mx + 0.5f, my + 0.5f, lv->mon_level);
+    }
+    return 1;
+}
+
+/* Los monstruos de los niveles de la zona z, de a partes: `begin` empieza;
+   hasta `cap` intentos (0 = sin tope) o hasta pasarse `ms` milisegundos (0
+   = sin hora), por lo menos uno. 1 = terminó. */
+static int zone_monsters_step(int z, int begin, int cap, double ms)
+{
+    static int next; /* el nivel que sigue */
+    if (begin) {
+        next = 0;
+        s_zm.lv = NULL;
+    }
+    double until = ms > 0 ? wall_ms() + ms : 0;
+    for (int done = 0;;) {
+        if (!s_zm.lv) {
+            while (next < world_level_count() && world_level(next)->zone != z)
+                next++;
+            if (next >= world_level_count())
+                return 1;
+            zone_monsters_begin(world_level(next++));
+            continue;
+        }
+        if (done > 0 && ((cap > 0 && done >= cap) || (until > 0 && wall_ms() > until)))
+            return 0;
+        done += zone_monsters_try();
+    }
 }
 
 /* El Id de levels.txt de un lugar (para las IA: los zombis del Burial
@@ -841,6 +1071,27 @@ static int level_id_at(float x, float y)
 {
     const Level *lv = world_level_at(x, y);
     return lv ? lv->id : 0;
+}
+
+/* D2_ZONETEST: los subtiles de los barriles, urnas y cestas que se rompen o
+   se abren (obj_passable): se pasa por ahí rompiéndolos */
+static uint8_t *s_walk_open;
+static int      s_walk_zone = -1; /* walk_bfs sin salir de esa zona (-1 = por todo el mapa) */
+
+/* Como foot_blocked, pero sin lo que tapan los de s_walk_open */
+static int walk_foot_blocked(int sx, int sy)
+{
+    static const int dx[5] = { 0, -1, 1, 0, 0 }, dy[5] = { 0, 0, 0, -1, 1 };
+    int w = s_map.width * TILE_SUB, h = s_map.height * TILE_SUB;
+    for (int k = 0; k < 5; k++) {
+        int x = sx + dx[k], y = sy + dy[k];
+        uint16_t c = map_coll(&s_map, x, y);
+        if (s_walk_open && x >= 0 && y >= 0 && x < w && y < h && s_walk_open[(size_t)y * (size_t)w + (size_t)x])
+            c &= (uint16_t)~COLL_OBJECT;
+        if (c & COLL_MASK_PLAYER_PATH)
+            return 1;
+    }
+    return 0;
 }
 
 /* Distancia caminando (en subtiles) desde (fx, fy) a todo el mapa, o NULL
@@ -867,7 +1118,8 @@ static int *walk_bfs(float fx, float fy)
         static const int dx[8] = { 1, -1, 0, 0, 1, 1, -1, -1 }, dy[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
         for (int d = 0; d < 8; d++) {
             int nx = cx + dx[d], ny = cy + dy[d];
-            if (nx < 0 || ny < 0 || nx >= w || ny >= h || dist[ny * w + nx] >= 0 || foot_blocked(nx, ny))
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h || dist[ny * w + nx] >= 0 || walk_foot_blocked(nx, ny) ||
+                (s_walk_zone >= 0 && zone_at(nx + 0.5f, ny + 0.5f) != s_walk_zone))
                 continue;
             dist[ny * w + nx] = dist[c] + 1;
             queue[qt++] = ny * w + nx;
@@ -915,10 +1167,8 @@ static int path_length(float fx, float fy, float tx, float ty)
 /* ¿Hay un waypoint (de cualquier acto) en la zona? */
 static int waypoint_in_zone(int z)
 {
-    static const char *const k_names[] = { "WaypointOutsideAct1", "WaypointInsideAct1", "WaypointAct2", "WaypointCellar",
-                                           "SewerWaypoint", "WaypointDesertValley", "WaypointAct3", "TravincalWaypoint" };
-    for (unsigned k = 0; k < sizeof k_names / sizeof k_names[0]; k++) {
-        int ids[8], n = units_find_all(k_names[k], ids, 8);
+    for (unsigned k = 0; k < sizeof k_wp_objects / sizeof k_wp_objects[0]; k++) {
+        int ids[8], n = units_find_all(k_wp_objects[k], ids, 8);
         for (int i = 0; i < n; i++)
             if (units_zone(ids[i]) == z)
                 return 1;
@@ -935,11 +1185,192 @@ static void lair_arrival(int lair, float *x, float *y)
     *y = (float)((y0 + 38) * TILE_SUB) + 2.5f;
 }
 
+/* D2_NAVCHECK="x,y" (con D2_ZONETEST): desde ese punto, lo que se alcanza
+   con el pie solo (lo que mira la prueba de zonas) y con el aire de las
+   paredes (lo que mira el movimiento de verdad, player_blocked, y el de los
+   bots); los primeros lugares donde el pie pasa y el aire no, al borde de
+   lo que se alcanza de verdad */
+/* ¿Se llega caminando de (fx, fy) a (tx, ty) en el mapa? (con el pie del
+   jugador y las almohadillas del Santuario Arcano, sin mirar las unidades:
+   para decir en el informe de la prueba si un monstruo al que el bot no
+   llegó está en un rincón cerrado o es cosa del bot). *region: los subtiles
+   a los que se llega desde el principio */
+static int map_reach(float fx, float fy, float tx, float ty, int *region)
+{
+    int w = s_map.width * TILE_SUB, h = s_map.height * TILE_SUB, found = 0, qh = 0, qt = 0;
+    int sx = (int)fx, sy = (int)fy, gx = (int)tx, gy = (int)ty;
+    *region = 0;
+    if (sx < 0 || sy < 0 || sx >= w || sy >= h)
+        return 0;
+    uint8_t *seen = calloc((size_t)w * (size_t)h, 1);
+    int *queue = malloc((size_t)w * (size_t)h * sizeof *queue);
+    if (!seen || !queue) {
+        free(seen);
+        free(queue);
+        return 0;
+    }
+    static BotJump jumps[128];
+    int nj = obj_pad_jumps(0, 0, w, h, jumps, 128);
+    static const int dx[8] = { 1, -1, 0, 0, 1, 1, -1, -1 }, dy[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+    queue[qt++] = sy * w + sx;
+    seen[queue[0]] = 1;
+    while (qh < qt) {
+        int c = queue[qh++], cx = c % w, cy = c / w;
+        found |= abs(cx - gx) <= 1 && abs(cy - gy) <= 1; /* (al lado alcanza: el monstruo puede estar donde no pisa el jugador) */
+        for (int d = 0; d < 8 + nj; d++) {
+            int nx = cx + dx[d < 8 ? d : 0], ny = cy + dy[d < 8 ? d : 0];
+            if (d >= 8) { /* al alcance de una almohadilla: adonde lleva */
+                const BotJump *j = &jumps[d - 8];
+                float ox = cx + 0.5f < j->x0 ? j->x0 - cx - 0.5f : cx + 0.5f > j->x1 ? cx + 0.5f - j->x1 : 0.0f;
+                float oy = cy + 0.5f < j->y0 ? j->y0 - cy - 0.5f : cy + 0.5f > j->y1 ? cy + 0.5f - j->y1 : 0.0f;
+                if (ox * ox + oy * oy > j->reach * j->reach)
+                    continue;
+                nx = (int)j->lx, ny = (int)j->ly;
+            }
+            int i = ny * w + nx;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[i] || walk_foot_blocked(nx, ny))
+                continue;
+            seen[i] = 1;
+            queue[qt++] = i;
+        }
+    }
+    *region = qt;
+    free(seen);
+    free(queue);
+    return found;
+}
+
+/* ¿(x, y) está a un subtile o menos de algo marcado `v` en seen? (al lado
+   alcanza, como en map_reach) */
+static int nav_near(const uint8_t *seen, int w, int h, int x, int y, uint8_t v)
+{
+    for (int yy = y - 1; yy <= y + 1; yy++)
+        for (int xx = x - 1; xx <= x + 1; xx++)
+            if (xx >= 0 && yy >= 0 && xx < w && yy < h && seen[(size_t)yy * (size_t)w + (size_t)xx] == v)
+                return 1;
+    return 0;
+}
+
+/* D2_NAVZONE=1: solo dentro de la zona del punto de partida (¿se llega sin
+   pasar por la vecina?). D2_NAVDRAW=r: el dibujo de r subtiles alrededor del
+   destino (o de la partida): # no se camina, v grosor, o se llega (con el
+   aire), : solo con el pie, p el hueco del destino, . libre sin llegar */
+static void nav_check(void)
+{
+    float fx, fy, tx = -1, ty = -1;
+    if (!getenv("D2_NAVCHECK") || sscanf(getenv("D2_NAVCHECK"), "%f,%f,%f,%f", &fx, &fy, &tx, &ty) < 2)
+        return;
+    int w = s_map.width * TILE_SUB, h = s_map.height * TILE_SUB;
+    if (fx < 0 || fy < 0 || fx >= w || fy >= h) /* (otro acto: el mapa es más chico) */
+        return;
+    int zone = getenv("D2_NAVZONE") && atoi(getenv("D2_NAVZONE")) ? zone_at(fx, fy) : -2;
+    uint8_t *seen = calloc((size_t)w * (size_t)h, 1); /* 1 con el pie, 2 también con el aire, 3 el hueco del destino */
+    int *queue = malloc((size_t)w * (size_t)h * sizeof *queue);
+    if (!seen || !queue) {
+        free(seen);
+        free(queue);
+        return;
+    }
+    static const int dx[8] = { 1, -1, 0, 0, 1, 1, -1, -1 }, dy[8] = { 0, 0, 1, -1, 1, -1, 1, -1 };
+    int dest_in = tx >= 0 && ty >= 0 && tx < w && ty < h;
+    for (int pass = 1; pass <= 2; pass++) {
+        int qh = 0, qt = 0, foot = 0, shown = 0;
+        queue[qt++] = (int)fy * w + (int)fx;
+        seen[queue[0]] = (uint8_t)pass;
+        while (qh < qt) {
+            int c = queue[qh++], cx = c % w, cy = c / w;
+            foot++;
+            for (int d = 0; d < 8; d++) {
+                int nx = cx + dx[d], ny = cy + dy[d], i = ny * w + nx;
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[i] >= pass || walk_foot_blocked(nx, ny) ||
+                    (zone != -2 && zone_at(nx + 0.5f, ny + 0.5f) != zone))
+                    continue;
+                if (pass == 2 && map_too_close(&s_map, nx + 0.5f, ny + 0.5f)) {
+                    if (shown++ < 12 && seen[i] == 1)
+                        printf("NAV: el aire cierra (%d, %d), al lado de (%d, %d)\n", nx, ny, cx, cy);
+                    continue;
+                }
+                seen[i] = (uint8_t)pass;
+                queue[qt++] = i;
+            }
+        }
+        printf("NAV: desde (%.0f, %.0f) %s%s: %d subtiles%s\n", fx, fy, pass == 1 ? "con el pie" : "con el aire",
+               zone != -2 ? " sin salir de la zona" : "", foot,
+               !dest_in                                       ? ""
+               : nav_near(seen, w, h, (int)tx, (int)ty, (uint8_t)pass) ? ", llega al destino"
+                                                              : ", NO llega al destino");
+    }
+    /* Si no llega: el hueco del destino (lo que se alcanza desde el subtile
+       libre más cerca de él), cuánto mide y dónde está */
+    if (dest_in && !nav_near(seen, w, h, (int)tx, (int)ty, 1)) {
+        int sx = -1, sy = -1;
+        for (int r = 0; r <= 3 && sx < 0; r++)
+            for (int yy = (int)ty - r; yy <= (int)ty + r && sx < 0; yy++)
+                for (int xx = (int)tx - r; xx <= (int)tx + r && sx < 0; xx++)
+                    if (xx >= 0 && yy >= 0 && xx < w && yy < h && !walk_foot_blocked(xx, yy) && !seen[yy * w + xx])
+                        sx = xx, sy = yy;
+        if (sx < 0) {
+            printf("NAV: el destino no tiene dónde pararse a 3 subtiles\n");
+        } else {
+            int qh = 0, qt = 0, x0 = sx, y0 = sy, x1 = sx, y1 = sy, touch = 0;
+            queue[qt++] = sy * w + sx;
+            seen[queue[0]] = 3;
+            while (qh < qt && qt < 4000000) {
+                int c = queue[qh++], cx = c % w, cy = c / w;
+                x0 = cx < x0 ? cx : x0, y0 = cy < y0 ? cy : y0, x1 = cx > x1 ? cx : x1, y1 = cy > y1 ? cy : y1;
+                for (int d = 0; d < 8; d++) {
+                    int nx = cx + dx[d], ny = cy + dy[d], i = ny * w + nx;
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h || walk_foot_blocked(nx, ny))
+                        continue;
+                    touch |= seen[i] == 1 || seen[i] == 2; /* (solo con D2_NAVZONE: se une por otra zona) */
+                    if (seen[i])
+                        continue;
+                    seen[i] = 3;
+                    queue[qt++] = i;
+                }
+            }
+            printf("NAV: el destino está en un hueco de %d subtiles, de (%d, %d) a (%d, %d)%s\n", qt, x0, y0, x1, y1,
+                   touch ? " que toca lo alcanzado (por otra zona)" : "");
+        }
+    }
+    int r = getenv("D2_NAVDRAW") ? atoi(getenv("D2_NAVDRAW")) : 0;
+    int ax = dest_in ? (int)tx : (int)fx, ay = dest_in ? (int)ty : (int)fy;
+    for (int y = ay - r; r > 0 && y <= ay + r; y++) {
+        printf("NAV y=%4d ", y);
+        for (int x = ax - r; x <= ax + r; x++) {
+            uint8_t s = x >= 0 && y >= 0 && x < w && y < h ? seen[y * w + x] : 0;
+            putchar(x == (int)fx && y == (int)fy               ? 'S'
+                    : dest_in && x == (int)tx && y == (int)ty ? 'D'
+                    : map_blocked(&s_map, x, y)                ? '#'
+                    : s == 2                                   ? 'o'
+                    : s == 1                                   ? ':'
+                    : s == 3                                   ? 'p'
+                    : map_coll(&s_map, x, y) & COLL_VOLUME     ? 'v'
+                                                               : '.');
+        }
+        putchar('\n');
+    }
+    /* Los que se rompen o se abren y tocan lo que se alcanza: los que pueden cerrar el paso */
+    for (int u = 0; u < units_count(); u++) {
+        int ox, oy, ow, oh, touch = 0;
+        if (!obj_passable(u, &ox, &oy, &ow, &oh))
+            continue;
+        for (int y = oy - 2; y < oy + oh + 2 && !touch; y++)
+            for (int x = ox - 2; x < ox + ow + 2 && !touch; x++)
+                touch = x >= 0 && y >= 0 && x < w && y < h && seen[(size_t)y * (size_t)w + (size_t)x] == 2;
+        if (touch)
+            printf("NAV: al borde, %s en (%d, %d)\n", units_id(u), ox, oy);
+    }
+    free(seen);
+    free(queue);
+}
+
 static void zone_test(void)
 {
     if (s_act == 3) /* con el puente de Mefisto arriba: también se prueba el portal rojo */
         a3_zone_test_prep();
     zones_load_all();
+    nav_check();
     static const char *const targets[] = {
         "WaypointOutsideAct1", "WaypointInsideAct1", "Corpsefire", "bloodraven", "Rakanishu", "StoneAlpha",
         "StoneBeta", "StoneGamma", "StoneDelta", "StoneLambda", "Treehead WoodFist", "InifussTree", "TowerTome",
@@ -950,9 +1381,23 @@ static void zone_test(void)
         "TravincalWaypoint", "Sszark the Burning", "Witch Doctor Endugu", "Stormtree", "Sarina the Battlemaid",
         "Icehawk Riftwing", "Ismail Vilehand", "Geleb Flamefinger", "Bremm Sparkfist", "Toorc Icefist",
         "Wyand Voidfinger", "Maffer Dragonhand", "mephisto", "LamesEnsTome", "KhalimHeartChest", "KhalimEyeChest",
-        "KhalimBrainChest", "TownAct3GidBInnAltar", "BeneathTheCityLever", "HellGate",
+        "KhalimBrainChest", "TownAct3GidBInnAltar", "BeneathTheCityLever", "HellGate", "WaypointAct4Town",
+        "WaypointOutsideAct4", "tyrael2", "jamella", "halbu", "cain4", "Bank", "izual", "The Feature Creep",
+        "SoulStoneForge", "DiabloSeal1", "DiabloSeal2", "DiabloSeal3", "DiabloSeal4", "DiabloSeal5", "DiabloStart",
+        "WaypointExp", "WaypointWilderness", "WaypointIceCave", "TempleWaypoint", "WaypointBaal", "prisondoor",
+        "PortalPermanent", "AncientsAltar", "AncientsGateway", "larzuk", "malah", "qual-kehk", "nihlathak", "cain6",
+        "The Cow King", "Wirt",
     };
-    int bad = 0;
+    int bad = 0, mw = s_map.width * TILE_SUB, mh = s_map.height * TILE_SUB;
+    s_walk_open = calloc((size_t)mw * (size_t)mh, 1);
+    for (int u = 0; s_walk_open && u < units_count(); u++) {
+        int ox, oy, ow, oh;
+        if (obj_passable(u, &ox, &oy, &ow, &oh))
+            for (int y = oy; y < oy + oh; y++)
+                for (int x = ox; x < ox + ow; x++)
+                    if (x >= 0 && y >= 0 && x < mw && y < mh)
+                        s_walk_open[(size_t)y * (size_t)mw + (size_t)x] = 1;
+    }
     for (int z = 0; z < world_zone_count(); z++) {
         float sx = -1, sy = -1, x, y;
         /* La entrada: la llegada de un salto o un pasillo hacia esta zona */
@@ -968,6 +1413,8 @@ static void zone_test(void)
             lair_arrival(z, &sx, &sy);
             find_free_spot(&sx, &sy);
         }
+        if (sx < 0 && s_act == 1 && z == world_level_zone(39) && world_cow_arrival(&sx, &sy) == 0) /* la granja: por el portal del cubo */
+            find_free_spot(&sx, &sy);
         for (int l = 0; l < world_link_count() && sx < 0; l++) {
             const WorldLink *wl = world_link(l);
             for (int r = 0; r < 60 && sx < 0; r++)
@@ -984,8 +1431,11 @@ static void zone_test(void)
             continue;
         }
         int *dist = walk_bfs(sx, sy);
-        if (!dist)
+        if (!dist) {
+            free(s_walk_open);
+            s_walk_open = NULL;
             return;
+        }
         char problems[512] = "";
         size_t len = 0;
         int checks = 0;
@@ -1005,15 +1455,31 @@ static void zone_test(void)
             if (len > sizeof problems - 64)
                 break;
         }
-        for (int l = 0; l < world_link_count(); l++) {
+        /* Cada unión: que se llegue y que esté sobre un cruce que entra a las
+           dos zonas (link_settle; en la semilla 43 del Acto 3 el punto en el
+           medio del río mandaba al bot a un rincón del Spider Forest y volvía).
+           Sin salir de la zona, solo un aviso: en la selva hay claros que el
+           armado cuelga solo de la selva vecina (semilla 54: el claro de arriba
+           del Spider Forest se une al resto por el Flayer Jungle) */
+        int *zdist = NULL;
+        for (int l = 0; l < world_link_count() && len < sizeof problems - 64; l++) {
             const WorldLink *wl = world_link(l);
             if (wl->a != z && wl->b != z)
                 continue;
             checks++;
-            if (walk_dist(dist, wl->x, wl->y, 8) < 0)
-                len += (size_t)snprintf(problems + len, sizeof problems - len, " pasillo a %s;",
-                                        world_zone_name(wl->a == z ? wl->b : wl->a));
+            if (!zdist) {
+                s_walk_zone = z;
+                zdist = walk_bfs(sx, sy);
+                s_walk_zone = -1;
+            }
+            if (walk_dist(dist, wl->x, wl->y, 8) < 0 || wl->cross == -1)
+                len += (size_t)snprintf(problems + len, sizeof problems - len, " pasillo a %s%s;",
+                                        world_zone_name(wl->a == z ? wl->b : wl->a), wl->cross == -1 ? " (sin cruce)" : "");
+            else if (zdist && walk_dist(zdist, wl->x, wl->y, wl->cross > 0 ? 4 : 8) < 0)
+                printf("  aviso: en %s el pasillo a %s se alcanza solo pasando por otra zona\n", world_zone_name(z),
+                       world_zone_name(wl->a == z ? wl->b : wl->a));
         }
+        free(zdist);
         for (unsigned t = 0; t < sizeof targets / sizeof targets[0] && len < sizeof problems - 64; t++) {
             int ids[8], n = units_find_all(targets[t], ids, 8);
             for (int k = 0; k < n; k++) {
@@ -1067,6 +1533,39 @@ static void zone_test(void)
                 }
             }
         }
+        { /* Los tiles a los que se llega y no tienen nada dibujado, o solo
+             paredes (sin piso: el vacío debajo de un arco), como dato (en el
+             original, FillBlanks los tapa) */
+            int x0, y0, x1, y1, bare = 0, nofloor = 0, bx = 0, by = 0, nx = 0, ny = 0;
+            world_zone_rect(z, &x0, &y0, &x1, &y1);
+            for (int ty = y0; ty < y1; ty++)
+                for (int tx = x0; tx < x1; tx++) {
+                    int reach = 0, floor = 0, wall = 0;
+                    for (int k = 0; k < 25 && !reach; k++)
+                        reach = dist[(size_t)(ty * TILE_SUB + k / 5) * (size_t)(s_map.width * TILE_SUB) +
+                                     (size_t)(tx * TILE_SUB + k % 5)] >= 0;
+                    if (!reach)
+                        continue;
+                    for (int l = 0; l < MAP_FLOORS; l++)
+                        floor |= map_floor(&s_map, l, tx, ty) != NULL;
+                    for (int l = 0; l < MAP_WALLS; l++)
+                        wall |= map_wall(&s_map, l, tx, ty) != NULL;
+                    if (!floor && !wall && !bare++)
+                        bx = tx, by = ty;
+                    if (!floor && wall && !nofloor++)
+                        nx = tx, ny = ty;
+                }
+            if (bare || nofloor)
+                printf("  %s: %d tiles se pisan sin nada dibujado (el primero en %d, %d) y %d con pared y sin piso (%d, %d)\n",
+                       world_zone_name(z), bare, bx, by, nofloor, nx, ny);
+            if (getenv("D2_ZONEREACH")) { /* D2_ZONEREACH=1: cuántos subtiles de la zona se alcanzan desde la entrada */
+                long reached = 0;
+                for (int sy2 = y0 * TILE_SUB; sy2 < y1 * TILE_SUB; sy2++)
+                    for (int sx2 = x0 * TILE_SUB; sx2 < x1 * TILE_SUB; sx2++)
+                        reached += dist[(size_t)sy2 * (size_t)(s_map.width * TILE_SUB) + (size_t)sx2] >= 0;
+                printf("  alcance %s: %ld\n", world_zone_name(z), reached);
+            }
+        }
         if (atoi(getenv("D2_ZONETEST")) == 2) { /* la zona dibujada: # bloqueado, . se llega, o no se llega, E la entrada */
             int x0, y0, x1, y1;
             world_zone_rect(z, &x0, &y0, &x1, &y1);
@@ -1096,10 +1595,20 @@ static void zone_test(void)
             printf("de (%.0f, %.0f) a (%.0f, %.0f): %d\n", rx0, ry0, rx1, ry1, walk_dist(dist, rx1, ry1, 3));
         free(dist);
     }
+    free(s_walk_open);
+    s_walk_open = NULL;
     for (int i = 0; getenv("D2_WARPS") && i < world_warp_count(); i++) { /* D2_WARPS: cada salto armado, de dónde a dónde */
         const Warp *w = world_warp(i);
         printf("salto %-26s -> %-26s (el %d) en (%.0f, %.0f)\n", world_zone_name(w->from), world_zone_name(w->to), w->pair,
                w->x0, w->y0);
+    }
+    for (int l = 0; getenv("D2_WARPS") && l < world_link_count(); l++) { /* y cada unión, con su cruce */
+        const WorldLink *wl = world_link(l);
+        printf("unión %-26s - %-26s en (%.1f, %.1f)%s\n", world_zone_name(wl->a), world_zone_name(wl->b), wl->x, wl->y,
+               wl->cross > 0     ? ""
+               : wl->cross == -1 ? ", sin cruce que entre a las dos"
+               : wl->cross == -2 ? ", fuera de un borde"
+                                 : ", sin mirar");
     }
     /* D2_TILEDUMP="tx,ty,ancho,alto" (depuración, en tiles del mapa): las
        baldosas de cada tile, orientación.estilo.secuencia de pisos y paredes */
@@ -1224,6 +1733,7 @@ int game_init(void)
     load_hirelings();
     if (skills_init() != 0)
         fprintf(stderr, "sin tablas de habilidades: no se van a poder aprender\n");
+    war_monpet_row(NULL); /* monpet.txt (Consumir del Brujo) ya leída: no en medio del juego */
     ui_loading(2, 6);
 
     size_t n;
@@ -1249,6 +1759,8 @@ int game_init(void)
         s_zone_max = atoi(getenv("D2_ZONE_MAX"));
     if (getenv("D2_ZONE_RESET")) /* pruebas: segundos hasta borrar una zona vacía */
         s_zone_reset_ticks = (uint32_t)(atof(getenv("D2_ZONE_RESET")) * TICK_RATE);
+    if (getenv("D2_ZONE_BUDGET")) /* ms por tick para armar una zona en partes (0 = de una, como antes) */
+        s_zone_budget = atof(getenv("D2_ZONE_BUDGET"));
     zone_load(0); /* el pueblo queda siempre */
     ui_loading(5, 6);
     mem_report("el pueblo");
@@ -1464,7 +1976,7 @@ int game_init(void)
     return ok;
 }
 
-static void gain_exp(Player *p, int exp);
+static void gain_exp(Player *p, uint32_t exp);
 static void auto_assign(Player *p, int skill);
 
 /* Depuración: D2_LEVEL=N sube al personaje a ese nivel y D2_SKILLS="Bash:3,Howl"
@@ -1514,8 +2026,31 @@ void game_start(int num_players)
     game_start_slots(num_players, slots, classes);
 }
 
+void game_set_difficulty(int diff)
+{
+    s_diff = diff < 0 ? 0 : diff > 2 ? 2 : diff;
+    world_set_difficulty(s_diff); /* los monstruos de cada nivel */
+    units_set_difficulty(s_diff); /* y sus números */
+    s_dl_resist = units_difficulty_int("ResistPenalty", 0);
+    s_dl_res_floor = units_difficulty_int("ResistFloor", -100);
+    s_dl_life_div = units_difficulty_int("LifeStealDivisor", 1);
+    s_dl_mana_div = units_difficulty_int("ManaStealDivisor", 1);
+    s_dl_static_min = units_difficulty_int("StaticFieldMin", 0);
+    s_dl_curse_div = units_difficulty_int("AiCurseDivisor", 1);
+    s_dl_life_div = s_dl_life_div > 0 ? s_dl_life_div : 1;
+    s_dl_mana_div = s_dl_mana_div > 0 ? s_dl_mana_div : 1;
+    s_dl_curse_div = s_dl_curse_div > 0 ? s_dl_curse_div : 1;
+}
+
+int game_difficulty(void)
+{
+    return s_diff;
+}
+
 void game_start_slots(int num_players, const int *slots, const int *classes)
 {
+    if (getenv("D2_DIFF") && !s_carry[0]) /* pruebas: en Pesadilla (1) o Infierno (2) (la campaña sigue sola) */
+        game_set_difficulty(atoi(getenv("D2_DIFF")));
     ui_loading(4, 6); /* armar a los personajes tarda un poco (más en la Pi) */
     automap_reset();
     overlays_clear();
@@ -1608,7 +2143,7 @@ void game_start_slots(int num_players, const int *slots, const int *classes)
         p->target = -1;
         p->dialog_npc = -1;
         p->waypoints = 1; /* el del pueblo, siempre */
-        p->act = 1;
+        p->act = p->act_max = p->act_top = 1;
         p->label = label[i];
         p->attack_skill = -1;
         p->buttons[0] = BTN_ATTACK;
@@ -1617,7 +2152,7 @@ void game_start_slots(int num_players, const int *slots, const int *classes)
             p->buttons[1] = BTN_THROW; /* la Amazona arranca con jabalinas: B las lanza */
         int loaded = load_character(p);
         if (getenv("D2_WAYPOINTS")) /* depuración: waypoints activados (máscara de bits) */
-            p->waypoints |= (int)strtol(getenv("D2_WAYPOINTS"), NULL, 0);
+            p->waypoints |= (uint64_t)strtoull(getenv("D2_WAYPOINTS"), NULL, 0);
         if (!loaded)
             give_start_items(p);
         debug_skills(p);
@@ -1675,13 +2210,18 @@ void game_start_slots(int num_players, const int *slots, const int *classes)
         s_view_x[i] = SCREEN_W / 2.0f;
         s_view_y[i] = SCREEN_H / 2.0f;
     }
+    if (s_diff > 0) { /* las tiendas otra vez, con el nivel de los personajes; y el cartel */
+        generate_shops();
+        s_quest_ticks = 4 * TICK_RATE;
+        snprintf(s_quest_banner, sizeof s_quest_banner, "%s", tr(k_diff_names[s_diff]));
+    }
     /* El acto: el más avanzado de los dos (juegan en el mismo mundo);
        D2_ACT=2 arranca en Lut Gholein (pruebas) */
     int act = getenv("D2_ACT") ? atoi(getenv("D2_ACT")) : 1;
     for (int i = 0; i < s_num_players; i++)
         if (s_pl[i].act > act)
             act = s_pl[i].act;
-    act = act >= 1 && act <= 3 ? act : 1;
+    act = act >= 1 && act <= 5 ? act : 1;
     if (act != s_act) {
         act_switch(act);
         if (getenv("D2_ZONETEST")) /* las del otro acto */
@@ -1735,6 +2275,7 @@ void game_start_slots(int num_players, const int *slots, const int *classes)
     }
     waypoints_find();
     waypoints_light();
+    preload_ui();
     if (getenv("D2_DEPTH_AUDIT")) { /* depuración: el orden de dibujo en todo el mapa */
         zones_load_all();
         depth_audit();
@@ -1763,9 +2304,15 @@ static int foot_blocked(int sx, int sy)
            (map_blocked(&s_map, sx, sy + 1) != 0);
 }
 
+/* La cruz y, además (no está en el original), medio subtile de aire con las
+   paredes y su grosor dibujado (map_too_close): las bases de los bloques de
+   las cloacas del Acto 3 y las puntas de sus esquinas se dibujan un subtile
+   más allá de lo que bloquean. El original para a los personajes en el
+   centro de los subtiles; acá se camina en continuo, y con solo la cruz se
+   llegaba hasta la esquina de la pared y se pisaba el dibujo. */
 static int blocked_body(float x, float y)
 {
-    return foot_blocked((int)floorf(x), (int)floorf(y));
+    return foot_blocked((int)floorf(x), (int)floorf(y)) + map_too_close(&s_map, x, y);
 }
 
 /* Busca, en anillos cada vez más grandes, un lugar sin paredes ni NPCs */
@@ -1785,18 +2332,67 @@ static void find_free_spot(float *x, float *y)
             }
 }
 
+/* El lugar libre más cerca de (*x, *y) entre los que se llega caminando
+   desde (fx, fy), hasta 8 subtiles (si no hay ninguno, find_free_spot).
+   find_free_spot toma el más cerca, que en un pasillo angosto puede quedar
+   del otro lado de la pared: al volver por el portal al pueblo los bots
+   quedaban encerrados en un hueco del Maggot Lair */
+static void reach_free_spot(float fx, float fy, float *x, float *y)
+{
+    enum { R = 8, W = 2 * R + 1 };
+    static const int k_dx[4] = { 1, -1, 0, 0 }, k_dy[4] = { 0, 0, 1, -1 };
+    uint8_t seen[W * W];
+    int queue[W * W], qh = 0, qt = 0, ox = (int)floorf(fx) - R, oy = (int)floorf(fy) - R;
+    float best = 1e9f, bx = fx, by = fy;
+    memset(seen, 0, sizeof seen);
+    seen[R * W + R] = 1;
+    queue[qt++] = R * W + R;
+    while (qh < qt) {
+        int c = queue[qh++], cx = c % W, cy = c / W;
+        float mx = (float)(ox + cx) + 0.5f, my = (float)(oy + cy) + 0.5f;
+        float d = (mx - *x) * (mx - *x) + (my - *y) * (my - *y);
+        if (d < best && !blocked_body(mx, my) && !units_blocking(mx, my, UNIT_PLAYER_BODY + 0.15f)) {
+            best = d;
+            bx = mx;
+            by = my;
+        }
+        for (int k = 0; k < 4; k++) {
+            int nx = cx + k_dx[k], ny = cy + k_dy[k];
+            if (nx < 0 || ny < 0 || nx >= W || ny >= W || seen[ny * W + nx] ||
+                blocked_body((float)(ox + nx) + 0.5f, (float)(oy + ny) + 0.5f))
+                continue;
+            seen[ny * W + nx] = 1;
+            queue[qt++] = ny * W + nx;
+        }
+    }
+    if (best < 1e9f) {
+        *x = bx;
+        *y = by;
+    } else {
+        *x = fx;
+        *y = fy;
+        find_free_spot(x, y);
+    }
+}
+
 /* Paredes, objetos, NPCs y monstruos. Si ya estaba encimado a alguien (por
    ejemplo al aparecer) lo deja salir en vez de quedar trabado. */
 static int player_blocked(float x, float y, float from_x, float from_y)
 {
-    int to = blocked_body(x, y);
+    int to = foot_blocked((int)floorf(x), (int)floorf(y));
     if (to) {
         /* Encimado a una pared (al aparecer o al llegar por un salto): puede
            salir con el centro libre, sin meterse más */
-        int from = blocked_body(from_x, from_y);
+        int from = foot_blocked((int)floorf(from_x), (int)floorf(from_y));
         if (!from || to > from || map_blocked(&s_map, (int)floorf(x), (int)floorf(y)))
             return 1;
     }
+    /* El aire con las paredes (blocked_body): si ya estaba más cerca, se
+       mueve sin acercarse más; un lugar para caer (x, y = de dónde) no */
+    float c2 = map_clearance2(&s_map, x, y);
+    if (c2 < MAP_BODY_CLEAR * MAP_BODY_CLEAR - 0.001f &&
+        ((x == from_x && y == from_y) || c2 < map_clearance2(&s_map, from_x, from_y) - 0.0001f))
+        return 1;
     return units_blocking(x, y, UNIT_PLAYER_BODY) && !units_blocking(from_x, from_y, UNIT_PLAYER_BODY);
 }
 
@@ -1856,21 +2452,32 @@ static void set_player_state(Player *p, int state, int mode)
         int dodge = skills_find(p->cls, "Dodge");
         if (dodge >= 0)
             audio_play(skills_get(p->cls, dodge)->st_sound, p->x, p->y);
-    } else if (state == PS_DYING && p->state != PS_DYING) {
+    }
+    int died = state == PS_DYING && p->state != PS_DYING;
+    if (died) {
         audio_play(s_classes[p->cls].snd_death, p->x, p->y);
         if (p->form != FORM_NONE) /* el Druida muere como humano */
             dru_unmorph(p);
+        /* PLAYER_ApplyDeathPenalty: el nivel % (hasta 20) del oro. El
+           original lo cuenta también con el del cofre y tira el resto del
+           que lleva en el cadáver; acá (pedido del usuario) solo se pierde
+           esa parte del que lleva: el equipo y el cofre no se tocan */
+        int pct = p->level_num < 20 ? p->level_num : 20;
+        p->gold_lost = (int)((int64_t)p->gold * pct / 100);
+        p->gold -= p->gold_lost;
     }
     p->state = state;
     p->mode = mode;
+    if (died && s_act == 5)
+        a5_player_died(p); /* (en la cumbre: los Antiguos) */
     p->anim_acc = 0;
     p->charge_ticks = 0;
 }
 
-static void gain_exp(Player *p, int exp)
+static void gain_exp(Player *p, uint32_t exp)
 {
     const CharClass *c = &s_classes[p->cls];
-    p->exp += exp;
+    p->exp = exp > 0xFFFFFFFFu - p->exp ? 0xFFFFFFFFu : p->exp + exp; /* (sin pasarse de 32 bits) */
     while (p->level_num < 99 && p->exp >= c->exp_next[p->level_num]) {
         p->level_num++;
         p->skill_points++;
@@ -1894,8 +2501,8 @@ static void share_exp(const Player *killer, int exp)
     for (int i = 0; i < s_num_players; i++) {
         Player *p = &s_pl[i];
         float dx = p->x - killer->x, dy = p->y - killer->y;
-        if (p->state < PS_DYING && dx * dx + dy * dy <= EXP_SHARE_RANGE * EXP_SHARE_RANGE)
-            gain_exp(p, exp);
+        if (p->state < PS_DYING && dx * dx + dy * dy <= EXP_SHARE_RANGE * EXP_SHARE_RANGE) /* (con el santuario de experiencia) */
+            gain_exp(p, p->shrine_ticks > 0 && p->shrine_kind == 15 ? exp * (100 + p->shrine_arg0) / 100 : exp);
     }
 }
 
@@ -2270,6 +2877,7 @@ static void refresh_stats(Player *p)
     memset(p->bonus, 0, sizeof p->bonus);
     ItemProp pr[MAX_PLAYER_PROPS];
     int np = player_props(p, pr, MAX_PLAYER_PROPS);
+    np = shrine_props(p, pr, np, MAX_PLAYER_PROPS); /* el santuario que dura */
     item_skill_bonus(p, pr, np);
     p->lvl_ac_pct = p->lvl_dmg_pct = 0;
     p->stats_dirty = 0;
@@ -2505,6 +3113,29 @@ static void cube_remove(Player *p, int i)
 /* El primer lugar libre recorriendo por columnas, de izquierda a derecha */
 static int bag_add(Player *p, const Item *it)
 {
+    /* Primero en una pila igual donde entre entero (pociones, llaves) */
+    for (int k = 0; k < p->bag_count; k++)
+        if (stack_fits(&p->bag[k], it)) {
+            p->bag[k].amount += it->amount > 0 ? it->amount : 1;
+            return 1;
+        }
+    /* Las llaves y los pergaminos: se llena la pila que tenga lugar y los
+       que sobran van a otro (solo si hay dónde: si no, no se levanta nada) */
+    for (int k = 0; k < p->bag_count && stack_cap(it->type) > 0 && !items_is_potion(it->type); k++) {
+        Item *b = &p->bag[k];
+        int room = stack_cap(b->type) - b->amount;
+        if (b->type != it->type || room <= 0)
+            continue;
+        for (int x = 0; x + it->type->inv_w <= BAG_W; x++)
+            for (int y = 0; y + it->type->inv_h <= BAG_H; y++)
+                if (bag_fits(p, it->type, x, y, -1)) {
+                    Item rest = *it;
+                    rest.amount -= room;
+                    b->amount += room;
+                    return bag_add_at(p, &rest, x, y);
+                }
+        break;
+    }
     for (int x = 0; x + it->type->inv_w <= BAG_W; x++)
         for (int y = 0; y + it->type->inv_h <= BAG_H; y++)
             if (bag_add_at(p, it, x, y))
@@ -2543,6 +3174,193 @@ static int is_potion(const ItemType *t)
     return items_is_potion(t);
 }
 
+/* ---- Pilas en la mochila ----
+   Las pociones se apilan hasta POTION_STACK por casilla, las llaves hasta
+   KEY_STACK y los Pergaminos de Portal hasta TP_STACK (pedido del usuario:
+   el original no apila pociones, las llaves van de a 12 y los pergaminos se
+   guardan en el tomo, que acá no hay). En una pila de pociones `amount` son
+   los tragos de todas (POTION_CHARGES cada una; la de arriba es la
+   empezada), así el guardado no cambia; en las llaves y los pergaminos, son
+   cuántos hay. Al cinturón y al cubo pasan de a una. */
+
+/* Cuántas hay en la casilla */
+static int stack_count(const Item *it)
+{
+    if (!it->type)
+        return 0;
+    if (is_potion(it->type))
+        return it->amount > POTION_CHARGES ? (it->amount + POTION_CHARGES - 1) / POTION_CHARGES : 1;
+    if (strcmp(it->type->code, "key") == 0 || strcmp(it->type->code, "tsc") == 0)
+        return it->amount > 0 ? it->amount : 1;
+    return 1;
+}
+
+/* Lo que entra en una casilla, en unidades de amount (0 = no se apila) */
+static int stack_cap(const ItemType *t)
+{
+    if (is_potion(t))
+        return POTION_STACK * POTION_CHARGES;
+    if (strcmp(t->code, "key") == 0)
+        return t->max_stack;
+    if (strcmp(t->code, "tsc") == 0)
+        return TP_STACK;
+    return 0;
+}
+
+/* ¿Entra `it` entero en la pila `into`? (dos pociones empezadas no se
+   juntan: los tragos de cada una se perderían) */
+static int stack_fits(const Item *into, const Item *it)
+{
+    int cap = stack_cap(it->type), a = it->amount > 0 ? it->amount : 1;
+    if (!cap || into->type != it->type || into->quality != it->quality || into->amount + a > cap)
+        return 0;
+    return !is_potion(it->type) || into->amount % POTION_CHARGES == 0 || a % POTION_CHARGES == 0;
+}
+
+/* Saca una poción de la pila: la de arriba (la empezada, si hay); la pila
+   puede quedar vacía (amount 0) */
+static Item potion_take_one(Item *stack)
+{
+    Item one = *stack;
+    int top = stack->amount % POTION_CHARGES;
+    one.amount = top ? top : stack->amount > 0 ? POTION_CHARGES : 0;
+    stack->amount -= one.amount;
+    return one;
+}
+
+/* ---- El cofre (stash) ----
+   Pestañas de STASH_W x STASH_H, cada objeto en su lugar como en la mochila.
+   Se abre con A en el cofre de cada pueblo (el objeto Bank, OperateFn 32) y
+   ocupa en el inventario el lugar del equipo, como el cubo. */
+
+/* Las pestañas que tiene: una por acto al que llegó y las compradas */
+static int stash_tabs(const Player *p)
+{
+    int acts = p->act_max < 1 ? 1 : p->act_max > STASH_ACTS ? STASH_ACTS : p->act_max;
+    int n = acts + p->stash_bought;
+    return n < STASH_TABS ? n : STASH_TABS;
+}
+
+/* Lo que cuesta la próxima: el triple de la anterior */
+static int stash_price(const Player *p)
+{
+    int64_t price = STASH_PRICE;
+    for (int k = 0; k < p->stash_bought; k++)
+        price *= 3;
+    return price > 2000000000 ? 2000000000 : (int)price;
+}
+
+static int stash_can_buy(const Player *p)
+{
+    return p->stash_bought < STASH_BUY_MAX && stash_tabs(p) < STASH_TABS;
+}
+
+/* Objeto de la pestaña que ocupa la casilla (x, y), o -1 */
+static int stash_at(const Player *p, int tab, int x, int y)
+{
+    for (int i = 0; i < p->stash_count[tab]; i++) {
+        const ItemType *t = p->stash[tab][i].type;
+        if (x >= p->stash_x[tab][i] && x < p->stash_x[tab][i] + t->inv_w && y >= p->stash_y[tab][i] &&
+            y < p->stash_y[tab][i] + t->inv_h)
+            return i;
+    }
+    return -1;
+}
+
+static int stash_add_at(Player *p, int tab, const Item *it, int x, int y)
+{
+    const ItemType *t = it->type;
+    if (p->stash_count[tab] >= STASH_CELLS || x < 0 || y < 0 || x + t->inv_w > STASH_W || y + t->inv_h > STASH_H)
+        return 0;
+    for (int a = 0; a < t->inv_h; a++)
+        for (int b = 0; b < t->inv_w; b++)
+            if (stash_at(p, tab, x + b, y + a) >= 0)
+                return 0;
+    int n = p->stash_count[tab]++;
+    p->stash[tab][n] = *it;
+    p->stash_x[tab][n] = (uint8_t)x;
+    p->stash_y[tab][n] = (uint8_t)y;
+    return 1;
+}
+
+/* En una pila igual donde entre entera, o en el primer lugar libre (por
+   columnas, como la mochila) */
+static int stash_add(Player *p, int tab, const Item *it)
+{
+    for (int k = 0; k < p->stash_count[tab]; k++)
+        if (stack_fits(&p->stash[tab][k], it)) {
+            p->stash[tab][k].amount += it->amount > 0 ? it->amount : 1;
+            return 1;
+        }
+    for (int x = 0; x + it->type->inv_w <= STASH_W; x++)
+        for (int y = 0; y + it->type->inv_h <= STASH_H; y++)
+            if (stash_add_at(p, tab, it, x, y))
+                return 1;
+    return 0;
+}
+
+static void stash_remove(Player *p, int tab, int i)
+{
+    for (int k = i; k < p->stash_count[tab] - 1; k++) {
+        p->stash[tab][k] = p->stash[tab][k + 1];
+        p->stash_x[tab][k] = p->stash_x[tab][k + 1];
+        p->stash_y[tab][k] = p->stash_y[tab][k + 1];
+    }
+    p->stash_count[tab]--;
+}
+
+/* Ordenar la pestaña, como la mochila */
+static void stash_sort(Player *p, int tab)
+{
+    static Item items[STASH_CELLS];
+    int n = p->stash_count[tab];
+    memcpy(items, p->stash[tab], sizeof(Item) * (size_t)n);
+    qsort(items, (size_t)n, sizeof items[0], cmp_bag_items);
+    p->stash_count[tab] = 0;
+    for (int i = 0; i < n; i++)
+        if (!stash_add(p, tab, &items[i]) && !bag_add(p, &items[i])) /* no debería pasar */
+            items_ground_add(&items[i], p->x + 0.8f, p->y + 0.8f);
+}
+
+/* El oro: todo al cofre o todo a la mochila */
+static void stash_move_gold(Player *p, int to_stash)
+{
+    int *from = to_stash ? &p->gold : &p->stash_gold, *to = to_stash ? &p->stash_gold : &p->gold;
+    if (*from <= 0) {
+        show_message(p, to_stash ? "No llevás oro" : "No hay oro en el cofre");
+        return;
+    }
+    int64_t sum = (int64_t)*to + *from;
+    int moved = sum > 2000000000 ? 2000000000 - *to : *from;
+    *to += moved;
+    *from -= moved;
+    audio_play_name("item_gold", AUDIO_NOPOS, AUDIO_NOPOS);
+}
+
+/* Comprar la próxima pestaña: con el oro que lleva y, si no alcanza, con el
+   del cofre (como las compras del original) */
+static void stash_buy(Player *p)
+{
+    int price = stash_price(p);
+    if (!stash_can_buy(p))
+        return;
+    if ((int64_t)p->gold + p->stash_gold < price) {
+        char msg[64];
+        snprintf(msg, sizeof msg, tr("No te alcanza: cuesta %d"), price);
+        show_message(p, msg);
+        return;
+    }
+    int from_bag = p->gold < price ? p->gold : price;
+    p->gold -= from_bag;
+    p->stash_gold -= price - from_bag;
+    p->stash_bought++;
+    p->stash_tab = stash_tabs(p) - 1;
+    audio_play_name("item_gold", AUDIO_NOPOS, AUDIO_NOPOS);
+    char msg[64];
+    snprintf(msg, sizeof msg, tr("Pestaña %d del cofre"), p->stash_tab + 1);
+    show_message(p, msg);
+}
+
 /* Cuánto vale un objeto para comparar con lo que tiene puesto */
 static int item_score(const Item *it)
 {
@@ -2568,7 +3386,10 @@ static int pick_up(Player *p, const Item *it)
     if (is_potion(t)) {
         for (int i = 0; i < BELT_SLOTS; i++)
             if (!p->belt[i].type) {
-                p->belt[i] = *it;
+                Item rest = *it, one = potion_take_one(&rest);
+                if (rest.amount > 0 && !bag_add(p, &rest))
+                    break; /* (una pila que no entra: entera a la mochila o queda en el suelo) */
+                p->belt[i] = one;
                 return 1;
             }
         return bag_add(p, it);
@@ -2583,6 +3404,11 @@ static int pick_up(Player *p, const Item *it)
             blocked = items_ammo_for(weapon) != t->ammo || cur->type;
         if (!meets_item(p, it))
             blocked = 1;
+        if (is_quest_item(cur->type))
+            blocked = 1; /* la Voluntad de Khalim en la mano (para el Orbe) no se cambia sola por un arma mejor */
+        const ItemType *off = p->equip[SLOT_SHIELD].type;
+        if (t->slot == SLOT_WEAPON && items_ammo_for(t) && !(off && off->ammo == items_ammo_for(t)))
+            blocked = 1; /* un arco o una ballesta sin su carcaj no se pone solo: no podría tirar */
         if (!blocked && (t->ammo || item_score(it) > item_score(cur))) {
             if (cur->type && !bag_add(p, cur))
                 return 0;
@@ -2717,7 +3543,8 @@ static void weapon_damage_pct(const Player *p, int thrown, int extra_pct, int *d
         bonus = player_str(p);
     /* y las auras (Poder, Fanatismo...), el oso y los % de daño de los objetos que no son el arma */
     int pct = 100 + bonus + p->sk_dmg_pct + p->au_dmg_pct + p->dru_dmg_pct + extra_pct + p->bonus[STAT_DMG_PCT_ALL] +
-              p->lvl_dmg_pct + bonus_off_weapon(p, STAT_DMG_PCT);
+              p->lvl_dmg_pct + bonus_off_weapon(p, STAT_DMG_PCT) -
+              (p->curse == A4C_WEAKEN || p->curse == A4C_DECREPIFY ? 50 : 0); /* maldito: Debilitar, Decrepitud */
     if (pct < 1)
         pct = 1;
     *dmin = lo * pct / 100;
@@ -2768,9 +3595,13 @@ static int player_defense(const Player *p)
     for (int s = 0; s < SLOT_COUNT; s++)
         if (p->equip[s].type && p->equip[s].type->kind == ITEM_ARMOR) /* la de cada armadura, con su % */
             def += p->equip[s].ac * (100 + items_stat(&p->equip[s], STAT_AC_PCT)) / 100;
-    /* Piel de hierro, Grito, las armaduras de hielo, Desafío, Escudo sagrado y lo que sube con el nivel */
-    return def * (100 + p->sk_def_pct + p->shout_pct + (p->armor_ticks > 0 ? p->armor_pct : 0) + p->au_def_pct +
-                  (p->hs_ticks > 0 ? p->hs_def : 0) + p->dru_def_pct + p->lvl_ac_pct) / 100;
+    /* Piel de hierro, Grito, las armaduras de hielo, Desafío, Escudo sagrado, lo que sube con el nivel, el
+       santuario de armadura y la Defense Curse de las súcubos (skill_armor_percent -ln56: 50 + 5 por nivel) */
+    int pct = 100 + p->sk_def_pct + p->shout_pct + (p->armor_ticks > 0 ? p->armor_pct : 0) + p->au_def_pct +
+              (p->hs_ticks > 0 ? p->hs_def : 0) + p->dru_def_pct + p->lvl_ac_pct +
+              (p->shrine_ticks > 0 && p->shrine_kind == 6 ? p->shrine_arg0 : 0) -
+              (p->curse == A4C_DEFENSE ? 50 + 5 * (p->curse_lvl - 1) : 0);
+    return def * (pct > 0 ? pct : 0) / 100;
 }
 
 /* Puntería (attack rating) del original: (destreza - 7) * 5 + ToHitFactor */
@@ -2782,15 +3613,19 @@ static int player_attack_rating(const Player *p)
 }
 
 /* La resistencia (0 fuego, 1 frío, 2 rayo, 3 veneno): la de las
-   habilidades, las auras y los objetos, hasta el máximo (75 más lo que lo
-   suben, nunca más de 95) */
+   habilidades, las auras y los objetos, menos la de la dificultad (-40 en
+   Pesadilla, -100 en Infierno: ResistPenalty, SUNITDMG), hasta el máximo
+   (75 más lo que lo suben, nunca más de 95) y nunca menos de -100 */
 static int player_resist(const Player *p, int ri)
 {
     static const int k_res[4] = { STAT_RES_FIRE, STAT_RES_COLD, STAT_RES_LTNG, STAT_RES_POIS };
-    int r = p->bonus[k_res[ri]] + (ri < 3 ? p->resist[ri] + p->au_res[ri] : 0);
+    int r = p->bonus[k_res[ri]] + (ri < 3 ? p->resist[ri] + p->au_res[ri] : 0) + (p->a5_flags & A5F_RESIST ? 10 : 0) +
+            s_dl_resist;
+    if (p->curse == A4C_LOWERRES) /* Bajar resistencias (dm56: de 25 a 70 %) */
+        r -= 25 + (70 - 25) * (110 * p->curse_lvl / (p->curse_lvl + 6)) / 100;
     int most = 75 + p->bonus[k_res[ri] + 1] + (ri < 3 ? p->res_max[ri] + p->au_res_max[ri] : 0);
     most = most > 95 ? 95 : most;
-    return r > most ? most : r;
+    return r > most ? most : r < s_dl_res_floor ? s_dl_res_floor : r;
 }
 
 /* El daño de un elemento que le llega: su resistencia, la reducción de
@@ -2830,6 +3665,11 @@ static void give_start_items(Player *p)
             Item it = items_make(t);
             pick_up(p, &it);
         }
+    }
+    const ItemType *tp = items_find("tsc"); /* y un Pergamino de Portal, como en el original */
+    if (tp) {
+        Item it = items_make(tp);
+        bag_add(p, &it);
     }
 }
 
@@ -2891,8 +3731,9 @@ static void belt_refill(Player *p, int i, const ItemType *like)
         }
     }
     if (best >= 0) {
-        p->belt[i] = p->bag[best];
-        bag_remove(p, best);
+        p->belt[i] = potion_take_one(&p->bag[best]);
+        if (p->bag[best].amount <= 0)
+            bag_remove(p, best);
     }
 }
 
@@ -2900,9 +3741,9 @@ static void belt_refill(Player *p, int i, const ItemType *like)
 static int potion_sip(Player *p, Item *it)
 {
     apply_potion(p, it->type);
-    if (it->amount > POTION_CHARGES || it->amount <= 0)
+    if (it->amount <= 0)
         it->amount = POTION_CHARGES;
-    return --it->amount <= 0;
+    return --it->amount <= 0; /* (en una pila, de la de arriba) */
 }
 
 /* Toma de la poción de una casilla del cinturón. Cuando se termina, otra
@@ -2941,8 +3782,9 @@ static void drink(Player *p, int kind)
             continue;
         for (int i = 0; i < BELT_SLOTS; i++)
             if (!p->belt[i].type) {
-                p->belt[i] = p->bag[k];
-                bag_remove(p, k);
+                p->belt[i] = potion_take_one(&p->bag[k]);
+                if (p->bag[k].amount <= 0)
+                    bag_remove(p, k);
                 drink_slot(p, i);
                 return;
             }
@@ -3017,6 +3859,12 @@ static Item *cursor_item(Player *p)
         int k = cube_at(p, (sel - INV_CUBE0) % CUBE_W, (sel - INV_CUBE0) / CUBE_W);
         return k >= 0 ? &p->cube[k] : NULL;
     }
+    if (sel >= INV_STASH0 && sel < INV_STAB0) {
+        int k = stash_at(p, p->stash_tab, (sel - INV_STASH0) % STASH_W, (sel - INV_STASH0) / STASH_W);
+        return k >= 0 ? &p->stash[p->stash_tab][k] : NULL;
+    }
+    if (sel >= INV_TRANSMUTE)
+        return NULL;
     if (sel < SLOT_COUNT)
         return p->equip[sel].type ? &p->equip[sel] : NULL;
     if (sel < INV_BELT0) {
@@ -3037,6 +3885,8 @@ static void cube_transmute_now(Player *p)
         show_message(p, "El cubo está vacío");
         return;
     }
+    if (cow_recipe(p)) /* la pierna de Wirt: el portal a las vacas (no es un objeto) */
+        return;
     Item out[3];
     char what[112];
     int n = cube_transmute(p->cube, p->cube_count, p->level_num, out, 3, what, sizeof what);
@@ -3063,9 +3913,55 @@ static void cube_toggle(Player *p)
     audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
 }
 
+/* Lo que no es una casilla del cofre: las pestañas y los botones del oro */
+static void stash_button(Player *p, int sel)
+{
+    if (sel >= INV_STAB0 && sel < INV_GOLD_IN) {
+        int k = sel - INV_STAB0;
+        if (k < stash_tabs(p)) { /* otra pestaña (también con algo en la mano) */
+            p->stash_tab = k;
+            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
+        } else if (!p->stash_confirm) { /* "+": la primera A pregunta */
+            p->stash_confirm = 1;
+            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
+        } else {
+            p->stash_confirm = 0;
+            stash_buy(p);
+            save_character(p);
+        }
+    } else if (sel == INV_GOLD_IN || sel == INV_GOLD_OUT) {
+        stash_move_gold(p, sel == INV_GOLD_IN);
+    }
+}
+
 static void inventory_use(Player *p)
 {
     int sel = p->inv_sel;
+    if (sel >= INV_STAB0) {
+        stash_button(p, sel);
+        return;
+    }
+    if (sel >= INV_STASH0) { /* del cofre a la mochila */
+        Item *it = cursor_item(p);
+        if (it) {
+            if (bag_add(p, it))
+                stash_remove(p, p->stash_tab, (int)(it - p->stash[p->stash_tab]));
+            else
+                inventory_full(p);
+        }
+        return;
+    }
+    if (p->stash_open && sel >= INV_CELL0 && sel < INV_BELT0) { /* de la mochila al cofre, entero */
+        int i = bag_at(p, (sel - INV_CELL0) % BAG_W, (sel - INV_CELL0) / BAG_W);
+        if (i < 0)
+            return;
+        if (stash_add(p, p->stash_tab, &p->bag[i]))
+            bag_remove(p, i);
+        else
+            show_message(p, "No entra en esta pestaña");
+        refresh_look(p);
+        return;
+    }
     if (sel >= INV_CUBE0 && sel < INV_TRANSMUTE) { /* del cubo a la mochila */
         Item *it = cursor_item(p);
         if (it) {
@@ -3098,7 +3994,7 @@ static void inventory_use(Player *p)
             cube_toggle(p);
             return;
         }
-        if (a3_use_item(p, i)) /* la Poción de la vida */
+        if (a3_use_item(p, i) || a5_use_item(p, i)) /* la Poción de la vida, el Pergamino de Resistencia */
             return;
         if (strcmp(t->code, "ass") == 0) { /* el Libro de Habilidad de Radament: un punto, una vez */
             if (!(p->a2_flags & A2F_BOOK)) {
@@ -3113,11 +4009,14 @@ static void inventory_use(Player *p)
             save_character(p);
             return;
         }
-        if (p->cube_open) { /* con el cubo abierto, X lo pasa al cubo */
-            if (cube_add(p, &p->bag[i]))
-                bag_remove(p, i);
-            else
+        if (p->cube_open) { /* con el cubo abierto, X lo pasa al cubo (las pociones, de a una) */
+            Item rest = p->bag[i], one = is_potion(t) ? potion_take_one(&rest) : rest;
+            if (!cube_add(p, &one))
                 show_message(p, "No entra en el cubo");
+            else if (is_potion(t) && rest.amount > 0)
+                p->bag[i] = rest;
+            else
+                bag_remove(p, i);
             return;
         }
         if (t->slot != SLOT_NONE) {
@@ -3129,11 +4028,17 @@ static void inventory_use(Player *p)
                 if (!p->belt[k].type)
                     free_slot = k;
             if (free_slot >= 0) {
-                p->belt[free_slot] = p->bag[i];
-                bag_remove(p, i);
+                p->belt[free_slot] = potion_take_one(&p->bag[i]);
+                if (p->bag[i].amount <= 0)
+                    bag_remove(p, i);
             } else if (potion_sip(p, &p->bag[i])) {
                 bag_remove(p, i);
             }
+        } else if (strcmp(t->code, "tsc") == 0) {
+            if (tp_cast(p, i)) /* el portal se abre al lado: se cierra el inventario */
+                close_ui(p);
+        } else if (strcmp(t->code, "key") == 0) {
+            show_message(p, "Las llaves abren los cofres cerrados");
         }
     } else if (sel < INV_SORT) {
         drink_slot(p, sel - INV_BELT0);
@@ -3158,8 +4063,14 @@ static void inventory_lift(Player *p)
         return;
     }
     if (sel == INV_STATS) { /* a repartir los puntos */
+        if (p->stash_open)
+            return; /* (con el cofre abierto se queda en el inventario) */
         p->inv_page = PAGE_STATS;
         audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
+        return;
+    }
+    if (sel >= INV_STAB0) {
+        stash_button(p, sel);
         return;
     }
     Item *it = cursor_item(p);
@@ -3171,6 +4082,8 @@ static void inventory_lift(Player *p)
         bag_remove(p, (int)(it - p->bag));
     else if (sel >= INV_CUBE0 && sel < INV_TRANSMUTE)
         cube_remove(p, (int)(it - p->cube));
+    else if (sel >= INV_STASH0 && sel < INV_STAB0)
+        stash_remove(p, p->stash_tab, (int)(it - p->stash[p->stash_tab]));
     else
         memset(it, 0, sizeof *it);
     refresh_look(p);
@@ -3238,6 +4151,12 @@ static void inventory_place(Player *p)
             show_message(p, "No entra ahí");
             return;
         }
+        if (under >= 0 && stack_fits(&p->bag[under], &held)) { /* encima de una pila igual: se juntan */
+            p->bag[under].amount += held.amount > 0 ? held.amount : 1;
+            memset(&p->held, 0, sizeof p->held);
+            audio_play(t->drop_sound, AUDIO_NOPOS, AUDIO_NOPOS);
+            return;
+        }
         memset(&p->held, 0, sizeof p->held);
         if (under >= 0) {
             p->held = p->bag[under];
@@ -3249,8 +4168,17 @@ static void inventory_place(Player *p)
             show_message(p, "En el cinturón van pociones");
             return;
         }
-        p->held = p->belt[sel - INV_BELT0];
-        p->belt[sel - INV_BELT0] = held;
+        Item *slot = &p->belt[sel - INV_BELT0];
+        if (stack_count(&held) > 1) { /* de una pila, una sola */
+            if (slot->type) {
+                show_message(p, "Ese lugar del cinturón está ocupado");
+                return;
+            }
+            *slot = potion_take_one(&p->held);
+        } else {
+            p->held = *slot;
+            *slot = held;
+        }
     } else if (sel >= INV_CUBE0 && sel < INV_TRANSMUTE) {
         int cx = (sel - INV_CUBE0) % CUBE_W, cy = (sel - INV_CUBE0) / CUBE_W;
         if (cx + t->inv_w > CUBE_W) cx = CUBE_W - t->inv_w;
@@ -3272,12 +4200,54 @@ static void inventory_place(Player *p)
             show_message(p, "No entra ahí");
             return;
         }
+        if (is_potion(t) && stack_count(&held) > 1) { /* al cubo, de a una */
+            if (under >= 0) {
+                show_message(p, "Ahí ya hay algo");
+                return;
+            }
+            Item one = potion_take_one(&p->held);
+            cube_add_at(p, &one, cx, cy);
+            audio_play(t->drop_sound, AUDIO_NOPOS, AUDIO_NOPOS);
+            return;
+        }
         memset(&p->held, 0, sizeof p->held);
         if (under >= 0) {
             p->held = p->cube[under];
             cube_remove(p, under);
         }
         cube_add_at(p, &held, cx, cy);
+    } else if (sel >= INV_STASH0 && sel < INV_STAB0) { /* en el cofre: como en la mochila */
+        int tab = p->stash_tab, cx = (sel - INV_STASH0) % STASH_W, cy = (sel - INV_STASH0) / STASH_W;
+        if (cx + t->inv_w > STASH_W) cx = STASH_W - t->inv_w;
+        if (cy + t->inv_h > STASH_H) cy = STASH_H - t->inv_h;
+        int under = -1, many = 0;
+        for (int a = 0; a < t->inv_h; a++)
+            for (int b = 0; b < t->inv_w; b++) {
+                int k = stash_at(p, tab, cx + b, cy + a);
+                if (k >= 0 && under >= 0 && k != under)
+                    many = 1;
+                if (k >= 0)
+                    under = k;
+            }
+        if (many) {
+            show_message(p, "No entra ahí");
+            return;
+        }
+        if (under >= 0 && stack_fits(&p->stash[tab][under], &held)) {
+            p->stash[tab][under].amount += held.amount > 0 ? held.amount : 1;
+            memset(&p->held, 0, sizeof p->held);
+            audio_play(t->drop_sound, AUDIO_NOPOS, AUDIO_NOPOS);
+            return;
+        }
+        memset(&p->held, 0, sizeof p->held);
+        if (under >= 0) {
+            p->held = p->stash[tab][under];
+            stash_remove(p, tab, under);
+        }
+        stash_add_at(p, tab, &held, cx, cy);
+    } else if (sel >= INV_STAB0) { /* una pestaña: se ve esa, con lo de la mano */
+        stash_button(p, sel);
+        return;
     } else {
         show_message(p, "Soltalo en la mochila");
         return;
@@ -3307,6 +4277,47 @@ static void inventory_drop(Player *p)
     memset(&p->held, 0, sizeof p->held);
 }
 
+/* El objeto del lugar `sel` (para que el cursor salte de uno a otro): el de
+   la mochila o 1000 + el del cofre; -1 = ninguno */
+static int inv_item_at(const Player *p, int sel)
+{
+    if (sel >= INV_CELL0 && sel < INV_BELT0)
+        return bag_at(p, (sel - INV_CELL0) % BAG_W, (sel - INV_CELL0) / BAG_W);
+    if (sel >= INV_STASH0 && sel < INV_STAB0 && p->stash_open) {
+        int k = stash_at(p, p->stash_tab, (sel - INV_STASH0) % STASH_W, (sel - INV_STASH0) / STASH_W);
+        return k >= 0 ? 1000 + k : -1;
+    }
+    return -1;
+}
+
+/* A en el cofre del pueblo: el inventario con el cofre en el lugar del equipo */
+static void stash_show(Player *p)
+{
+    p->inv_open = 1;
+    p->inv_page = PAGE_INVENTORY;
+    p->assigning = 0;
+    p->cube_open = 0;
+    p->stash_open = 1;
+    p->stash_confirm = 0;
+    if (p->stash_tab < 0 || p->stash_tab >= stash_tabs(p))
+        p->stash_tab = 0;
+    p->inv_sel = INV_STASH0;
+    audio_play_name("object_chest_large", AUDIO_NOPOS, AUDIO_NOPOS);
+}
+
+/* B: cierra el inventario; con el cofre, también el cofre (se abrió en el
+   pueblo) y se guarda la partida */
+static void inventory_close(Player *p)
+{
+    if (p->stash_open) {
+        p->stash_open = 0;
+        p->stash_confirm = 0;
+        p->inv_sel = INV_CELL0;
+        save_character(p);
+    }
+    p->inv_open = 0;
+}
+
 static void inventory_tick(Player *p, const PlayerInput *pi)
 {
     int holding = p->held.type != NULL;
@@ -3314,29 +4325,34 @@ static void inventory_tick(Player *p, const PlayerInput *pi)
         inventory_drop(p);
         return;
     }
-    if (pi->button[3]) { /* Y: con algo en la mano lo tira; si no, siguiente panel */
+    if (pi->button[3]) { /* Y: con algo en la mano lo tira; si no, siguiente panel (no con el cofre) */
         if (holding)
             inventory_drop(p);
-        else
+        else if (!p->stash_open)
             p->inv_page = PAGE_SKILLS;
         return;
     }
+    if (p->stash_tab < 0 || p->stash_tab >= stash_tabs(p))
+        p->stash_tab = 0;
     /* Sin el cubo en la mochila (lo tiró o lo vendió) no hay nada que mostrar */
     if (p->cube_open && bag_index_of(p, "box") < 0 && !(holding && strcmp(p->held.type->code, "box") == 0)) {
         p->cube_open = 0;
         p->inv_sel = INV_CELL0;
     }
-    if (pi->back) { /* B: con algo en la mano lo guarda; si no, cierra el cubo o el inventario */
+    if (pi->back) { /* B: con algo en la mano lo guarda; si no, cierra el cubo, el cofre o el inventario */
         if (holding)
             inventory_stow(p);
         else if (p->cube_open)
             cube_toggle(p);
         else
-            p->inv_open = 0;
+            inventory_close(p);
         return;
     }
-    if (pi->potion_life) { /* LB: ordenar */
-        bag_sort(p);
+    if (pi->potion_life) { /* LB: ordenar (la pestaña del cofre si el cursor está ahí) */
+        if (p->inv_sel >= INV_STASH0 && p->inv_sel < INV_STAB0)
+            stash_sort(p, p->stash_tab);
+        else
+            bag_sort(p);
         audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
         return;
     }
@@ -3346,15 +4362,15 @@ static void inventory_tick(Player *p, const PlayerInput *pi)
     if (dx || dy) {
         int from = p->inv_sel, next = nav_nearest(INV_ENTRIES, from, dx, dy, inv_rect_cb, p);
         /* Sin nada en la mano el cursor salta de objeto en objeto */
-        int item = from >= INV_CELL0 && from < INV_BELT0 ? bag_at(p, (from - INV_CELL0) % BAG_W, (from - INV_CELL0) / BAG_W) : -1;
-        while (!holding && item >= 0 && next >= INV_CELL0 && next < INV_BELT0 &&
-               bag_at(p, (next - INV_CELL0) % BAG_W, (next - INV_CELL0) / BAG_W) == item) {
+        int item = inv_item_at(p, from);
+        while (!holding && item >= 0 && inv_item_at(p, next) == item) {
             int after = nav_nearest(INV_ENTRIES, next, dx, dy, inv_rect_cb, p);
             if (after == next)
                 break;
             next = after;
         }
         p->inv_sel = next;
+        p->stash_confirm = 0;
     }
     if (holding && (pi->action || pi->drop))
         inventory_place(p);
@@ -3621,6 +4637,13 @@ static void item_info_text(const Item *it, char *buf, size_t cap)
         snprintf(buf, cap, tr("Recupera %d%% de vida y maná"), t->heal_pct);
     } else if (t->stamina_ticks) {
         snprintf(buf, cap, "%s", tr("Recupera la estamina"));
+    } else if (strcmp(t->code, "key") == 0) {
+        snprintf(buf, cap, tr("Abren los cofres cerrados (%d)"), it->amount);
+    } else if (strcmp(t->code, "tsc") == 0) {
+        if (stack_count(it) > 1)
+            snprintf(buf, cap, tr("Abren un portal al pueblo (%d)"), stack_count(it));
+        else
+            snprintf(buf, cap, "%s", tr("Abre un portal al pueblo"));
     } else {
         buf[0] = '\0';
     }
@@ -3632,8 +4655,8 @@ static void item_info_text(const Item *it, char *buf, size_t cap)
 #define SHOP_MAGIC_PCT   20 /* armas y armaduras que salen mágicas en las tiendas */
 /* El nivel más alto de lo que venden en Normal en cada acto (npcLevels de
    D2GAME_NPC_FillStoreInventory: 12, 20, 28...) y el de sus afijos mágicos */
-static const int k_shop_max_level[3] = { 12, 20, 28 };
-static const int k_shop_affix_level[3] = { 6, 15, 24 }; /* shortcut: el original usa el nivel del personaje + 5 con ese tope */
+static const int k_shop_max_level[5] = { 12, 20, 28, 36, 44 };
+static const int k_shop_affix_level[5] = { 6, 15, 24, 33, 42 }; /* shortcut: el original usa el nivel del personaje + 5 con ese tope (el Acto 5 sigue la serie) */
 
 typedef struct {
     const char *npc; /* Id de monstats.txt */
@@ -3655,17 +4678,55 @@ static Shop s_shops[VENDOR_COUNT] = {
     { "alkor", VENDOR_ALKOR, 3, { { 0 } }, 0 },
     { "asheara", VENDOR_ASHEARA, 3, { { 0 } }, 0 },
     { "hratli", VENDOR_HRATLI, 3, { { 0 } }, 0 },
+    { "halbu", VENDOR_HALBU, 4, { { 0 } }, 0 },
+    { "jamella", VENDOR_JAMELLA, 4, { { 0 } }, 0 },
+    { "malah", VENDOR_MALAH, 5, { { 0 } }, 0 },
+    { "larzuk", VENDOR_LARZUK, 5, { { 0 } }, 0 },
+    { "drehya", VENDOR_ANYA, 5, { { 0 } }, 0 }, /* (y Nihlathak, hasta que se va: shop_of) */
 };
 
-enum { OPT_TALK, OPT_TRADE, OPT_HIRE, OPT_REVIVE, OPT_IMBUE, OPT_TRAVEL, OPT_GAMBLE, OPT_LEAVE };
+enum { OPT_TALK, OPT_TRADE, OPT_HIRE, OPT_REVIVE, OPT_IMBUE, OPT_TRAVEL, OPT_GAMBLE, OPT_LEAVE, OPT_SOCKET, OPT_PERSONAL };
+
+/* D2GAME_NPC_GenerateStoreItem: en Pesadilla e Infierno, con el personaje
+   de nivel 26 o más, en lugar de lo de la tabla la versión excepcional o de
+   élite (más probable cuanto más nivel) o la de NightmareUpgrade / HellUpgrade
+   (las pociones grandes) */
+static const ItemType *shop_upgrade(const ItemType *t, int ilvl, int clvl)
+{
+    if (s_diff == 0 || clvl <= 25)
+        return t;
+    const ItemType *u = NULL;
+    if (s_diff == 1) {
+        if ((int)(rnd() % 100000) < (ilvl << 6) + 4000 && t->ubercode[0])
+            u = items_find(t->ubercode);
+        else if (t->nm_upgrade[0])
+            u = items_find(t->nm_upgrade);
+    } else {
+        int r = (int)(rnd() % 100000);
+        if (r < 16 * ilvl + 1000 && t->ultracode[0])
+            u = items_find(t->ultracode);
+        else if (r < (ilvl << 7) + 5000 && t->ubercode[0])
+            u = items_find(t->ubercode);
+        if (t->hell_upgrade[0])
+            u = items_find(t->hell_upgrade);
+    }
+    return u && items_supported(u) ? u : t;
+}
 
 /* Mercadería de cada vendedor según sus columnas (AkaraMin/Max, FaraMin/Max...)
-   de las tablas de objetos, hasta el nivel de su acto */
+   de las tablas de objetos, hasta el nivel de su acto. En Pesadilla e
+   Infierno sin ese tope: el nivel del personaje + 5 (el más alto de los dos;
+   D2GAME_NPC_FillStoreInventory) */
 static void generate_shops(void)
 {
+    int clvl = 1;
+    for (int i = 0; i < s_num_players; i++)
+        clvl = s_pl[i].level_num > clvl ? s_pl[i].level_num : clvl;
     for (int v = 0; v < VENDOR_COUNT; v++) {
         Shop *sh = &s_shops[v];
         int max_level = k_shop_max_level[sh->act - 1], affix = k_shop_affix_level[sh->act - 1];
+        if (s_diff > 0)
+            max_level = affix = clvl + 5 < 99 ? clvl + 5 : 99;
         sh->count = 0;
         for (int i = 0; i < items_type_count() && sh->count < SHOP_MAX; i++) {
             const ItemType *t = items_type(i);
@@ -3676,7 +4737,7 @@ static void generate_shops(void)
             if (n < 1)
                 n = 1;
             for (int k = 0; k < n && sh->count < SHOP_MAX; k++) {
-                Item it = items_make(t);
+                Item it = items_make(shop_upgrade(t, max_level, clvl));
                 if (rnd() % 100 < SHOP_MAGIC_PCT)
                     items_make_magic(&it, affix);
                 items_add_automagic(&it, affix); /* los objetos de clase (automagic.txt) */
@@ -3686,8 +4747,15 @@ static void generate_shops(void)
     }
 }
 
+static int shop_unlimited(const ItemType *t)
+{
+    return is_potion(t) || strcmp(t->code, "key") == 0 || strcmp(t->code, "tsc") == 0;
+}
+
 static Shop *shop_of(const char *npc)
 {
+    if (strcmp(npc, "nihlathak") == 0) /* en Harrogath vende lo de Anya hasta que ella vuelve */
+        npc = "drehya";
     for (int v = 0; v < VENDOR_COUNT; v++)
         if (strcmp(s_shops[v].npc, npc) == 0)
             return &s_shops[v];
@@ -3699,18 +4767,27 @@ static Shop *shop_of(const char *npc)
 static int npc_options(const Player *p, const char *npc, int *opts)
 {
     int n = 0;
-    opts[n++] = OPT_TALK;
+    if (strcmp(npc, "halbu") != 0 && strcmp(npc, "jamella") != 0) /* (los del Acto 4 no tienen nada que contar) */
+        opts[n++] = OPT_TALK;
     if (shop_of(npc))
         opts[n++] = OPT_TRADE;
-    if (strcmp(npc, "gheed") == 0 || strcmp(npc, "elzix") == 0 || strcmp(npc, "alkor") == 0) /* los que apuestan */
+    if (strcmp(npc, "gheed") == 0 || strcmp(npc, "elzix") == 0 || strcmp(npc, "alkor") == 0 ||
+        strcmp(npc, "jamella") == 0 || strcmp(npc, "nihlathak") == 0 || strcmp(npc, "drehya") == 0) /* los que apuestan */
         opts[n++] = OPT_GAMBLE;
-    if (strcmp(npc, "kashya") == 0 || strcmp(npc, "greiz") == 0 || strcmp(npc, "asheara") == 0) {
+    if (strcmp(npc, "tyrael2") == 0 && p->merc_name && p->merc_dead) /* en el Acto 4 no se contrata: Tyrael solo resucita */
+        opts[n++] = OPT_REVIVE;
+    if (strcmp(npc, "kashya") == 0 || strcmp(npc, "greiz") == 0 || strcmp(npc, "asheara") == 0 ||
+        strcmp(npc, "qual-kehk") == 0) {
         opts[n++] = OPT_HIRE;
         if (p->merc_name && p->merc_dead)
             opts[n++] = OPT_REVIVE;
     }
     if (strcmp(npc, "charsi") == 0 && p->malus_q == 3) /* la recompensa del Mazo */
         opts[n++] = OPT_IMBUE;
+    if (strcmp(npc, "larzuk") == 0 && p->shenk_q == 3) /* la de Shenk: un engarce */
+        opts[n++] = OPT_SOCKET;
+    if (strcmp(npc, "drehya") == 0 && p->nihl_q == 4) /* la de Nihlathak: personalizar un objeto */
+        opts[n++] = OPT_PERSONAL;
     if (strncmp(npc, "warriv", 6) == 0 && p->andy_q >= 2) /* después de Andariel */
         opts[n++] = OPT_TRAVEL;
     if (strcmp(npc, "meshif1") == 0 && p->tombs_q >= 6) /* después de Duriel: el barco a Kurast */
@@ -3722,7 +4799,7 @@ static int npc_options(const Player *p, const char *npc, int *opts)
 }
 
 static const char *const k_option_names[] = { "Hablar", "Comerciar", "Contratar", "Resucitar", "Imbuir",
-                                              "Viajar al este", "Apostar", "Salir" };
+                                              "Viajar al este", "Apostar", "Salir", "Engarzar", "Personalizar" };
 
 /* ---- Mercenarias ---- */
 
@@ -3739,6 +4816,8 @@ typedef struct {
    (HireDesc) y sus nombres (NameFirst..NameLast: "merc01".."merc41") */
 static struct {
     int  act;
+    int  diff;    /* Difficulty: los que se contratan en esa dificultad (1 Normal, 2 Pesadilla, 3 Infierno) */
+    int  cls;     /* Class: el número de monstats.txt (los bárbaros: 561 el de dos manos, 560 el de una) */
     char desc[24];
     char names[16]; /* sin los dos números */
     int  num_names;
@@ -3748,16 +4827,20 @@ static struct {
    guerrero del desierto no avisa que está por morir) */
 static const struct {
     const char *monster, *icon, *hired, *thanks, *danger, *title;
-} k_merc_act[3] = {
+} k_merc_act[4] = {
     { "roguehire", "hireables/rogueicon", "rogue_confirm_a_1", "hireable_female_thank_you", "rogue_mortal_danger",
       "Mercenaria" },
     { "act2hire", "hireables/act2hireableicon", "hireable_male_thanks_1", "hireable_male_thanks_1", NULL, "Mercenario" },
     { "act3hire", "hireables/act3hireableicon", "ironwolf_command_1", "hireable_male_thanks_1", NULL, "Mercenario" },
+    { "act5hire2", "hireables/barbhirable_icon", "hireable_male_thanks_1", "hireable_male_thanks_1", NULL, "Mercenario" },
 };
-#define MERC_ACT(type) k_merc_act[s_hire_type[type].act >= 2 && s_hire_type[type].act <= 3 ? s_hire_type[type].act - 1 : 0]
+#define MERC_ACT(type)                                                                                                  \
+    k_merc_act[s_hire_type[type].act == 5 ? 3 : s_hire_type[type].act >= 2 && s_hire_type[type].act <= 3 ? s_hire_type[type].act - 1 : 0]
 
 static const char *merc_monster(int type)
 {
+    if (s_hire_type[type].act == 5 && s_hire_type[type].cls == 560) /* el de una mano (Frenesí) */
+        return "act5hire1";
     return MERC_ACT(type).monster;
 }
 
@@ -3781,12 +4864,15 @@ static void load_hirelings(void)
     free(d);
     for (int r = 1; r < t.rows; r++) {
         int id = txt_get_int(&t, r, "Id", -1), act = txt_get_int(&t, r, "Act", 0);
-        if (txt_get_int(&t, r, "Version", 0) != 100 || act < 1 || act > 3 ||
-            txt_get_int(&t, r, "Difficulty", 0) != 1 || id < 0 || id >= MERC_TYPES || s_hire_rows[id] >= MERC_ROWS)
+        int diff = txt_get_int(&t, r, "Difficulty", 0);
+        if (txt_get_int(&t, r, "Version", 0) != 100 || act < 1 || act > 5 || diff < 1 || diff > 3 || id < 0 ||
+            id >= MERC_TYPES || s_hire_rows[id] >= MERC_ROWS)
             continue;
+        s_hire_type[id].diff = diff;
         const char *first = txt_get(&t, r, txt_col(&t, "NameFirst")), *last = txt_get(&t, r, txt_col(&t, "NameLast"));
         size_t len = strlen(first);
         s_hire_type[id].act = act;
+        s_hire_type[id].cls = txt_get_int(&t, r, "Class", 0);
         snprintf(s_hire_type[id].desc, sizeof s_hire_type[id].desc, "%s", txt_get(&t, r, txt_col(&t, "HireDesc")));
         snprintf(s_hire_type[id].names, sizeof s_hire_type[id].names, "%.*s", len > 2 ? (int)len - 2 : 0, first);
         s_hire_type[id].num_names = strlen(last) > 2 ? atoi(last + strlen(last) - 2) : MERC_NAMES;
@@ -3881,7 +4967,7 @@ static void merc_stats(int type, int level, MercStats *ms)
             static const struct { int kind; const char *missile; int elem, flags; } k_spells[] = {
                 { SK_FIRE_BOLT, "firebolt", ELEM_FIRE, 0 },        { SK_FIRE_BALL, "fireball", ELEM_FIRE, MF_EXPLODE },
                 { SK_GLACIAL_SPIKE, "glacialspike", ELEM_COLD, MF_FREEZE_BURST },
-                { SK_CHARGED_BOLT, "chargedbolt", ELEM_LTNG, MF_CHARGED }, { SK_LIGHTNING, "chainlightning", ELEM_LTNG, MF_PIERCE },
+                { SK_CHARGED_BOLT, "chargedbolt", ELEM_LTNG, MF_CHARGED }, { SK_LIGHTNING, "lightningbolt", ELEM_LTNG, MF_PIERCE },
             };
             /* shortcut: la Armadura escalofriante no la usa (no hay armaduras en los aliados) */
             for (unsigned sp = 0; sp < sizeof k_spells / sizeof k_spells[0]; sp++) {
@@ -4008,6 +5094,8 @@ static int merc_slot_fits(const Player *p, int slot, const ItemType *t)
         if (s_hire_type[p->merc_type].act == 2)
             return (items_type_is(t, "spea") || items_type_is(t, "pole")) && !items_type_is(t, "aspe") &&
                    !items_type_is(t, "jave");
+        if (s_hire_type[p->merc_type].act == 5) /* el bárbaro de Qual-Kehk: espadas */
+            return items_type_is(t, "swor");
         return items_type_is(t, "bow") && !items_type_is(t, "abow");
     case MSLOT_HEAD:   return t->slot == SLOT_HELM && !items_type_is(t, "phlm") && !items_type_is(t, "pelt");
     case MSLOT_TORSO:  return t->slot == SLOT_BODY;
@@ -4043,8 +5131,8 @@ static void merc_offers(Player *p)
     if (p->num_offers > 0 && p->offers_level == p->level_num && p->offers_act == s_act)
         return;
     int types[MERC_TYPES], nt = 0;
-    for (int t = 0; t < MERC_TYPES; t++)
-        if (s_hire_rows[t] > 0 && s_hire_type[t].act == s_act)
+    for (int t = 0; t < MERC_TYPES; t++) /* (los de su dificultad: cada una tiene sus filas, y los que se contrataron siguen con las suyas) */
+        if (s_hire_rows[t] > 0 && s_hire_type[t].act == s_act && s_hire_type[t].diff == s_diff + 1)
             types[nt++] = t;
     if (nt == 0 && s_act == 1) /* sin hireling.txt: las dos pícaras */
         types[nt++] = 0, types[nt++] = 1;
@@ -4056,6 +5144,8 @@ static void merc_offers(Player *p)
         o->type = types[rnd() % (uint32_t)nt];
         o->level = p->level_num - 1 + (int)(rnd() % 3);
         o->level = o->level < 1 ? 1 : o->level;
+        if (o->level < s_hire[o->type][0].level) /* (no menos que su primera fila: los bárbaros empiezan en el 28) */
+            o->level = s_hire[o->type][0].level;
         int names = s_hire_type[o->type].num_names > 0 ? s_hire_type[o->type].num_names : MERC_NAMES;
         for (int tries = 0; tries < 20; tries++) {
             o->name = 1 + (int)(rnd() % (uint32_t)names);
@@ -4158,8 +5248,23 @@ static const struct { const char *id, *vo; } k_npc_vo[NPC_TALKERS] = {
     /* el muelle de Kurast: Meshif y Caín tienen las suyas del Acto 3 */
     { "ormus", "Ormus" }, { "alkor", "Alkor" }, { "asheara", "Asheara" }, { "hratli", "Hratli" },
     { "natalya", "Natalya" }, { "meshif2", "MeshifAct3" }, { "cain3", "CainAct3" },
+    /* el Acto 4: la Fortaleza (Halbu y Jamella no hablan), el espíritu de Izual y Hadriel */
+    { "tyrael2", "TyraelAct4" }, { "cain4", "CainAct4" }, { "izualghost", "Izual" }, { "malachai", "HellsAngel" },
+    /* Harrogath: Anya es "drehya" en monstats */
+    { "larzuk", "Larzuk" }, { "malah", "Malah" }, { "qual-kehk", "QualKehk" }, { "nihlathak", "Nihlathak" },
+    { "cain6", "CainAct5" }, { "drehya", "Anya" },
+    { "tyrael3", "TyraelAct5" }, /* en la Cámara de la Piedra del Mundo, muerto Baal (a5quest.inc) */
 };
 #define NPC_VO_COUNT ((int)(sizeof k_npc_vo / sizeof k_npc_vo[0]))
+
+/* El número de un NPC por su nombre en las claves ("CainAct5"); -1 si no está */
+static int npc_vo_index_by_vo(const char *vo)
+{
+    for (int i = 0; i < NPC_VO_COUNT; i++)
+        if (strcmp(vo, k_npc_vo[i].vo) == 0)
+            return i;
+    return -1;
+}
 
 static int npc_vo_index(const char *npc)
 {
@@ -4231,13 +5336,33 @@ static const char *const k_talk_lines[QUEST_LINES] = {
     "A3Q4AfterInit", "A3Q4Successful",
     "A3Q5AfterInit", "A3Q5EarlyReturn", "A3Q5Successful",
     "A3Q6AfterInit", "A3Q6EarlyReturn", "A3Q6Successful",
+    /* Acto 5 (gpAct5Q1NpcMessages...: los de Harrogath, desde el 47) */
+    "A5Q1AfterInit", "A5Q1EarlyReturn", "A5Q1Successful",
+    "A5Q2AfterInit", "A5Q2EarlyReturn", "A5Q2Successful",
+    "A5Q3AfterInit", "A5Q3EarlyReturn", "A5Q3FoundAnya", "A5Q3Successful",
+    "A5Q4AfterInit", "A5Q4EarlyReturn", "A5Q4Successful",
+    "A5Q5AfterInit", "A5Q5EarlyReturn", "A5Q5Successful",
+    "A5Q6EarlyReturn", "A5Q6Successful",
 };
+#define TALK_ACT5 47 /* (el primero del Acto 5) */
+#define NPC_ACT5  30 /* (el primero de Harrogath en k_npc_vo) */
+
+static int talk_heard_get(const Player *p, int who, int id)
+{
+    return (int)((p->talk_heard[who][id >> 6] >> (id & 63)) & 1);
+}
+
+static void talk_heard_set(Player *p, int who, int id)
+{
+    p->talk_heard[who][id >> 6] |= (uint64_t)1 << (id & 63);
+}
 
 /* Los "volviste sin terminar": solo si salió del campamento desde la última vez */
 static int talk_line_is_return(int id)
 {
     return id == 1 || id == 4 || id == 6 || id == 9 || id == 12 || id == 15 || id == 18 || id == 21 || id == 24 ||
-           id == 27 || id == 29 || id == 34 || id == 37 || id == 42 || id == 45;
+           id == 27 || id == 29 || id == 34 || id == 37 || id == 42 || id == 45 || id == 48 || id == 51 || id == 54 ||
+           id == 58 || id == 61 || id == 63;
 }
 
 /* ¿Toca ahora el comentario `id`? (según cómo va la misión) */
@@ -4280,6 +5405,19 @@ static int talk_line_due(const Player *p, int id)
     case 43:          return p->temple_q >= 3;
     case 44: case 45: return p->meph_q == 1;
     case 46:          return p->meph_q >= 2;
+    case 47: case 48: return p->shenk_q == 1;
+    case 49:          return p->shenk_q >= 2;
+    case 50: case 51: return p->rescue_q == 1;
+    case 52:          return p->rescue_q >= 2;
+    case 53: case 54: return p->anya_q == 1;
+    case 55:          return p->anya_q == 2 || p->anya_q == 3;
+    case 56:          return p->anya_q >= 4;
+    case 57: case 58: return p->nihl_q == 1 || p->nihl_q == 2;
+    case 59:          return p->nihl_q >= 3;
+    case 60: case 61: return p->ancients_q == 1 || p->ancients_q == 2;
+    case 62:          return p->ancients_q >= 3;
+    case 63:          return p->baal_q >= 1 && p->baal_q <= 3;
+    case 64:          return p->baal_q >= 4;
     default:          return 0;
     }
 }
@@ -4287,8 +5425,15 @@ static int talk_line_due(const Player *p, int id)
 /* La clave del comentario para ese NPC ("A1Q1AfterInitCharsi" o "...Main"), o 0 si no tiene */
 static int talk_line_key(const Player *p, int id, const char *name, char *key, size_t cap)
 {
-    /* Caín y Greiz se llaman distinto en las del Acto 2 ("A2Q1AfterInitCain", "A2Q1AfterInitGreiz") */
-    const char *alt = strcmp(name, "CainAct2") == 0 ? "Cain" : strcmp(name, "Griez") == 0 ? "Greiz" : NULL;
+    /* Los del Acto 5 solo los dicen los de Harrogath (el Caín del Acto 1 también se llama "Cain") */
+    int who = npc_vo_index_by_vo(name);
+    if (id >= TALK_ACT5 && who < NPC_ACT5)
+        return 0;
+    /* Caín y Greiz se llaman distinto en las del Acto 2 ("A2Q1AfterInitCain", "A2Q1AfterInitGreiz") y
+       Caín en las del 5 ("A5Q1AfterInitCain") */
+    const char *alt = strcmp(name, "CainAct2") == 0 || strcmp(name, "CainAct5") == 0 ? "Cain"
+                      : strcmp(name, "Griez") == 0                                   ? "Greiz"
+                                                                                     : NULL;
     for (int k = 0; k < (alt ? 2 : 1); k++) {
         const char *nm = k ? alt : name;
         snprintf(key, cap, "%s%s", k_talk_lines[id], nm);
@@ -4332,15 +5477,20 @@ static void talk_mark_heard(Player *p, int who, const char *name, const char *ke
     char k[64];
     for (int id = 0; id < QUEST_LINES; id++)
         if (talk_line_key(p, id, name, k, sizeof k) && strcmp(k, key) == 0)
-            p->talk_heard[who] |= (uint64_t)1 << id;
+            talk_heard_set(p, who, id);
 }
 
 /* La presentación del NPC (la de la clase si hay: "CharsiIntroBarGossip1") */
 static int npc_intro_key(const Player *p, const char *name, char *key, size_t cap)
 {
     const char *cls = s_classes[p->cls].abbr;
+    if (strcmp(name, "TyraelAct4") == 0) { /* la de la Fortaleza (A4Q0) no lleva el número del acto */
+        snprintf(key, cap, "TyraelActIntroGossip1");
+        return 1;
+    }
     static const char *const forms[] = { "%sIntro%sGossip1", "%sAct1Intro%sGossip1", "%sActIntro%sGossip1",
-                                         "%sIntroGossip1", "%sAct1IntroGossip1", "%sActIntroGossip1" }; /* Hratli: "HratliActIntro..." */
+                                         "%sAct5Intro%sGossip1", "%sIntroGossip1", "%sAct1IntroGossip1",
+                                         "%sActIntroGossip1", "%sAct5IntroGossip1" }; /* Hratli: "HratliActIntro..." */
     for (unsigned f = 0; f < sizeof forms / sizeof forms[0]; f++) {
         snprintf(key, cap, forms[f], name, cls);
         if (str_exists(key))
@@ -4433,7 +5583,7 @@ static int npc_has_news(const Player *p, const char *npc)
 {
     int who = npc_vo_index(npc), bit;
     char k[64];
-    if (a2_npc_news(p, who) || a3_npc_news(p, who))
+    if (a2_npc_news(p, who) || a3_npc_news(p, who) || a4_npc_news(p, who) || a5_npc_news(p, who))
         return 1;
     if (who == 6 && ((p->rada_q == 0 && s_act == 2) || p->rada_q == 2)) /* Atma: Radament */
         return 1;
@@ -4474,9 +5624,9 @@ static void npc_talk(Player *p, const char *npc)
     const char *piece = who == 16 ? cain_piece(p, &bit) : NULL;
     char sun_key[64];
     int sun_done = who >= 6 && p->sun_q == 3 && talk_line_key(p, 25, name, sun_key, sizeof sun_key);
-    if (!(p->npc_met & (1 << who)) && !npc_is_cain(who)) {
+    if (!(p->npc_met & (1ull << who)) && !npc_is_cain(who)) {
         /* Todavía no se presentó (si se habló sin abrir el diálogo; Kaelan no tiene presentación) */
-        p->npc_met |= 1 << who;
+        p->npc_met |= 1ull << who;
         npc_intro_key(p, name, key, sizeof key);
     }
     if (key[0]) {
@@ -4559,6 +5709,10 @@ static void npc_talk(Player *p, const char *npc)
         snprintf(key, sizeof key, "%s", sun_key);
     } else if (a3_npc_quest(p, who, key, sizeof key)) {
         /* el muelle de Kurast (a3quest.inc) */
+    } else if (a4_npc_quest(p, who, key, sizeof key)) {
+        /* la Fortaleza (a4quest.inc) */
+    } else if (a5_npc_quest(p, who, key, sizeof key)) {
+        /* Harrogath (a5quest.inc) */
     } else if (a2_npc_quest(p, who, key, sizeof key)) {
         /* el Santuario, el Invocador y las Siete Tumbas */
     } else {
@@ -4566,7 +5720,7 @@ static void npc_talk(Player *p, const char *npc)
            "después del pedido" va antes de "volviste sin terminar") */
         char k[64];
         for (int id = 0; id < QUEST_LINES && !key[0]; id++)
-            if (talk_line_due(p, id) && !((p->talk_heard[who] >> id) & 1) &&
+            if (talk_line_due(p, id) && !talk_heard_get(p, who, id) &&
                 (!talk_line_is_return(id) || p->talk_away[who]) && talk_line_key(p, id, name, k, sizeof k))
                 snprintf(key, sizeof key, "%s", k);
         /* Si no, la siguiente frase suelta que ya tenga sentido (en orden, y vuelve a empezar) */
@@ -4585,9 +5739,9 @@ static void npc_talk(Player *p, const char *npc)
         if (!key[0])
             npc_intro_key(p, name, key, sizeof key);
     }
-    uint64_t before = p->talk_heard[who];
+    uint64_t before0 = p->talk_heard[who][0], before1 = p->talk_heard[who][1];
     talk_mark_heard(p, who, name, key);
-    if (p->talk_heard[who] != before)
+    if (p->talk_heard[who][0] != before0 || p->talk_heard[who][1] != before1)
         p->talk_away[who] = 0; /* habló de las misiones: el próximo "volviste" es cuando vuelva */
     npc_say(p, key);
     save_character(p);
@@ -4603,13 +5757,14 @@ static void open_dialog(Player *p, int npc)
     /* La primera vez se presenta solo, como en el original */
     int who = npc_vo_index(units_id(npc));
     char key[64];
-    if (who >= 0 && !npc_is_cain(who) && !(p->npc_met & (1 << who)) && npc_intro_key(p, k_npc_vo[who].vo, key, sizeof key)) {
-        p->npc_met |= 1 << who;
+    if (who >= 0 && !npc_is_cain(who) && !(p->npc_met & (1ull << who)) && npc_intro_key(p, k_npc_vo[who].vo, key, sizeof key)) {
+        p->npc_met |= 1ull << who;
         npc_say(p, key);
         save_character(p);
     }
-    /* Hablar con Akara (o con Fara en Lut Gholein) cura, como en el original */
-    if (strcmp(units_id(npc), "akara") == 0 || strcmp(units_id(npc), "fara") == 0) {
+    /* Hablar con Akara (con Fara en Lut Gholein, con Jamella en la Fortaleza, con Malah en Harrogath) cura, como en el original */
+    if (strcmp(units_id(npc), "akara") == 0 || strcmp(units_id(npc), "fara") == 0 || strcmp(units_id(npc), "jamella") == 0 ||
+        strcmp(units_id(npc), "malah") == 0) {
         p->hp = p->hp_max;
         p->mana = p->mana_max;
     }
@@ -4621,13 +5776,9 @@ static void waypoints_find(void)
 {
     for (int k = 0; k < WP_MAX; k++)
         s_wp_unit[k] = -1;
-    /* Los de cada acto se llaman distinto (objpreset.txt) */
-    static const char *const k_names[] = { "WaypointOutsideAct1", "WaypointInsideAct1", "WaypointAct2",
-                                           "WaypointCellar", "SewerWaypoint", "WaypointDesertValley",
-                                           "WaypointAct3", "TravincalWaypoint" };
     int ids[24], n = 0;
-    for (unsigned k = 0; k < sizeof k_names / sizeof k_names[0]; k++)
-        n += units_find_all(k_names[k], ids + n, 24 - n);
+    for (unsigned k = 0; k < sizeof k_wp_objects / sizeof k_wp_objects[0]; k++)
+        n += units_find_all(k_wp_objects[k], ids + n, 24 - n);
     for (int i = 0; i < n; i++) {
         float x, y;
         units_position(ids[i], 1.0f, &x, &y);
@@ -4669,15 +5820,22 @@ static int waypoint_near(const Player *p)
 static void open_waypoints(Player *p, int here)
 {
     p->wp_open = 1;
-    p->wp_sel = here >= 0 ? here : (s_act - 1) * WP_ACT;
+    p->wp_sel = here >= 0 ? here : wp_first(s_act);
     p->inv_open = 0;
 }
 
-/* ¿Puede ver la solapa de ese acto? (el II desde que viajó al este, el III
-   desde que navegó a Kurast) */
+/* ¿Puede ver la solapa de ese acto? (la de cada acto al que llegó: el II
+   desde que viajó al este, el III desde que navegó a Kurast, el IV desde
+   que entró al portal rojo) */
 static int wp_act_open(const Player *p, int act)
 {
-    return act == 1 || act <= s_act || act <= p->act || (act == 2 && p->andy_q >= 3);
+    return act == 1 || act <= s_act || act <= p->act || act <= p->act_top || (act == 2 && p->andy_q >= 3);
+}
+
+/* Cuántos waypoints tiene la solapa (la del Acto 4, tres) */
+static int wp_rows(int tab)
+{
+    return k_wp_first[tab + 1] - k_wp_first[tab];
 }
 
 /* Panel abierto: arriba y abajo eligen, A viaja y B cierra */
@@ -4687,18 +5845,25 @@ static void waypoint_tick(Player *p, const PlayerInput *pi)
         p->wp_open = 0;
         return;
     }
-    /* Arriba y abajo dentro de la solapa; a los costados, el otro acto */
-    int tab = p->wp_sel / WP_ACT, row = p->wp_sel % WP_ACT;
+    /* Arriba y abajo dentro de la solapa; a los costados, la solapa abierta
+       que sigue o la de antes */
+    int tab = wp_act(p->wp_sel) - 1, row = p->wp_sel - k_wp_first[tab], rows = wp_rows(tab);
     if (pi->nav_up)
-        row = (row + WP_ACT - 1) % WP_ACT;
+        row = (row + rows - 1) % rows;
     if (pi->nav_down)
-        row = (row + 1) % WP_ACT;
-    if ((pi->nav_left || pi->nav_right) && wp_act_open(p, 2 - tab))
-        tab = 1 - tab;
-    p->wp_sel = tab * WP_ACT + row;
+        row = (row + 1) % rows;
+    for (int t = 1; t < WP_ACTS && (pi->nav_left || pi->nav_right); t++) {
+        int nt = (tab + (pi->nav_right ? t : WP_ACTS - t)) % WP_ACTS;
+        if (wp_act_open(p, nt + 1)) {
+            tab = nt;
+            break;
+        }
+    }
+    rows = wp_rows(tab);
+    p->wp_sel = k_wp_first[tab] + (row < rows ? row : rows - 1);
     if (!pi->action)
         return;
-    int k = p->wp_sel, act = k / WP_ACT + 1;
+    int k = p->wp_sel, act = wp_act(k);
     if (!((p->waypoints >> k) & 1) || (act == s_act && world_waypoint_zone(k) < 0)) {
         show_message(p, "Todavía no lo activaste");
         return;
@@ -4734,6 +5899,7 @@ static void close_ui(Player *p)
         units_position(id, 1.0f, &x, &y);
         units_place(p->dialog_npc, x, y);
     }
+    a5_dialog_closed(p, p->dialog_npc); /* Tyrael en la Cámara: el portal del final */
     p->dialog_npc = -1;
     p->shop_open = p->gambling = 0;
     p->hire_open = 0;
@@ -4788,18 +5954,34 @@ static void dialog_tick(Player *p, const PlayerInput *pi)
         merc_revive(p);
         break;
     case OPT_IMBUE:
+    case OPT_SOCKET:
+    case OPT_PERSONAL: /* (la misma lista: imbuir, engarzar o personalizar) */
         p->imbue_open = 1;
         p->imbue_sel = 0;
+        p->imbue_mode = opts[p->dialog_sel] == OPT_SOCKET ? 1 : opts[p->dialog_sel] == OPT_PERSONAL ? 2 : 0;
         break;
     case OPT_TRAVEL: { /* la caravana de Warriv (al este o de vuelta al oeste) y el barco de Meshif */
         int meshif = strcmp(units_id(p->dialog_npc), "meshif1") == 0 ? 3 : strcmp(units_id(p->dialog_npc), "meshif2") == 0 ? 2 : 0;
         close_ui(p);
+        /* La primera vez al este, la cinemática del fin del acto, como
+           QUESTS_ActChange (A1COMPLETED y A2COMPLETED) */
         if (meshif) { /* a Kurast, o de vuelta a Lut Gholein */
+            if (meshif == 3 && party_lacks(offsetof(Player, a2_flags), A2F_SAILED))
+                queue_movie("act03start");
+            if (meshif == 3)
+                for (int i = 0; i < s_num_players; i++)
+                    s_pl[i].a2_flags |= A2F_SAILED;
             act_switch(meshif);
             break;
         }
-        if (s_act == 1)
+        if (s_act == 1) {
+            for (int i = 0; i < s_num_players; i++)
+                if (s_pl[i].andy_q < 3) {
+                    queue_movie("act02start");
+                    break;
+                }
             party_raise(offsetof(Player, andy_q), 3);
+        }
         act_switch(s_act == 1 ? 2 : 1);
         break;
     }
@@ -4882,6 +6064,19 @@ static void shop_rect_cb(const void *ctx, int i, int *x, int *y, int *w, int *h)
 
 #define SHOP_LIST_MAX (SHOP_MAX + BAG_MAX)
 
+/* Cuántos faltan para llenar una pila de ese tipo en la mochila (la primera
+   que tenga lugar, o una nueva); 0 = no se apila */
+static int shop_fill_count(const Player *p, const ItemType *t)
+{
+    int cap = stack_cap(t);
+    if (cap <= 0 || is_potion(t))
+        return 0;
+    for (int k = 0; k < p->bag_count; k++)
+        if (p->bag[k].type == t && stack_count(&p->bag[k]) < cap)
+            return cap - stack_count(&p->bag[k]);
+    return cap;
+}
+
 static void shop_tick(Player *p, const PlayerInput *pi)
 {
     units_talk(p->dialog_npc, p->x, p->y);
@@ -4909,6 +6104,24 @@ static void shop_tick(Player *p, const PlayerInput *pi)
             return;
         }
         p->shop_sel = next;
+    }
+    /* X sobre los Pergaminos de Portal: los que faltan para llenar una pila
+       (comprarlos de a uno con el control eran veinte veces A) */
+    if (pi->drop && n > 0 && !p->gambling && p->shop_tab != SHOP_SELL &&
+        strcmp(items[p->shop_sel]->type->code, "tsc") == 0) {
+        Item one = *items[p->shop_sel];
+        int want = shop_fill_count(p, one.type), price = items_price(&one, 0), got = 0;
+        while (got < want && p->gold >= price && bag_add(p, &one)) {
+            p->gold -= price;
+            got++;
+        }
+        if (got)
+            audio_play(one.type->drop_sound, AUDIO_NOPOS, AUDIO_NOPOS);
+        else if (p->gold < price)
+            show_message(p, "No tenés suficiente oro");
+        else
+            inventory_full(p);
+        return;
     }
     if (!pi->action || n == 0)
         return;
@@ -4942,8 +6155,9 @@ static void shop_tick(Player *p, const PlayerInput *pi)
         } else {
             p->gold -= price;
             audio_play(it.type->drop_sound, AUDIO_NOPOS, AUDIO_NOPOS);
-            /* Las pociones no se acaban; el resto sale de la mercadería */
-            if (!is_potion(it.type)) {
+            /* Las pociones, las llaves y los portales no se acaban; el resto
+               sale de la mercadería */
+            if (!shop_unlimited(it.type)) {
                 int k = (int)(items[p->shop_sel] - sh->stock);
                 sh->stock[k] = sh->stock[--sh->count];
             }
@@ -4952,7 +6166,7 @@ static void shop_tick(Player *p, const PlayerInput *pi)
         p->gold += items_price(&it, 1);
         audio_play_name("item_gold", AUDIO_NOPOS, AUDIO_NOPOS);
         bag_remove(p, (int)(items[p->shop_sel] - p->bag));
-        if (sh->count < SHOP_MAX && !is_potion(it.type))
+        if (sh->count < SHOP_MAX && !shop_unlimited(it.type))
             sh->stock[sh->count++] = it;
     }
     if (p->shop_sel >= shop_list(p, items, SHOP_LIST_MAX))
@@ -4991,7 +6205,8 @@ static void tick_potions(Player *p)
     }
     /* El maná se llena solo en ManaRegen segundos (charstats.txt) */
     if (p->state < PS_DYING && p->mana < p->mana_max && !p->aura_nomana) {
-        p->mana_acc += p->mana_max / (s_classes[p->cls].mana_regen * TICK_RATE) * (100 + p->sk_mana_regen + p->au_mana_regen) / 100.0f;
+        p->mana_acc += p->mana_max / (s_classes[p->cls].mana_regen * TICK_RATE) *
+                       (100 + p->sk_mana_regen + p->au_mana_regen - (p->drain_ticks > 0 ? 24 * p->drain_lvl : 0)) / 100.0f;
         while (p->mana_acc >= 1.0f && p->mana < p->mana_max) {
             p->mana_acc -= 1.0f;
             p->mana++;
@@ -5003,6 +6218,10 @@ static void tick_potions(Player *p)
         p->antidote_ticks--;
     if (p->amp_ticks > 0)
         p->amp_ticks--;
+    if (p->curse_ticks > 0 && --p->curse_ticks == 0)
+        p->curse = A4C_NONE;
+    if (p->drain_ticks > 0)
+        p->drain_ticks--;
     if (p->thaw_ticks > 0)
         p->thaw_ticks--;
     if (p->chill_ticks > 0)
@@ -5025,6 +6244,8 @@ static void tick_potions(Player *p)
     }
     if (p->stamina_boost_ticks > 0)
         p->stamina_boost_ticks--;
+    if (p->shrine_ticks > 0 && --p->shrine_ticks == 0)
+        refresh_stats(p); /* se terminó el santuario */
     if (p->message_ticks > 0)
         p->message_ticks--;
 }
@@ -5035,7 +6256,11 @@ static void tick_potions(Player *p)
 static void drop_loot(int monster, const Player *killer)
 {
     Item drops[6];
-    int n = items_roll_drop(units_treasure_class(monster), units_level(monster), killer->bonus[STAT_MAGIC_FIND], drops, 6);
+    /* (el Rey Vaca y su escolta son "cowking" en monstats, con BaseId hellbovine) */
+    const char *mid = units_id(monster);
+    items_drop_from_bovine(strcmp(mid, "hellbovine") == 0 || strcmp(mid, "cowking") == 0 || strcmp(mid, "The Cow King") == 0);
+    int n = items_roll_drop(units_treasure_class(monster), units_level(monster), killer ? killer->bonus[STAT_MAGIC_FIND] : 0, drops, 6);
+    items_drop_from_bovine(0);
     float x, y;
     units_position(monster, 1.0f, &x, &y);
     for (int i = 0; i < n; i++) {
@@ -5180,7 +6405,10 @@ static void start_attack(Player *p, int skill)
 /* ---- Ataques a distancia ---- */
 
 #define AIM_RANGE          14.0f /* apunta solo al monstruo más cercano hasta esta distancia */
-#define MISSILE_HIT_RADIUS 0.75f
+/* Contra los proyectiles los jugadores ocupan una cruz (COLLISION_UNIT_SIZE_SMALL
+   del original); lo que toca cada proyectil depende de su Size (missiles_touches) */
+#define PLAYER_FOOT   2
+#define MISSILE_CELLS 16
 
 /* Munición del ataque: el carcaj si dispara, el arma si la lanza */
 static Item *ammo_item(Player *p, int kind)
@@ -5586,8 +6814,9 @@ static int missile_hit_unit(Missile *mi, int unit)
         overlays_add(prog, OV_AT_UNIT, unit, ux, uy, 0);
     }
     if (!merc) { /* lo que roba el equipo es del jugador, no de su mercenaria */
-        p->hp += phys * p->bonus[STAT_LIFESTEAL] / 100;
-        p->mana += phys * p->bonus[STAT_MANASTEAL] / 100;
+        /* (en Pesadilla la mitad y en Infierno un tercio: LifeStealDivisor y ManaStealDivisor) */
+        p->hp += phys * p->bonus[STAT_LIFESTEAL] / 100 / s_dl_life_div;
+        p->mana += phys * p->bonus[STAT_MANASTEAL] / 100 / s_dl_mana_div;
     }
     if (p->hp > p->hp_max) p->hp = p->hp_max;
     if (p->mana > p->mana_max) p->mana = p->mana_max;
@@ -5621,6 +6850,21 @@ static int missile_hit_unit(Missile *mi, int unit)
     return 1;
 }
 
+/* Un veneno nuevo (SUNITDMG_ApplyPoisonDamage): si el que ya tiene hace
+   más por cuadro, sigue ese; si no, va el nuevo con su duración (menos con
+   "duración del veneno reducida", la Plen del original) */
+static void player_poison(Player *p, float rate, int len)
+{
+    int cut = p->bonus[STAT_POIS_LEN_RES] > 75 ? 75 : p->bonus[STAT_POIS_LEN_RES];
+    len = len * (100 - cut) / 100;
+    if (p->antidote_ticks > 0)
+        rate *= 0.5f;
+    if (p->poison_ticks > 0 && rate < p->poison_rate)
+        return;
+    p->poison_ticks = len > 1 ? len : 1;
+    p->poison_rate = rate;
+}
+
 /* Proyectil de un monstruo que alcanza a un jugador */
 static int missile_hit_player(Missile *mi, Player *p)
 {
@@ -5635,17 +6879,11 @@ static int missile_hit_player(Missile *mi, Player *p)
         return 1;
     }
     int dmg = roll(mi->dmin, mi->dmax);
-    if (p->amp_ticks > 0) /* maldecido */
-        dmg *= 2;
+    if (p->amp_ticks > 0 || p->curse == A4C_DECREPIFY) /* maldecido: el doble (Decrepitud: la mitad más) */
+        dmg = dmg * (100 + (p->amp_ticks > 0 ? 100 : 0) + (p->curse == A4C_DECREPIFY ? 50 : 0)) / 100;
     missiles_impact_sound(mi);
-    if (mi->elem == ELEM_POIS && mi->elen > 0) {
-        /* con la resistencia al veneno, y menos tiempo con "duración del veneno reducida" */
-        int cut = p->bonus[STAT_POIS_LEN_RES] > 75 ? 75 : p->bonus[STAT_POIS_LEN_RES];
-        int len = mi->elen * (100 - cut) / 100;
-        p->poison_ticks = len > 1 ? len : 1;
-        p->poison_rate = (float)player_elem_hit(p, ELEM_POIS, roll(mi->emin, mi->emax)) / (float)mi->elen;
-        if (p->antidote_ticks > 0)
-            p->poison_rate *= 0.5f;
+    if (mi->elem == ELEM_POIS && mi->elen > 0) { /* (con la resistencia al veneno) */
+        player_poison(p, (float)player_elem_hit(p, ELEM_POIS, roll(mi->emin, mi->emax)) / (float)mi->elen, mi->elen);
     } else {
         int elem = roll(mi->emin, mi->emax);
         if (mi->elem == ELEM_COLD && p->thaw_ticks > 0)
@@ -5662,6 +6900,10 @@ static int missile_hit_player(Missile *mi, Player *p)
             if (len > p->chill_ticks)
                 p->chill_ticks = len;
         }
+    }
+    if (missiles_is(mi, "fingermagespider")) { /* el abrazo de los Gropers (fingermagecurse): -24 % de maná por nivel, 30 + 10 por nivel cuadros */
+        p->drain_lvl = 3; /* shortcut: el Sk1lvl de los tres Gropers de monstats.txt */
+        p->drain_ticks = 30 + 10 * p->drain_lvl;
     }
     take_damage(p, dmg > 0 ? dmg : 1, 1);
     armor_shot(p, mi->source); /* Armadura gélida: le devuelve uno */
@@ -5682,6 +6924,37 @@ static void spawn_cloud(const Missile *src, const char *name, float x, float y)
     c->radius10 = src->radius10 > 0 ? src->radius10 : 15;
 }
 
+/* La poción de gas de las felinas (MISSMODE_SrvHit25_PantherPotGreen): 8
+   nubes (HitSubMissile1) que se abren alrededor y envenenan */
+static void gas_clouds(const Missile *src)
+{
+    static const int k_dx[8] = { 0, 2, 2, 2, 0, -2, -2, -2 }, k_dy[8] = { 2, 2, 0, -2, -2, -2, 0, 2 };
+    const char *name = missiles_hit_sub(src);
+    int elem, emin, emax, dmin, dmax;
+    missiles_base_damage(name, &elem, &emin, &emax, &dmin, &dmax);
+    missiles_poison_total(name, &emin, &emax);
+    /* la velocidad: Param1 << 7 (media unidad de Vel por cada uno) */
+    float sp = (float)missiles_param1(name) * 0.5f * missiles_vel_scale();
+    for (int k = 0; k < 8; k++) {
+        Missile *c = missiles_spawn(name, src->x, src->y, 0.0f, 0.0f);
+        if (!c)
+            break;
+        float l = sqrtf((float)(k_dx[k] * k_dx[k] + k_dy[k] * k_dy[k]));
+        c->flags = MF_CLOUD; /* (sin MF_EFFECT: se mueve) */
+        c->vx = (float)k_dx[k] / l * sp;
+        c->vy = (float)k_dy[k] / l * sp;
+        c->owner = -1;
+        c->source = src->source;
+        c->ar = src->ar;
+        c->level = src->level;
+        c->elem = ELEM_POIS;
+        c->emin = emin;
+        c->emax = emax;
+        c->elen = missiles_elen(name);
+        c->radius10 = 12;
+    }
+}
+
 /* Fin del proyectil (pegó, chocó o se le acabó el alcance): explosión de
    fuego, nube de veneno y la animación de su explosión */
 static void missile_impact(int i)
@@ -5689,12 +6962,27 @@ static void missile_impact(int i)
     Missile *mi = missiles_get(i);
     sorc_missile_end(mi);
     war_missile_end(mi);
+    if (mi->owner < 0) { /* de un monstruo: lo que hace al pegar o caer */
+        if (getenv("D2_MISS_DEBUG") && (missiles_hit_func(mi) == 24 || missiles_hit_func(mi) == 25))
+            printf("proyectil: cae la poción en (%.1f, %.1f) a los %d ticks\n", mi->x, mi->y, mi->age);
+        if (missiles_hit_func(mi) == 24) /* la poción de fuego de las felinas: a todos alrededor (radio 1) */
+            enemy_area(mi, 1.5f);
+        else if (missiles_hit_func(mi) == 25 && missiles_hit_sub(mi)) /* la de gas */
+            gas_clouds(mi);
+        /* lo que se ve al pegar (la explosión de la bola de fuego de los
+           vampiros), si no tiene ExplosionMissile y no es lo que ya soltó */
+        const char *clt = missiles_clt_hit_sub(mi);
+        if (clt && !missiles_explosion(mi) && !(missiles_hit_sub(mi) && strcmp(clt, missiles_hit_sub(mi)) == 0))
+            missiles_effect(clt, mi->x, mi->y);
+    }
     if (mi->owner >= 0 && mi->owner < s_num_players && (mi->flags & (MF_IMMOLATE | MF_FREEZE_BURST)))
         burst_explode(&s_pl[mi->owner], mi);
     if (mi->owner >= 0 && mi->owner < s_num_players && (mi->flags & MF_EXPLODE)) {
         Player *p = &s_pl[mi->owner];
         float r = mi->radius10 / 10.0f;
-        for (int u = 0; u < units_count(); u++) {
+        int ids[64], n = units_enemies_around(mi->x, mi->y, r, ids, 64);
+        for (int k = 0; k < (n >= 0 ? n : units_count()); k++) {
+            int u = n >= 0 ? ids[k] : k;
             float ux, uy;
             if (!units_alive_enemy(u))
                 continue;
@@ -5741,6 +7029,8 @@ static int missile_hit_merc(Missile *mi, const Player *owner)
         return 0;
     missiles_impact_sound(mi);
     int e = roll(mi->emin, mi->emax), ri = mi->elem == ELEM_FIRE ? 0 : mi->elem == ELEM_COLD ? 1 : mi->elem == ELEM_LTNG ? 2 : -1;
+    if (mi->elem == ELEM_POIS && mi->elen > 0 && (mi->flags & MF_CLOUD))
+        e = e * 8 / mi->elen; /* una nube le pega cada 8 ticks: el veneno, repartido */
     if (ri >= 0)
         e = e * (100 - units_ally_resist(owner->merc_unit, ri)) / 100;
     units_merc_damage(owner->merc_unit, roll(mi->dmin, mi->dmax) + e);
@@ -5815,6 +7105,70 @@ static void merc_tick_players(void)
     }
 }
 
+/* El camino de los rayos cargados (PATH_ComputePathChargedBolt): tramos de
+   2 subtiles en la dirección principal (la de las 8 más cerca de adonde se
+   tiraron) o a 45 grados de un lado u otro, al azar en cada tramo y sin
+   acumularse; así se abren en abanico pero siguen hacia allá. Duran hasta
+   77 cuadros (SKILLS_MissileInit_ChargedBolt). En `ang` va la dirección
+   principal y en (mx, my) dónde empezó el tramo. */
+static void charged_step(Missile *mi)
+{
+    /* -1, 0 o +1 con la secuencia del original (le falta un 0: "arreglarla
+       haría que se abran menos") */
+    static const int k_turn[32] = { -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1,
+                                    0,  1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 1 };
+    static const int k_dx[8] = { 1, 1, 0, -1, -1, -1, 0, 1 }, k_dy[8] = { 0, 1, 1, 1, 0, -1, -1, -1 };
+    float sp = sqrtf(mi->vx * mi->vx + mi->vy * mi->vy);
+    if (sp <= 0.0f)
+        return;
+    int turn = 0;
+    if (mi->age == 0) {
+        mi->ang = (float)(((int)lroundf(atan2f(mi->vy, mi->vx) / (PI_F / 4.0f)) + 8) & 7);
+        if (mi->life > 77)
+            mi->life = 77;
+        turn = 1;
+    } else {
+        float dx = mi->x - mi->mx, dy = mi->y - mi->my, seg = mi->vx != 0.0f && mi->vy != 0.0f ? 2.83f : 2.0f;
+        turn = dx * dx + dy * dy >= seg * seg;
+    }
+    if (!turn)
+        return;
+    int d = ((int)mi->ang + k_turn[rnd() & 31]) & 7;
+    float l = d & 1 ? 1.41421356f : 1.0f;
+    mi->vx = (float)k_dx[d] / l * sp;
+    mi->vy = (float)k_dy[d] / l * sp;
+    mi->mx = mi->x;
+    mi->my = mi->y;
+}
+
+/* Los subtiles que recorrió en este tick (los puntos del camino que mira el
+   original en MISSMODE_HandleMissileCollision): del que dejó al que llegó,
+   sin el de partida salvo en su primer tick, y siempre el de ahora */
+static int missile_cells(int i, const Missile *mi, int (*cells)[2])
+{
+    float px, py;
+    missiles_position(i, 0.0f, &px, &py);
+    float dx = mi->x - px, dy = mi->y - py, d = fabsf(dx) > fabsf(dy) ? fabsf(dx) : fabsf(dy);
+    int steps = (int)ceilf(d * 2.0f), n = 0, lx = (int)floorf(px), ly = (int)floorf(py);
+    steps = steps < 1 ? 1 : steps > MISSILE_CELLS ? MISSILE_CELLS : steps;
+    if (mi->age <= 1) {
+        cells[n][0] = lx;
+        cells[n++][1] = ly;
+    }
+    for (int s = 1; s <= steps && n < MISSILE_CELLS; s++) {
+        int cx = (int)floorf(px + dx * (float)s / (float)steps), cy = (int)floorf(py + dy * (float)s / (float)steps);
+        if (cx == lx && cy == ly)
+            continue;
+        cells[n][0] = lx = cx;
+        cells[n++][1] = ly = cy;
+    }
+    if (n == 0) { /* no cambió de subtile */
+        cells[0][0] = lx;
+        cells[n++][1] = ly;
+    }
+    return n;
+}
+
 static void tick_missiles(void)
 {
     int pets[MAX_PET_TARGETS], npets = -1; /* los esbirros (se buscan con el primer proyectil de un monstruo) */
@@ -5822,6 +7176,24 @@ static void tick_missiles(void)
         Missile *mi = missiles_get(i);
         if (!mi)
             continue;
+        /* El Espíritu de hueso de los caballeros y el abrazo de los Gropers: van hacia el jugador más cercano */
+        if ((mi->flags & MF_HOMING) && mi->owner < 0) {
+            float best = 30.0f, bx = 0.0f, by = 0.0f;
+            for (int k = 0; k < s_num_players; k++) {
+                const Player *p = &s_pl[k];
+                float d = sqrtf((p->x - mi->x) * (p->x - mi->x) + (p->y - mi->y) * (p->y - mi->y));
+                if (p->state < PS_DYING && d < best) {
+                    best = d;
+                    bx = p->x - mi->x;
+                    by = p->y - mi->y;
+                }
+            }
+            float sp = sqrtf(mi->vx * mi->vx + mi->vy * mi->vy);
+            if (best < 30.0f && best > 0.01f) {
+                mi->vx = bx / best * sp;
+                mi->vy = by / best * sp;
+            }
+        }
         /* Flecha guiada: gira hacia el monstruo más cercano */
         if ((mi->flags & MF_HOMING) && mi->owner >= 0) {
             int t = units_find_enemy(mi->x, mi->y, 10.0f);
@@ -5847,24 +7219,23 @@ static void tick_missiles(void)
             mi->vx = vx;
             mi->vy = vy;
         }
-        if ((mi->flags & MF_CHARGED) && mi->age % 3 == 0) { /* los rayos cargados zigzaguean */
-            float a = ((float)(rnd() % 100) - 50.0f) / 60.0f, ca = cosf(a), sa = sinf(a);
-            float vx = mi->vx * ca - mi->vy * sa, vy = mi->vx * sa + mi->vy * ca;
-            mi->vx = vx;
-            mi->vy = vy;
-        }
+        if (mi->flags & MF_CHARGED) /* los rayos cargados: de a tramos, al azar hacia donde iban */
+            charged_step(mi);
         int r = missiles_step(i, &s_map);
         mi = missiles_get(i);
         if (!mi)
             continue;
+        missiles_trail(i); /* los rayos: el rastro que se ve como un rayo largo */
         if (mi->flags & MF_BURN)
             burn_tick(mi);
         if (mi->flags & MF_CLOUD) {
             float rad = mi->radius10 / 10.0f;
             if (mi->owner < 0 && mi->age % 8 == 0) /* de un monstruo (la Nova venenosa de Mefisto) */
                 enemy_area(mi, rad);
+            int ids[64], n = mi->owner >= 0 ? units_enemies_around(mi->x, mi->y, rad, ids, 64) : 0;
             if (mi->owner >= 0)
-                for (int u = 0; u < units_count(); u++) {
+                for (int k = 0; k < (n >= 0 ? n : units_count()); k++) {
+                    int u = n >= 0 ? ids[k] : k;
                     float ux, uy;
                     if (!units_alive_enemy(u))
                         continue;
@@ -5902,57 +7273,71 @@ static void tick_missiles(void)
             missile_impact(i);
             continue;
         }
+        if (mi->flags & MF_NOHIT) /* solo se ve (las llamas de Infierno, el Orbe) */
+            continue;
+        int cells[MISSILE_CELLS][2], nc = missile_cells(i, mi, cells), ms = missiles_size(mi);
         if (mi->owner >= 0) {
-            if (mi->flags & MF_NOHIT) /* solo se ve (las llamas de Infierno, el Orbe) */
-                continue;
             if (mi->flags & MF_HEAL) /* Rayo sagrado: cura al compañero */
-                holy_heal(mi);
-            /* De un jugador: le pega al primer monstruo que toca (de una nova, uno solo por monstruo) */
-            int u = units_find_enemy(mi->x, mi->y, MISSILE_HIT_RADIUS);
+                holy_heal(mi, cells, nc);
+            /* De un jugador: le pega al primer monstruo que toca en el camino
+               (de una nova, uno solo por monstruo) */
+            int u = units_find_enemy_path(cells, nc, ms, mi->hit, mi->num_hit);
             if (u >= 0 && !already_hit(mi, u) && (!(mi->flags & MF_GROUP) || hit_group_first(mi->group, u)) &&
                 missile_hit_unit(mi, u) && !(mi->flags & MF_PIERCE) && !pierce_roll(mi))
                 missile_impact(i);
-        } else if (!(mi->flags & MF_NOHIT)) {
-            /* De un monstruo: a los jugadores vivos y a sus mercenarias */
-            int hit = 0;
-            for (int k = 0; k < s_num_players && !hit; k++) {
-                Player *p = &s_pl[k];
-                float dx = p->x - mi->x, dy = p->y - mi->y;
-                if (p->state >= PS_DYING || (p->level && p->level->town) ||
-                    dx * dx + dy * dy > MISSILE_HIT_RADIUS * MISSILE_HIT_RADIUS || already_hit(mi, -1 - k))
-                    continue;
-                if (missile_hit_player(mi, p)) {
-                    missile_impact(i);
-                    hit = 1;
+        } else {
+            /* De un monstruo: a los jugadores vivos y a sus mercenarias. La
+               poción en arco va por el aire: cae donde estaba el blanco. Los
+               que no mueren al chocar (CollideKill 0: el aliento de las
+               momias, las llamas de los chamanes, el rayo del Consejo) le
+               pegan a cada uno una vez y siguen. */
+            if (mi->lob_total > 0)
+                continue;
+            int hit = 0, kill = missiles_collide_kill(mi);
+            for (int c = 0; c < nc && !hit; c++) {
+                int cx = cells[c][0], cy = cells[c][1];
+                for (int k = 0; k < s_num_players && !hit; k++) {
+                    Player *p = &s_pl[k];
+                    if (p->state >= PS_DYING || (p->level && p->level->town) ||
+                        !missiles_touches(ms, cx, cy, p->x, p->y, PLAYER_FOOT) || already_hit(mi, -1 - k))
+                        continue;
+                    if ((mi->flags & MF_GROUP) && mi->group < 0) /* una nova de un monstruo: a cada jugador le pega uno solo */
+                        for (int j = 0; j < missiles_capacity(); j++) {
+                            Missile *o = missiles_get(j);
+                            if (o && o != mi && o->group == mi->group)
+                                already_hit(o, -1 - k);
+                        }
+                    if (missile_hit_player(mi, p) && kill) {
+                        missile_impact(i);
+                        hit = 1;
+                    }
                 }
-            }
-            for (int k = 0; k < s_num_players && !hit; k++) {
-                const Player *p = &s_pl[k];
-                float mx, my;
-                if (!units_merc_alive(p->merc_unit))
-                    continue;
-                units_position(p->merc_unit, 1.0f, &mx, &my);
-                float dx = mx - mi->x, dy = my - mi->y;
-                if (dx * dx + dy * dy > MISSILE_HIT_RADIUS * MISSILE_HIT_RADIUS || already_hit(mi, -10 - k))
-                    continue;
-                if (missile_hit_merc(mi, p)) {
-                    missile_impact(i);
-                    hit = 1;
+                for (int k = 0; k < s_num_players && !hit; k++) {
+                    const Player *p = &s_pl[k];
+                    float mx, my;
+                    if (!units_merc_alive(p->merc_unit))
+                        continue;
+                    units_position(p->merc_unit, 1.0f, &mx, &my);
+                    if (!missiles_touches(ms, cx, cy, mx, my, units_foot(p->merc_unit)) || already_hit(mi, -10 - k))
+                        continue;
+                    if (missile_hit_merc(mi, p) && kill) {
+                        missile_impact(i);
+                        hit = 1;
+                    }
                 }
-            }
-            if (!hit && npets < 0)
-                npets = units_pet_targets(pets, MAX_PET_TARGETS);
-            for (int k = 0; k < npets && !hit; k++) {
-                float ux, uy, r = MISSILE_HIT_RADIUS + units_radius(pets[k]) - UNIT_PLAYER_BODY;
-                if (!units_pet_alive(pets[k]))
-                    continue;
-                units_position(pets[k], 1.0f, &ux, &uy);
-                float dx = ux - mi->x, dy = uy - mi->y;
-                if (dx * dx + dy * dy > r * r || already_hit(mi, -1000 - pets[k]))
-                    continue;
-                if (missile_hit_pet(mi, pets[k])) {
-                    missile_impact(i);
-                    hit = 1;
+                if (!hit && npets < 0)
+                    npets = units_pet_targets(pets, MAX_PET_TARGETS);
+                for (int k = 0; k < npets && !hit; k++) {
+                    float ux, uy;
+                    if (!units_pet_alive(pets[k]))
+                        continue;
+                    units_position(pets[k], 1.0f, &ux, &uy);
+                    if (!missiles_touches(ms, cx, cy, ux, uy, units_foot(pets[k])) || already_hit(mi, -1000 - pets[k]))
+                        continue;
+                    if (missile_hit_pet(mi, pets[k]) && kill) {
+                        missile_impact(i);
+                        hit = 1;
+                    }
                 }
             }
         }
@@ -6154,7 +7539,7 @@ static void cast_effect(Player *p)
 
 /* Usa una habilidad aprendida: gasta el maná y arranca el ataque o el
    lanzamiento. Devuelve 1 si el personaje quedó ocupado. */
-static int use_skill(Player *p, int skill)
+static int use_skill_mana(Player *p, int skill)
 {
     const SkillDef *s = skills_get(p->cls, skill);
     int lvl = eff_lvl(p, skill);
@@ -6257,6 +7642,35 @@ static int use_skill(Player *p, int skill)
     return 1;
 }
 
+/* Con Blood Mana (la maldición de las súcubos, D2GAME_SKILLS_BloodMana) lo
+   que cuesta la habilidad sale de la vida: si no alcanza, se le va la
+   maldición, queda con 1 de vida y no la usa; si le quedan menos de 40
+   (Param5), se le va */
+static int use_skill(Player *p, int skill)
+{
+    int lvl = eff_lvl(p, skill), cost = lvl > 0 ? skill_mana(skills_get(p->cls, skill), lvl) : 0;
+    if (p->curse != A4C_BLOODMANA || cost <= 0)
+        return use_skill_mana(p, skill);
+    if (p->hp < cost) {
+        p->curse = A4C_NONE;
+        p->curse_ticks = 0;
+        p->hp = 1;
+        return 0;
+    }
+    int mana = p->mana;
+    p->mana = mana + cost; /* (lo que gaste sale de acá) */
+    int busy = use_skill_mana(p, skill), paid = mana + cost - p->mana;
+    p->mana = mana;
+    if (paid > 0) {
+        p->hp = p->hp - paid > 1 ? p->hp - paid : 1;
+        if (p->hp < 40) {
+            p->curse = A4C_NONE;
+            p->curse_ticks = 0;
+        }
+    }
+    return busy;
+}
+
 /* Lo que hace el botón A, B, X o Y fuera de los menús */
 static int use_button(Player *p, int b, int in_town)
 {
@@ -6294,7 +7708,7 @@ static int use_button(Player *p, int b, int in_town)
 /* Cuánto lo frena el frío (%): enfriado, la mitad; el aura de Duriel, lo suyo */
 static int cold_slow(const Player *p)
 {
-    int s = p->chill_ticks > 0 ? 50 : 0;
+    int s = p->chill_ticks > 0 || p->curse == A4C_DECREPIFY ? 50 : 0; /* (Decrepitud: -50 % de velocidad) */
     return p->aura_slow > s ? p->aura_slow : s;
 }
 
@@ -6362,10 +7776,40 @@ static int fast_pct(int x)
 
 /* El NPC con el que habla A: en el pueblo cualquiera; afuera, Tyrael (en la
    cámara de Tal Rasha) */
+/* ¿Hay un objeto de misión para usar más cerca que ese NPC? */
+static int quest_nearer(const Player *p, int npc)
+{
+    int u;
+    if (!quest_action(p, &u) || u < 0)
+        return 0;
+    float ux, uy, nx, ny;
+    units_position(u, 1.0f, &ux, &uy);
+    units_position(npc, 1.0f, &nx, &ny);
+    return (ux - p->x) * (ux - p->x) + (uy - p->y) * (uy - p->y) < (nx - p->x) * (nx - p->x) + (ny - p->y) * (ny - p->y);
+}
+
+/* En el pueblo, con A y el cartel: ¿el portal de al lado antes que el NPC?
+   Si está más cerca (Anya camina junto a su portal rojo al templo y A le
+   hablaba a ella: el bot se quedaba ahí) */
+static int portal_first(const Player *p, int npc)
+{
+    const Warp *w = portal_near(p);
+    if (!w || npc < 0 || warp_closed(w))
+        return 0;
+    float nx, ny, wx = (w->x0 + w->x1) / 2, wy = (w->y0 + w->y1) / 2;
+    units_position(npc, 1.0f, &nx, &ny);
+    return (wx - p->x) * (wx - p->x) + (wy - p->y) * (wy - p->y) < (nx - p->x) * (nx - p->x) + (ny - p->y) * (ny - p->y);
+}
+
 static int talk_npc_near(const Player *p, int in_town)
 {
     int npc = units_find_npc(p->x, p->y, 4.0f);
-    return npc >= 0 && (in_town || strcmp(units_id(npc), "tyrael1") == 0) ? npc : -1;
+    /* afuera solo los que están ahí para hablar: Tyrael encadenado y en la Cámara, el espíritu de Izual y Hadriel en el río */
+    const char *id = npc >= 0 ? units_id(npc) : "";
+    return npc >= 0 && (in_town || !strcmp(id, "tyrael1") || !strcmp(id, "tyrael3") || !strcmp(id, "izualghost") ||
+                        !strcmp(id, "malachai"))
+               ? npc
+               : -1;
 }
 
 /* Las frases de chat del original (chat_a a chat_h de cada clase, cada una
@@ -6422,6 +7866,10 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
     p->held_mask = 0;
     for (int b = 0; b < 4; b++)
         p->held_mask |= (pi->held[b] ? 1 : 0) << b;
+    if (p->act > p->act_max) /* llegó a otro acto: una pestaña más del cofre */
+        p->act_max = p->act;
+    if (p->act > p->act_top)
+        p->act_top = p->act;
     tick_potions(p);
     skills_tick(p);
     PlayerInput none;
@@ -6433,7 +7881,10 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
             p->chat_open = !p->chat_open;
         if (pi->inventory && p->dialog_npc < 0 && !p->wp_open) {
             inventory_stow(p);
-            p->inv_open = !p->inv_open;
+            if (p->inv_open)
+                inventory_close(p);
+            else
+                p->inv_open = 1;
             p->inv_page = 0;
             p->assigning = 0;
             if (p->cube_open) { /* el inventario se abre con el equipo */
@@ -6441,6 +7892,8 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
                 p->inv_sel = INV_CELL0;
             }
         }
+        if (p->stash_open && !p->inv_open) /* se cerró por otro lado */
+            inventory_close(p);
         if (pi->skill_tree && p->dialog_npc < 0) { /* teclado: directo al árbol */
             p->inv_open = !(p->inv_open && p->inv_page == 1);
             p->inv_page = 1;
@@ -6497,6 +7950,13 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
         if (pi->automap)
             p->map_open = !p->map_open;
     }
+    if (p->frozen_ticks > 0) { /* congelado: puede tomar pociones, pero ni se mueve ni ataca */
+        p->frozen_ticks--;
+        if (p->state < PS_DYING) {
+            pi = &none;
+            sx = sy = 0.0f;
+        }
+    }
 
     const CharAnim *a = player_anim(p, p->mode);
     switch (p->state) {
@@ -6507,6 +7967,12 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
             p->hp = p->hp_max;
             p->dead_ticks = 0;
             set_player_state(p, PS_NORMAL, MODE_TN);
+            if (p->gold_lost > 0) {
+                char msg[64];
+                snprintf(msg, sizeof msg, tr("Perdiste %d de oro"), p->gold_lost);
+                show_message(p, msg);
+                p->gold_lost = 0;
+            }
         }
         return;
     case PS_DYING:
@@ -6576,7 +8042,7 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
     /* Pasar por un waypoint apagado lo activa y abre el panel, como en el original */
     int wp = waypoint_near(p);
     if (wp >= 0 && !((p->waypoints >> wp) & 1)) {
-        p->waypoints |= 1 << wp;
+        p->waypoints |= 1ull << wp;
         waypoints_light();
         audio_play_name("object_waypoint_open", p->x, p->y);
         save_character(p);
@@ -6602,25 +8068,58 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
            no, un objeto al lado de una Piedra Cairn no dejaba tocarla) */
         int took = 0, full = 0;
         if (it >= 0 && units_find_enemy(p->x, p->y, MELEE_RANGE) < 0) {
-            const Item *g = items_ground_item(it, NULL, NULL);
-            if (pick_up(p, g)) {
-                audio_play(g->type->drop_sound, p->x, p->y);
-                items_ground_remove(it);
-                refresh_look(p);
-                took = 1;
-            } else {
+            /* Lo más cercano; si no entra, lo que siga más cerca que sí entre
+               (con el joystick no se elige cuál: en un montón, lo que no
+               entraba tapaba lo demás, también la Gidbinn) */
+            int tried[16], nt = 0;
+            for (int k = it; k >= 0 && !took && nt < 16;) {
+                const Item *g = items_ground_item(k, NULL, NULL);
+                if (pick_up(p, g)) {
+                    audio_play(g->type->drop_sound, p->x, p->y);
+                    items_ground_remove(k);
+                    refresh_look(p);
+                    took = 1;
+                    break;
+                }
+                tried[nt++] = k;
+                float bd = 1.8f * 1.8f;
+                k = -1;
+                for (int i = 0; i < items_ground_count(); i++) {
+                    float gx, gy;
+                    int seen = 0;
+                    if (!items_ground_item(i, &gx, &gy))
+                        continue;
+                    for (int t = 0; t < nt; t++)
+                        seen |= tried[t] == i;
+                    float d = (gx - p->x) * (gx - p->x) + (gy - p->y) * (gy - p->y);
+                    if (!seen && d <= bd) {
+                        bd = d;
+                        k = i;
+                    }
+                }
+            }
+            if (!took) {
                 inventory_full(p);
                 full = 1; /* no ataca al aire */
             }
         }
+        /* Con un monstruo al lado, A pega antes que abrir el waypoint o hablar
+           con un NPC de afuera (como con los cofres y las escaleras): al lado
+           del waypoint del River of Flame o de Hadriel no se le podía pegar al
+           que atacaba (A abría y cerraba el panel o el diálogo) */
+        int foe = units_find_enemy(p->x, p->y, MELEE_RANGE) >= 0;
         if (took) {
-        } else if (wp >= 0) {
+        } else if (wp >= 0 && !foe) {
             open_waypoints(p, wp);
-        } else if (npc >= 0 && (in_town || !portal_near(p))) { /* afuera, el portal que abrió Tyrael va antes */
+        } else if (npc >= 0 && !foe && (in_town ? !portal_first(p, npc) : !portal_near(p)) && !quest_nearer(p, npc)) {
+            /* afuera, el portal que abrió Tyrael va antes; y un objeto de misión más cerca que el NPC (el portal del final, al
+               lado de Tyrael) */
             open_dialog(p, npc);
         } else if (quest_first(p) && quest_interact(p)) {
             return;
-        } else if (portal_near(p) && units_find_enemy(p->x, p->y, MELEE_RANGE) < 0) {
+        } else if (obj_first(p) && !foe && obj_interact(p)) {
+            return; /* un cofre, un barril, un santuario (con un monstruo al lado, A pega) */
+        } else if (portal_near(p) && !foe) {
             /* La escalera o el portal (con un monstruo al lado, A pega) */
             use_warp(p, portal_near(p));
             return;
@@ -6724,14 +8223,21 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
 
 void game_print_status(void)
 {
-    const char *area = getenv("D2_DUMP_BLOCKS"); /* "x,y": colisión alrededor de ese subtile */
+    /* "x,y": colisión alrededor de ese subtile: # bloquea, v grosor de pared,
+       u alguien, + no entra la cruz, - el centro queda pegado a una pared */
+    const char *area = getenv("D2_DUMP_BLOCKS");
     int ax, ay;
     if (area && sscanf(area, "%d,%d", &ax, &ay) == 2) {
         int r = getenv("D2_DUMP_R") ? atoi(getenv("D2_DUMP_R")) : 5; /* radio del dibujo */
         for (int y = ay - r; y <= ay + r; y++) {
             printf("    y=%3d ", y);
             for (int x = ax - r; x <= ax + r; x++)
-                putchar(map_blocked(&s_map, x, y) ? '#' : units_blocking(x + 0.5f, y + 0.5f, 0.0f) ? 'u' : '.');
+                putchar(map_blocked(&s_map, x, y)                        ? '#'
+                        : map_coll(&s_map, x, y) & COLL_VOLUME             ? 'v'
+                        : units_blocking(x + 0.5f, y + 0.5f, 0.0f)         ? 'u'
+                        : foot_blocked(x, y)                               ? '+'
+                        : map_too_close(&s_map, x + 0.5f, y + 0.5f)        ? '-'
+                                                                           : '.');
             putchar('\n');
         }
     }
@@ -6755,9 +8261,9 @@ void game_print_status(void)
     static const char *const states[] = { "normal", "atacando", "golpeado", "habilidad", "muriendo", "muerto" };
     for (int i = 0; i < s_num_players; i++) {
         const Player *p = &s_pl[i];
-        printf("  J%d: (%.0f, %.0f) %s, vida %d/%d, maná %d/%d, nivel %d (exp %d), %s, estamina %.1f/%.0f%s%s\n",
+        printf("  J%d: (%.0f, %.0f) %s, vida %d/%d, maná %d/%d, nivel %d (exp %u), %s, estamina %.1f/%.0f%s%s\n",
                i + 1, p->x, p->y, p->level ? p->level->name : "?", p->hp, p->hp_max, p->mana, p->mana_max,
-               p->level_num, p->exp, states[p->state], p->stamina, p->stamina_max,
+               p->level_num, (unsigned)p->exp, states[p->state], p->stamina, p->stamina_max,
                p->running ? " corriendo" : p->moving ? " caminando" : "", p->exhausted ? " (agotado)" : "");
         if (p->message_ticks > 0)
             printf("  J%d dice: %s\n", i + 1, p->message);
@@ -6874,23 +8380,65 @@ static int save_path(int slot, char *buf, size_t cap)
     return 1;
 }
 
-static void save_character(const Player *p)
+/* Lo que es de cada dificultad (pQuestData[nDifficulty] del original): las
+   misiones, las presentaciones de los NPC, los waypoints, el acto en el que
+   quedó, el mercenario gratis de Kashya y el Rey Vaca. Las de Normal van
+   sin prefijo (como antes de las dificultades) y las de Pesadilla e
+   Infierno con "d1 " y "d2 " */
+static const char *const k_diff_pre[3] = { "", "d1 ", "d2 " };
+
+/* La dificultad de una línea de la partida guardada (-1 = es del personaje)
+   y, en *rest, la línea sin el prefijo */
+static int save_line_diff(const char *line, const char **rest)
 {
-    char path[300], tmp[310], line[1024];
-    if (s_demo)
-        return; /* el personaje de la demostración no se guarda */
-    if (!save_path(p->slot, path, sizeof path))
-        return;
-    mkdir(s_save_dir, 0755);
-    snprintf(tmp, sizeof tmp, "%s.tmp", path);
-    FILE *f = fopen(tmp, "w");
-    if (!f) {
-        fprintf(stderr, "no pude guardar en %s\n", tmp);
-        return;
+    static const char *const k_keys[] = { "den ", "quests ", "waypoints ", "talk ", "act1 ", "act2 ", "act3 ",
+                                          "act4 ", "act5 ", "cowking ", "inact ", "qseen ", "freehire ", "acttop " };
+    int d = 0;
+    if (line[0] == 'd' && (line[1] == '1' || line[1] == '2') && line[2] == ' ') {
+        d = line[1] - '0';
+        line += 3;
     }
-    fprintf(f, "%s\nclass %s\nlevel %d\nexp %d\nlife %d\nmana %d\ngold %d\nden %d %d\n", SAVE_MAGIC,
-            s_classes[p->cls].token, p->level_num, p->exp,
-            p->hp_base, p->mana_base, p->gold, p->den_done, p->den_rewarded);
+    for (unsigned k = 0; k < sizeof k_keys / sizeof k_keys[0]; k++)
+        if (strncmp(line, k_keys[k], strlen(k_keys[k])) == 0) {
+            *rest = line;
+            return d;
+        }
+    return -1;
+}
+
+static void save_diff(FILE *f, const Player *p, int d)
+{
+    const char *pre = k_diff_pre[d];
+    fprintf(f, "%sden %d %d\n", pre, p->den_done, p->den_rewarded);
+    fprintf(f, "%squests %d %d %d %d %llu\n", pre, p->den_started, p->raven_started, p->raven_done, p->raven_rewarded,
+            (unsigned long long)p->npc_met);
+    fprintf(f, "%swaypoints %llu\n", pre, (unsigned long long)p->waypoints);
+    for (int k = 0; k < NPC_TALKERS; k++)
+        if (p->talk_heard[k][0] || p->talk_heard[k][1] || p->talk_next[k]) /* (el segundo número, desde el Acto 5) */
+            fprintf(f, "%stalk %d %d %llu %llu\n", pre, k, p->talk_next[k], (unsigned long long)p->talk_heard[k][0],
+                    (unsigned long long)p->talk_heard[k][1]);
+    fprintf(f, "%sact1 %d %d %d %d\n", pre, p->cain_q, p->malus_q, p->tower_q, p->andy_q);
+    fprintf(f, "%sact2 %d %d %d %d %d %d %d %d\n", pre, p->rada_q, p->staff_q, p->staff_seen, p->sun_q, p->arcane_q,
+            p->summ_q, p->tombs_q, p->a2_flags);
+    fprintf(f, "%sact3 %d %d %d %d %d %d %d\n", pre, p->bird_q, p->blade_q, p->will_q, p->tome_q, p->temple_q,
+            p->meph_q, p->a3_flags);
+    fprintf(f, "%sact4 %d %d %d %d\n", pre, p->izual_q, p->forge_q, p->diablo_q, p->a4_flags);
+    fprintf(f, "%sact5 %d %d %d %d %d %d %d %d\n", pre, p->shenk_q, p->rescue_q, p->anya_q, p->nihl_q, p->ancients_q,
+            p->baal_q, p->a5_flags, p->rescued);
+    if (p->cow_king)
+        fprintf(f, "%scowking 1\n", pre);
+    fprintf(f, "%sinact %d\n", pre, p->act);
+    fprintf(f, "%sqseen %u\n", pre, (unsigned)p->quest_seen);
+    fprintf(f, "%sfreehire %d\n", pre, p->free_hire);
+    fprintf(f, "%sacttop %d\n", pre, p->act_top);
+}
+
+/* El personaje como queda en la partida guardada */
+static void save_character_to(FILE *f, const Player *p)
+{
+    char line[1024];
+    fprintf(f, "%s\nclass %s\nlevel %d\nexp %u\nlife %d\nmana %d\ngold %d\n", SAVE_MAGIC, s_classes[p->cls].token,
+            p->level_num, (unsigned)p->exp, p->hp_base, p->mana_base, p->gold);
     for (int s = 0; s < SLOT_COUNT; s++)
         if (p->equip[s].type) {
             items_to_text(&p->equip[s], line, sizeof line);
@@ -6909,6 +8457,14 @@ static void save_character(const Player *p)
         items_to_text(&p->cube[i], line, sizeof line);
         fprintf(f, "cubeat %d %d %s\n", p->cube_x[i], p->cube_y[i], line);
     }
+    /* El cofre: las pestañas compradas, el oro, el acto más alto y la que se
+       veía; después cada objeto con su pestaña y lugar */
+    fprintf(f, "stash %d %d %d %d\n", p->stash_bought, p->stash_gold, p->act_max, p->stash_tab);
+    for (int t = 0; t < STASH_TABS; t++)
+        for (int i = 0; i < p->stash_count[t]; i++) {
+            items_to_text(&p->stash[t][i], line, sizeof line);
+            fprintf(f, "stashat %d %d %d %s\n", t, p->stash_x[t][i], p->stash_y[t][i], line);
+        }
     fprintf(f, "stats %d %d %d %d %d %d\n", p->stat_add[0], p->stat_add[1], p->stat_add[2], p->stat_add[3],
             p->stat_points, p->hp_extra);
     fprintf(f, "skillpoints %d\n", p->skill_points);
@@ -6920,26 +8476,18 @@ static void save_character(const Player *p)
                                         : p->buttons[b] == BTN_EMPTY ? "*empty"
                                         : p->buttons[b] == BTN_THROW ? "*throw"
                                                                      : skills_get(p->cls, p->buttons[b])->key);
-    fprintf(f, "quests %d %d %d %d %d\n", p->den_started, p->raven_started, p->raven_done, p->raven_rewarded,
-            p->npc_met);
-    fprintf(f, "waypoints %d\n", p->waypoints);
-    for (int k = 0; k < NPC_TALKERS; k++)
-        if (p->talk_heard[k] || p->talk_next[k])
-            fprintf(f, "talk %d %d %llu\n", k, p->talk_next[k], (unsigned long long)p->talk_heard[k]);
-    fprintf(f, "act1 %d %d %d %d\n", p->cain_q, p->malus_q, p->tower_q, p->andy_q);
-    fprintf(f, "act2 %d %d %d %d %d %d %d %d\n", p->rada_q, p->staff_q, p->staff_seen, p->sun_q, p->arcane_q,
-            p->summ_q, p->tombs_q, p->a2_flags);
-    fprintf(f, "act3 %d %d %d %d %d %d %d\n", p->bird_q, p->blade_q, p->will_q, p->tome_q, p->temple_q, p->meph_q,
-            p->a3_flags);
-    fprintf(f, "inact %d\n", p->act);
-    fprintf(f, "qseen %u\n", (unsigned)p->quest_seen);
+    for (int d = 0; d < 3; d++) /* lo de cada dificultad: la que se juega, de los campos; las otras, como se leyeron */
+        if (d == s_diff)
+            save_diff(f, p, d);
+        else
+            fputs(p->diff_raw[d], f);
+    fprintf(f, "diffmax %d\n", p->diff_max);
     if (p->merc_name) {
         int hp = p->merc_hp, max_hp;
         if (units_merc_alive(p->merc_unit))
             units_merc_health(p->merc_unit, &hp, &max_hp);
         fprintf(f, "merc %d %d %d %d %d\n", p->merc_type, p->merc_level, hp, p->merc_name, p->merc_dead);
     }
-    fprintf(f, "freehire %d\n", p->free_hire);
     if (p->aura >= 0) /* el aura puesta (como la habilidad derecha del original) */
         fprintf(f, "aura %s\n", skills_get(p->cls, p->aura)->key);
     for (int s = 0; s < MERC_SLOTS; s++)
@@ -6947,6 +8495,23 @@ static void save_character(const Player *p)
             items_to_text(&p->merc_equip[s], line, sizeof line);
             fprintf(f, "mercitem %d %s\n", s, line);
         }
+}
+
+static void save_character(const Player *p)
+{
+    char path[300], tmp[310];
+    if (s_demo)
+        return; /* el personaje de la demostración no se guarda */
+    if (!save_path(p->slot, path, sizeof path))
+        return;
+    mkdir(s_save_dir, 0755);
+    snprintf(tmp, sizeof tmp, "%s.tmp", path);
+    FILE *f = fopen(tmp, "w");
+    if (!f) {
+        fprintf(stderr, "no pude guardar en %s\n", tmp);
+        return;
+    }
+    save_character_to(f, p);
     /* Se escribe aparte y se reemplaza al final: si se corta la luz a la
        mitad, queda la partida anterior entera */
     int ok = fflush(f) == 0;
@@ -6955,28 +8520,82 @@ static void save_character(const Player *p)
         fprintf(stderr, "no pude guardar %s\n", path);
 }
 
-static int load_character(Player *p)
+/* Partidas de antes de que se sacara el Tomo de Portal: sus cargas pasan a
+   ser pergaminos (en la mochila, apilados; en el cubo, en su lugar) */
+static void tomes_to_scrolls(Player *p)
 {
-    char path[300], line[1024];
-    if (!save_path(p->slot, path, sizeof path))
-        return 0;
-    FILE *f = fopen(path, "r");
-    if (!f)
-        return 0;
+    const ItemType *tsc = items_find("tsc");
+    for (int k = p->bag_count - 1; k >= 0; k--) {
+        if (strcmp(p->bag[k].type->code, "tbk") != 0)
+            continue;
+        int n = p->bag[k].amount;
+        bag_remove(p, k);
+        while (tsc && n > 0) {
+            Item it = items_make(tsc);
+            it.amount = n < TP_STACK ? n : TP_STACK;
+            n -= it.amount;
+            if (!bag_add(p, &it))
+                break; /* (no debería pasar: el tomo dejó su lugar) */
+        }
+    }
+    for (int k = p->cube_count - 1; k >= 0; k--) {
+        if (strcmp(p->cube[k].type->code, "tbk") != 0)
+            continue;
+        if (tsc && p->cube[k].amount > 0) {
+            Item it = items_make(tsc);
+            it.amount = p->cube[k].amount < TP_STACK ? p->cube[k].amount : TP_STACK;
+            p->cube[k] = it;
+        } else {
+            cube_remove(p, k);
+        }
+    }
+}
+
+/* Lee el personaje de `f` (y lo cierra); `path` es para los mensajes */
+static int load_character_from(FILE *f, Player *p, const char *path)
+{
+    char line[1024];
     if (!fgets(line, sizeof line, f) || strncmp(line, SAVE_MAGIC, strlen(SAVE_MAGIC)) != 0) {
         fclose(f);
         fprintf(stderr, "%s no es una partida guardada\n", path);
         return 0;
     }
     const CharClass *c = &s_classes[p->cls];
-    int got_points = 0, got_stats = 0, saved_life = 0, got_talk = 0;
+    int got_points = 0, got_stats = 0, saved_life = 0, got_talk = 0, got_stash = 0, got_top = 0, baal_done[3] = { 0, 0, 0 };
     (void)c;
+    for (int d = 0; d < 3; d++)
+        p->diff_raw[d][0] = '\0';
     while (fgets(line, sizeof line, f)) {
         int a, b, used = 0, q[8];
         unsigned u;
-        unsigned long long talk_mask;
+        unsigned long long talk_mask, talk_mask2 = 0, wp_mask;
+        long long met;
         Item it;
         line[strcspn(line, "\r\n")] = '\0';
+        /* Lo de cada dificultad: el de las otras queda como está (save_diff) */
+        const char *rest;
+        int ld = save_line_diff(line, &rest);
+        if (ld >= 0 && sscanf(rest, "act5 %d %d %d %d %d %d", &q[0], &q[1], &q[2], &q[3], &q[4], &q[5]) == 6)
+            baal_done[ld] = q[5] >= 4; /* (las de antes de las dificultades no dicen cuál está abierta) */
+        if (ld >= 0 && ld != s_diff) {
+            size_t n = strlen(p->diff_raw[ld]), len = strlen(line);
+            if (n + len + 2 <= sizeof p->diff_raw[ld])
+                snprintf(p->diff_raw[ld] + n, sizeof p->diff_raw[ld] - n, "%s\n", line);
+            else
+                fprintf(stderr, "partida %s: no entra lo de la dificultad %d\n", path, ld);
+            continue;
+        }
+        if (ld > 0)
+            memmove(line, rest, strlen(rest) + 1);
+        if (sscanf(line, "diffmax %d", &a) == 1) {
+            p->diff_max = a < 0 ? 0 : a > 2 ? 2 : a;
+            continue;
+        }
+        if (sscanf(line, "acttop %d", &a) == 1) {
+            p->act_top = a < 1 ? 1 : a > 5 ? 5 : a;
+            got_top = 1;
+            continue;
+        }
         char tok[8];
         if (sscanf(line, "class %7s", tok) == 1) {
             for (int k = 0; k < NUM_CLASSES; k++)
@@ -7017,8 +8636,8 @@ static int load_character(Player *p)
         }
         if (sscanf(line, "level %d", &a) == 1)
             p->level_num = a < 1 ? 1 : a > 99 ? 99 : a;
-        else if (sscanf(line, "exp %d", &a) == 1)
-            p->exp = a;
+        else if (sscanf(line, "exp %u", &u) == 1)
+            p->exp = u;
         else if (sscanf(line, "life %d", &a) == 1)
             saved_life = a;
         else if (sscanf(line, "mana %d", &a) == 1)
@@ -7060,14 +8679,32 @@ static int load_character(Player *p)
             p->temple_q = q[4];
             p->meph_q = q[5];
             p->a3_flags = q[6];
-        } else if (sscanf(line, "talk %d %d %llu", &a, &b, &talk_mask) == 3 && a >= 0 && a < NPC_TALKERS) {
+        } else if (sscanf(line, "act4 %d %d %d %d", &q[0], &q[1], &q[2], &q[3]) == 4) {
+            p->izual_q = q[0];
+            p->forge_q = q[1];
+            p->diablo_q = q[2];
+            p->a4_flags = q[3];
+        } else if (sscanf(line, "act5 %d %d %d %d %d %d %d %d", &q[0], &q[1], &q[2], &q[3], &q[4], &q[5], &q[6], &q[7]) == 8) {
+            p->shenk_q = q[0];
+            p->rescue_q = q[1];
+            p->anya_q = q[2];
+            p->nihl_q = q[3];
+            p->ancients_q = q[4];
+            p->baal_q = q[5];
+            p->a5_flags = q[6];
+            p->rescued = q[7];
+        } else if (sscanf(line, "cowking %d", &a) == 1) {
+            p->cow_king = a != 0;
+        } else if (sscanf(line, "talk %d %d %llu %llu", &a, &b, &talk_mask, &talk_mask2) >= 3 && a >= 0 && a < NPC_TALKERS) {
             p->talk_next[a] = (uint8_t)(b >= 0 && b < GOSSIP_MAX ? b : 0);
-            p->talk_heard[a] = talk_mask;
+            p->talk_heard[a][0] = talk_mask;
+            p->talk_heard[a][1] = talk_mask2; /* (las de antes no lo tienen: 0) */
+            talk_mask2 = 0;
             got_talk = 1;
-        } else if (sscanf(line, "waypoints %d", &a) == 1) {
-            p->waypoints = a | 1;
+        } else if (sscanf(line, "waypoints %llu", &wp_mask) == 1) {
+            p->waypoints = wp_mask | 1;
         } else if (sscanf(line, "inact %d", &a) == 1) {
-            p->act = a >= 1 && a <= 3 ? a : 1;
+            p->act = a >= 1 && a <= 5 ? a : 1;
         } else if (sscanf(line, "qseen %u", &u) == 1) {
             p->quest_seen = u;
         } else if (sscanf(line, "act1 %d %d %d %d", &q[0], &q[1], &q[2], &q[3]) == 4) {
@@ -7075,12 +8712,26 @@ static int load_character(Player *p)
             p->malus_q = q[1];
             p->tower_q = q[2];
             p->andy_q = q[3];
-        } else if (sscanf(line, "quests %d %d %d %d %d", &q[0], &q[1], &q[2], &q[3], &q[4]) == 5) {
+        } else if (sscanf(line, "quests %d %d %d %d %lld", &q[0], &q[1], &q[2], &q[3], &met) == 5) {
             p->den_started = q[0];
             p->raven_started = q[1];
             p->raven_done = q[2];
             p->raven_rewarded = q[3];
-            p->npc_met = q[4];
+            /* Las de antes lo guardaban como int: con Malah (el bit 31) quedaba negativo */
+            p->npc_met = met < 0 ? (uint32_t)met : (uint64_t)met;
+        } else if (sscanf(line, "stash %d %d %d %d", &q[0], &q[1], &q[2], &q[3]) == 4) {
+            p->stash_bought = q[0] < 0 ? 0 : q[0] > STASH_BUY_MAX ? STASH_BUY_MAX : q[0];
+            p->stash_gold = q[1] > 0 ? q[1] : 0;
+            p->act_max = q[2] < 1 ? 1 : q[2] > STASH_ACTS ? STASH_ACTS : q[2];
+            p->stash_tab = q[3];
+            got_stash = 1;
+        } else if (sscanf(line, "stashat %d %d %d %n", &q[0], &a, &b, &used) == 3 && used > 0 &&
+                   items_from_text(line + used, &it)) {
+            int t = q[0] < 0 ? 0 : q[0] >= STASH_TABS ? STASH_TABS - 1 : q[0], done = stash_add_at(p, t, &it, a, b);
+            for (int k = 0; k < STASH_TABS && !done; k++) /* (no debería pasar) */
+                done = stash_add(p, k, &it);
+            if (!done)
+                bag_add(p, &it);
         } else if (sscanf(line, "equip %d %n", &a, &used) == 1 && used > 0 && items_from_text(line + used, &it)) {
             if (a >= 0 && a < SLOT_COUNT && (items_slot_ok(it.type, a) || (a == SLOT_SHIELD && it.type->kind == ITEM_WEAPON)))
                 p->equip[a] = it;
@@ -7110,16 +8761,46 @@ static int load_character(Player *p)
         if (saved_life > p->hp_base)
             p->hp_extra = saved_life - p->hp_base;
     }
+    /* La dificultad que abre cada Baal muerto (CLIENTS_UpdateCharacterProgression) */
+    for (int d = 0; d < 2; d++)
+        if (baal_done[d] && p->diff_max < d + 1)
+            p->diff_max = d + 1;
     /* Partidas de antes de que los NPC recordaran lo que dijeron: lo de las
        misiones que ya pasaron cuenta como dicho (si no, lo recitan todo junto) */
-    if (!got_talk)
+    if (!got_talk && s_diff == 0)
         for (int k = 0; k < NPC_TALKERS; k++)
             for (int id = 0; id < QUEST_LINES; id++)
                 if (talk_line_due(p, id))
-                    p->talk_heard[k] |= (uint64_t)1 << id;
+                    talk_heard_set(p, k, id);
+    /* Partidas de antes del cofre: el acto más alto, por las misiones */
+    if (!got_stash)
+        p->act_max = (p->a3_flags & A3F_HELLGATE) ? 4 : (p->a2_flags & A2F_SAILED) ? 3 : p->andy_q >= 3 ? 2 : 1;
+    if (p->act > p->act_max)
+        p->act_max = p->act;
+    if (!got_top) /* (las de antes de las dificultades: en Normal, el más alto que tenían) */
+        p->act_top = s_diff == 0 ? p->act_max : p->act;
+    if (p->act > p->act_top)
+        p->act_top = p->act;
+    tomes_to_scrolls(p);
     (void)c;
     printf("partida cargada: %s (nivel %d)\n", path, p->level_num);
     return 1;
+}
+
+static int load_character(Player *p)
+{
+    char path[300];
+    int i = (int)(p - s_pl);
+    if (i >= 0 && i < MAX_PLAYERS && s_carry[i]) { /* la campaña de la demostración: el de la dificultad anterior */
+        FILE *f = fmemopen(s_carry[i], s_carry_len[i], "r");
+        return f ? load_character_from(f, p, "el personaje de la demostración") : 0;
+    }
+    if (!save_path(p->slot, path, sizeof path))
+        return 0;
+    FILE *f = fopen(path, "r");
+    if (!f)
+        return 0;
+    return load_character_from(f, p, path);
 }
 
 void game_save(void)
@@ -7154,6 +8835,14 @@ int game_slot_info(int slot, SlotInfo *info)
                 info->gold = a;
             } else if (sscanf(line, "den %d %d", &a, &b) == 2) {
                 info->den_done = a;
+            } else if (sscanf(line, "diffmax %d", &a) == 1) {
+                info->diff_max = a < 0 ? 0 : a > 2 ? 2 : a > info->diff_max ? a : info->diff_max;
+            } else {
+                /* (las de antes de las dificultades: Baal muerto en Normal abre Pesadilla) */
+                int q[6], d = line[0] == 'd' && line[1] == '1' ? 1 : 0;
+                if (sscanf(line + (d ? 3 : 0), "act5 %d %d %d %d %d %d", &q[0], &q[1], &q[2], &q[3], &q[4], &q[5]) == 6 &&
+                    q[5] >= 4 && info->diff_max < d + 1)
+                    info->diff_max = d + 1;
             }
         }
     }
@@ -7320,6 +9009,237 @@ static int   s_cain_unit = -1;         /* Caín en el campamento, después de re
 #define PORTAL_CANYON_BACK 5
 #define PORTAL_DURIEL      6
 #define PORTAL_TYRAEL      7
+
+/* ---- El portal al pueblo ----
+   El Pergamino de Portal (o una carga del tomo) abre un portal azul al lado
+   del jugador y otro en el pueblo, unidos. Como en el original, cada jugador
+   tiene uno (abrir otro cierra el anterior), cualquiera puede usarlo, y se
+   cierra cuando el que lo abrió vuelve por él desde el pueblo. No se guarda
+   con la partida (el original tampoco: es de esa partida). */
+#define PORTAL_TP_FIELD(i) (16 + 2 * (i)) /* (los ids de world_portal de cada jugador) */
+#define PORTAL_TP_TOWN(i)  (17 + 2 * (i))
+typedef struct {
+    int   open;
+    float fx, fy; /* el de afuera */
+    float tx, ty; /* el del pueblo */
+} TownPortal;
+static TownPortal s_tp[MAX_PLAYERS];
+
+/* Pone (o saca) el dibujo del portal en (x, y), si su zona está armada */
+static void tp_object(float x, float y, int on)
+{
+    int ids[16], n = units_find_all("TownPortal", ids, 16);
+    for (int k = 0; k < n; k++) {
+        float ux, uy;
+        units_position(ids[k], 1.0f, &ux, &uy);
+        if (fabsf(ux - x) < 0.5f && fabsf(uy - y) < 0.5f) {
+            if (!on)
+                units_remove(ids[k]);
+            return;
+        }
+    }
+    int z = world_zone_at(&s_map, x, y);
+    if (!on || z < 0 || !world_zone_loaded(z))
+        return;
+    units_zone_begin(z);
+    units_spawn_object("TownPortal", x, y, "on");
+    units_zone_end();
+}
+
+static void tp_close(int i)
+{
+    if (!s_tp[i].open)
+        return;
+    tp_object(s_tp[i].fx, s_tp[i].fy, 0);
+    tp_object(s_tp[i].tx, s_tp[i].ty, 0);
+    world_portal(PORTAL_TP_FIELD(i), -1, 0, 0, -1, 0, 0);
+    world_portal(PORTAL_TP_TOWN(i), -1, 0, 0, -1, 0, 0);
+    s_tp[i].open = 0;
+}
+
+static void tp_reset(void)
+{
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        s_tp[i].open = 1; /* (para que tp_close saque los saltos) */
+        tp_close(i);
+    }
+}
+
+/* Una zona que se arma de nuevo: los dibujos de los portales que caen ahí */
+static void tp_zone_loaded(int z)
+{
+    for (int i = 0; i < MAX_PLAYERS; i++)
+        if (s_tp[i].open) {
+            if (world_zone_at(&s_map, s_tp[i].fx, s_tp[i].fy) == z)
+                tp_object(s_tp[i].fx, s_tp[i].fy, 1);
+            if (world_zone_at(&s_map, s_tp[i].tx, s_tp[i].ty) == z)
+                tp_object(s_tp[i].tx, s_tp[i].ty, 1);
+        }
+}
+
+/* Alguien cruzó un portal: si era el que lo abrió volviendo desde el pueblo, se cierra */
+static void tp_used(const Player *p, const Warp *w)
+{
+    int i = (int)(p - s_pl);
+    if (i >= 0 && i < MAX_PLAYERS && s_tp[i].open && w->portal == PORTAL_TP_TOWN(i) + 1)
+        tp_close(i);
+}
+
+/* Prueba: D2_TPTEST=1 (con D2_START afuera del pueblo) abre un portal con
+   un pergamino, entra, llega al pueblo y vuelve por el mismo, que se cierra */
+static int  tp_find(const Player *p);
+static int  tp_portal_objects(void)
+{
+    int ids[16];
+    return units_find_all("TownPortal", ids, 16);
+}
+
+static const Warp *tp_warp(int id)
+{
+    for (int k = 0; k < world_warp_count(); k++)
+        if (world_warp(k)->portal == id + 1)
+            return world_warp(k);
+    return NULL;
+}
+
+static void tp_test(void)
+{
+    static int step;
+    if (!getenv("D2_TPTEST") || step < 0)
+        return;
+    Player *p = &s_pl[0];
+    const Warp *w;
+    switch (step) {
+    case 0: {
+        if (s_ticks < 10)
+            return;
+        const ItemType *t = items_find("tsc");
+        Item it = items_make(t);
+        bag_add(p, &it);
+        int ok = tp_cast(p, tp_find(p));
+        printf("TP: en %s, abrir: %s; portal de afuera (%.1f, %.1f), del pueblo (%.1f, %.1f); dibujos: %d\n",
+               p->level ? p->level->name : "?", ok ? "sí" : "no", s_tp[0].fx, s_tp[0].fy, s_tp[0].tx, s_tp[0].ty,
+               tp_portal_objects());
+        step = ok ? 1 : -1;
+        return;
+    }
+    case 1:
+        if (s_ticks < 20 || !(w = tp_warp(PORTAL_TP_FIELD(0))))
+            return;
+        use_warp(p, w);
+        printf("TP: entró: está en %s (%.1f, %.1f), abierto %d\n", p->level ? p->level->name : "?", p->x, p->y,
+               s_tp[0].open);
+        step = 2;
+        return;
+    case 2:
+        if (s_ticks < 30 || !(w = tp_warp(PORTAL_TP_TOWN(0))))
+            return;
+        use_warp(p, w);
+        printf("TP: volvió: está en %s (%.1f, %.1f), abierto %d, saltos %s, dibujos %d\n",
+               p->level ? p->level->name : "?", p->x, p->y, s_tp[0].open,
+               tp_warp(PORTAL_TP_FIELD(0)) || tp_warp(PORTAL_TP_TOWN(0)) ? "quedaron" : "cerrados", tp_portal_objects());
+        step = -1;
+        return;
+    }
+}
+
+/* El lugar de la mochila con Pergaminos de Portal (la pila más chica, así se
+   gasta primero), o -1 */
+static int tp_find(const Player *p)
+{
+    int best = -1;
+    for (int k = 0; k < p->bag_count; k++)
+        if (strcmp(p->bag[k].type->code, "tsc") == 0 && (best < 0 || p->bag[k].amount < p->bag[best].amount))
+            best = k;
+    return best;
+}
+
+/* El del pueblo: cerca de donde se aparece, en un lugar libre lejos de los
+   NPC (con A se les habla: en Kurast caía al lado de Hratli y no se podía
+   entrar) y del portal del otro jugador */
+static void tp_town_spot(int i, int town, float *x, float *y)
+{
+    for (int r = 6; r < 18; r++) /* (empezando hacia abajo en la pantalla: lejos de la fogata del campamento) */
+        for (int a = 0; a < 16; a++) {
+            float ang = PI_F / 4 + (float)((a + 1) / 2) * (a % 2 ? 1.0f : -1.0f) * PI_F / 8 + (float)i * 0.6f,
+                  cx = s_town_x + cosf(ang) * r,
+                  cy = s_town_y + sinf(ang) * r;
+            const TownPortal *o = &s_tp[i ^ 1];
+            int open = 1; /* lugar abierto alrededor (que no tape la fogata ni una pared) */
+            for (int dy = -3; dy <= 3 && open; dy++)
+                for (int dx = -3; dx <= 3 && open; dx++)
+                    open = !map_blocked(&s_map, (int)floorf(cx) + dx, (int)floorf(cy) + dy);
+            if (!open || world_zone_at(&s_map, cx, cy) != town || blocked_body(cx, cy) || units_blocking(cx, cy, 4.0f) ||
+                (MAX_PLAYERS > 1 && o->open && fabsf(o->tx - cx) < 3.0f && fabsf(o->ty - cy) < 3.0f))
+                continue;
+            *x = cx;
+            *y = cy;
+            return;
+        }
+    *x = s_town_x + 4.0f + 3.0f * i; /* (no debería pasar) */
+    *y = s_town_y - 3.0f;
+    find_free_spot(x, y);
+}
+
+/* Abre el portal con lo que hay en ese lugar de la mochila. 1 si se abrió. */
+static int tp_cast(Player *p, int bag_index)
+{
+    if (bag_index < 0 || bag_index >= p->bag_count)
+        return 0;
+    Item *it = &p->bag[bag_index];
+    if (!p->level || p->level->town) {
+        show_message(p, "En el pueblo no hace falta");
+        return 0;
+    }
+    int town = world_zone_at(&s_map, s_town_x, s_town_y), zone = world_zone_at(&s_map, p->x, p->y);
+    if (town < 0 || zone < 0)
+        return 0;
+    if (it->amount > 1) /* de la pila, uno */
+        it->amount--;
+    else
+        bag_remove(p, bag_index);
+    return tp_open(p);
+}
+
+/* El portal al pueblo al lado del jugador (el pergamino, el tomo, el
+   santuario de portal). 1 si se abrió. */
+static int tp_open(Player *p)
+{
+    int i = (int)(p - s_pl);
+    int town = world_zone_at(&s_map, s_town_x, s_town_y), zone = world_zone_at(&s_map, p->x, p->y);
+    if (town < 0 || zone < 0 || !p->level || p->level->town)
+        return 0;
+    tp_close(i);
+    /* El de afuera, al lado (en la misma zona); el del pueblo, cerca de donde
+       se aparece, uno al lado del otro */
+    float fx = p->x + 1.0f, fy = p->y + 1.0f, tx, ty;
+    reach_free_spot(p->x, p->y, &fx, &fy); /* (del mismo lado de las paredes que el jugador) */
+    if (world_zone_at(&s_map, fx, fy) != zone) {
+        fx = p->x;
+        fy = p->y;
+    }
+    float ax = fx + 1.5f, ay = fy + 1.5f; /* adónde se vuelve: al lado del portal, y se llega caminando hasta él */
+    reach_free_spot(fx, fy, &ax, &ay);
+    if (world_zone_at(&s_map, ax, ay) != zone) {
+        ax = fx;
+        ay = fy;
+    }
+    tp_town_spot(i, town, &tx, &ty);
+    world_portal(PORTAL_TP_FIELD(i), zone, fx, fy, town, tx + 1.5f, ty + 1.5f);
+    world_portal(PORTAL_TP_TOWN(i), town, tx, ty, zone, ax, ay);
+    s_tp[i].open = 1;
+    s_tp[i].fx = fx;
+    s_tp[i].fy = fy;
+    s_tp[i].tx = tx;
+    s_tp[i].ty = ty;
+    tp_object(fx, fy, 1);
+    tp_object(tx, ty, 1);
+    audio_play_name("player_townportal_cast", p->x, p->y);
+    audio_play_name("object_townportal", fx, fy);
+    if (s_act == 5)
+        a5_portal_opened(p); /* (en la cumbre: los Antiguos) */
+    return 1;
+}
 #define QUEST_RANGE     4.0f /* a esta distancia (subtiles) se tocan los objetos de las misiones */
 
 static const char *const k_quest_objects[] = {
@@ -7328,6 +9248,9 @@ static const char *const k_quest_objects[] = {
     "SevenTombsReceptacle",
     "LamesEnsTome", "GidBInnDecoy", "KhalimEyeChest", "KhalimBrainChest", "KhalimHeartChest", "BeneathTheCityLever",
     "CompellingOrb", "HellGate", /* el Acto 3 (a3quest.inc) */
+    "DiabloSeal1", "DiabloSeal2", "DiabloSeal3", "DiabloSeal4", "DiabloSeal5", "SoulStoneForge",
+    "ReallyTheLastPortal", /* el Acto 4 (a4quest.inc) */
+    "AnyaYetAgain", "AncientsAltar", "NotKiddingLastPortal", /* el Acto 5 (a5quest.inc) */
 };
 
 /* El Acto 2: los cofres de las piezas del Báculo y el altar del Sol
@@ -7352,6 +9275,30 @@ static int a2_object_bit(const char *cls)
 }
 
 /* El estado más avanzado de una misión entre los jugadores */
+/* main.c pasa la cinemática del fin de acto después del tick */
+static void queue_movie(const char *name)
+{
+    s_pending_movie = name;
+    if (s_debug || getenv("D2_AT_TRACE"))
+        printf("cinemática pedida: %s\n", name);
+}
+
+const char *game_take_movie(void)
+{
+    const char *m = s_pending_movie;
+    s_pending_movie = NULL;
+    return m;
+}
+
+/* ¿Alguno de los jugadores no tiene esa marca? (la primera vez de algo) */
+static int party_lacks(size_t field, int bit)
+{
+    for (int i = 0; i < s_num_players; i++)
+        if (!(*(const int *)((const char *)&s_pl[i] + field) & bit))
+            return 1;
+    return 0;
+}
+
 static int party_max(size_t field)
 {
     int m = 0;
@@ -7375,7 +9322,9 @@ static void party_raise(size_t field, int value)
 static int is_quest_item(const ItemType *t)
 {
     static const char *const k_codes[] = { "bks", "bkd", "hdm", "box", "tr1", "ass", "msf", "vip", "hst",
-                                           "j34", "g34", "bbb", "xyz", "g33", "qey", "qhr", "qbr", "qf1", "qf2" };
+                                           "j34", "g34", "bbb", "xyz", "g33", "qey", "qhr", "qbr", "qf1", "qf2",
+                                           "mss", "hfh", /* (los del Acto 4: la Piedra de Mefisto y el Martillo) */
+                                           "ice", "tr2" }; /* (y del 5: la poción de Malah y el Pergamino de Resistencia) */
     for (unsigned k = 0; t && k < sizeof k_codes / sizeof k_codes[0]; k++)
         if (strcmp(t->code, k_codes[k]) == 0)
             return 1;
@@ -7667,6 +9616,12 @@ static void quest_zone_loaded(int z)
 {
     if (s_act == 3)
         a3_zone_loaded(z);
+    if (s_act == 4)
+        a4_zone_loaded(z);
+    if (s_act == 5)
+        a5_zone_loaded(z);
+    if (s_act == 1)
+        cow_zone_loaded(z);
     int cain = party_max(offsetof(Player, cain_q));
     float sx = 0, sy = 0;
     int found = 0;
@@ -7692,6 +9647,7 @@ static void quest_zone_loaded(int z)
         open_tristram_portals();
         spawn_portal_objects(z);
     }
+    tp_zone_loaded(z); /* los portales al pueblo que caen ahí */
     object_done(z, "InifussTree", cain >= 2);
     object_done(z, "Gibbet", cain >= 5);
     object_done(z, "Malus", party_max(offsetof(Player, malus_q)) >= 2);
@@ -7741,6 +9697,11 @@ static void quest_zone_loaded(int z)
 }
 
 #include "a3quest.inc"
+#include "a4quest.inc"
+#include "a5quest.inc"
+static int bots_playing(void); /* la demostración o una prueba automática (autotest.inc) */
+#include "objects.inc" /* los cofres, barriles, santuarios y pozos */
+#include "cows.inc"    /* el nivel de las vacas */
 
 /* El objeto de misión más cercano al jugador (o -1) y qué se puede hacer
    con él; NULL si nada (ya está hecho o todavía no toca) */
@@ -7768,6 +9729,10 @@ static const char *quest_action(const Player *p, int *unit)
     static char text[80];
     if (s_act == 3)
         return a3_action(p, cls);
+    if (s_act == 4)
+        return a4_action(p, cls);
+    if (s_act == 5)
+        return a5_action(p, cls);
     if (strcmp(cls, "InifussTree") == 0 && cain < 2) {
         const ItemType *t = items_find("bks");
         snprintf(text, sizeof text, tr("A: Tomar el %s"), t ? t->name : "pergamino");
@@ -7813,6 +9778,14 @@ static int quest_interact(Player *p)
     float ux, uy;
     units_position(u, 1.0f, &ux, &uy);
     if (s_act == 3 && a3_interact(p, cls, u, ux, uy)) {
+        save_party();
+        return 1;
+    }
+    if (s_act == 4 && a4_interact(p, cls, u, ux, uy)) {
+        save_party();
+        return 1;
+    }
+    if (s_act == 5 && a5_interact(p, cls, u, ux, uy)) {
         save_party();
         return 1;
     }
@@ -8084,6 +10057,10 @@ static void quest_tick(void)
     }
     if (s_act == 3)
         a3_quest_tick();
+    if (s_act == 4)
+        a4_quest_tick();
+    if (s_act == 5)
+        a5_quest_tick();
 }
 
 /* Al empezar una partida: las piedras en otro orden y los jefes vivos */
@@ -8099,6 +10076,8 @@ static void quest_reset(void)
     s_stones_lit = 0;
     s_countess_dead = s_andariel_dead = 0;
     a3_quest_reset();
+    a4_quest_reset();
+    a5_quest_reset();
     s_a2_opened = s_rada_dead = s_sun_timer = s_summ_dead = s_duriel_dead = s_tyr_told = 0;
     s_tome_x = s_orifice_x = s_tyrael_x = s_tyr_portal_x = -1;
     for (int k = PORTAL_ARCANE_IN; k <= PORTAL_TYRAEL; k++)
@@ -8108,27 +10087,39 @@ static void quest_reset(void)
     s_cain_unit = -1;
     world_portal(PORTAL_TRISTRAM, -1, 0, 0, -1, 0, 0);
     world_portal(PORTAL_CAIRN, -1, 0, 0, -1, 0, 0);
+    tp_reset();
+    obj_reset();
+    cow_reset();
 }
 
 /* ---- Imbuir (la recompensa de Charsi) ---- */
 
-/* Lo que se puede imbuir: armas y armaduras comunes, puestas (-(lugar + 1))
+/* ¿Sirve para la lista? Imbuir (Charsi): armas y armaduras comunes;
+   engarzar (Larzuk): armas y armaduras sin engarces; personalizar (Anya):
+   las que no son comunes ni están personalizadas */
+static int imbue_fits(const Player *p, const Item *it)
+{
+    if (!it->type || is_quest_item(it->type) || (it->type->kind != ITEM_WEAPON && it->type->kind != ITEM_ARMOR) || it->type->stackable)
+        return 0;
+    if (p->imbue_mode == 1)
+        return it->sockets == 0;
+    if (p->imbue_mode == 2)
+        return it->quality != QUALITY_NORMAL && it->quality != QUALITY_SUPERIOR && it->quality != QUALITY_LOW &&
+               !strstr(it->name, s_classes[p->cls].title);
+    return it->quality == QUALITY_NORMAL;
+}
+
+/* Lo que se puede imbuir (o engarzar, o personalizar): puestas (-(lugar + 1))
    o en la mochila (su índice) */
 static int imbue_candidates(const Player *p, int *out)
 {
     int n = 0;
-    for (int s = 0; s < SLOT_COUNT; s++) {
-        const Item *it = &p->equip[s];
-        if (it->type && it->quality == QUALITY_NORMAL && !is_quest_item(it->type) &&
-            (it->type->kind == ITEM_WEAPON || it->type->kind == ITEM_ARMOR))
+    for (int s = 0; s < SLOT_COUNT; s++)
+        if (imbue_fits(p, &p->equip[s]))
             out[n++] = -(s + 1);
-    }
-    for (int i = 0; i < p->bag_count; i++) {
-        const Item *it = &p->bag[i];
-        if (it->type && it->quality == QUALITY_NORMAL && !is_quest_item(it->type) &&
-            (it->type->kind == ITEM_WEAPON || it->type->kind == ITEM_ARMOR))
+    for (int i = 0; i < p->bag_count; i++)
+        if (imbue_fits(p, &p->bag[i]))
             out[n++] = i;
-    }
     return n;
 }
 
@@ -8143,7 +10134,9 @@ static void imbue_tick(Player *p, const PlayerInput *pi)
     int list[BAG_MAX + SLOT_COUNT], n = imbue_candidates(p, list);
     if (pi->back || pi->inventory || n == 0) {
         if (n == 0)
-            show_message(p, "No tenés armas ni armaduras comunes");
+            show_message(p, p->imbue_mode == 1   ? "No tenés armas ni armaduras sin engarces"
+                            : p->imbue_mode == 2 ? "No tenés objetos mágicos, raros o únicos para personalizar"
+                                                 : "No tenés armas ni armaduras comunes");
         p->imbue_open = 0;
         return;
     }
@@ -8156,13 +10149,24 @@ static void imbue_tick(Player *p, const PlayerInput *pi)
     if (!pi->action)
         return;
     Item *it = imbue_item(p, list[p->imbue_sel]), copy = *it;
-    /* Como en el original: un raro de nivel del personaje + 4 */
-    if (!items_make_rare(&copy, p->level_num + 4)) {
+    if (p->imbue_mode == 1) { /* Larzuk (A5Q1): los engarces que puede tener */
+        if (!items_larzuk_sockets(&copy)) {
+            show_message(p, "Ese objeto no admite engarces");
+            return;
+        }
+        p->shenk_q = 4;
+    } else if (p->imbue_mode == 2) { /* Anya (A5Q4): con el nombre del personaje */
+        char label[64];
+        items_label(&copy, label, sizeof label);
+        snprintf(copy.name, sizeof copy.name, "%.38s de %.20s", label, s_classes[p->cls].title);
+        p->nihl_q = 5;
+    } else if (!items_make_rare(&copy, p->level_num + 4)) { /* Como en el original: un raro de nivel del personaje + 4 */
         show_message(p, "No se pudo imbuir");
         return;
+    } else {
+        p->malus_q = 4;
     }
     *it = copy;
-    p->malus_q = 4;
     p->imbue_open = 0;
     audio_play_name("cursor_questdone", AUDIO_NOPOS, AUDIO_NOPOS);
     char label[64];
@@ -8181,7 +10185,8 @@ static void draw_imbue(const Player *p)
     int w = x1 - x0 - 40 > 420 ? 420 : x1 - x0 - 40, x = (x0 + x1) / 2 - w / 2, y = 60, lh = 26;
     int h = 64 + shown * lh + 30;
     ui_dark_box(x, y, w, h);
-    font_draw_centered(x + w / 2, y + 10, "Imbuir", 3, COL(R_GOLD, 15));
+    font_draw_centered(x + w / 2, y + 10, p->imbue_mode == 1 ? "Engarzar" : p->imbue_mode == 2 ? "Personalizar" : "Imbuir", 3,
+                       COL(R_GOLD, 15));
     for (int k = 0; k < shown; k++) {
         int c = list[first + k], chosen = first + k == p->imbue_sel, ty = y + 52 + k * lh;
         char label[64];
@@ -8192,8 +10197,14 @@ static void draw_imbue(const Player *p)
         if (chosen)
             draw_pentagram(x + 8, ty - 4, 20, 1);
     }
-    font_draw_centered(x + w / 2, y + h - 24, "Charsi lo vuelve raro: de 3 a 6 propiedades", 1, COL(R_STONE, 12));
-    font_draw_centered(x + w / 2, y + h + 4, "A: imbuir   B: volver", 1, COL(R_STONE, 12));
+    font_draw_centered(x + w / 2, y + h - 24,
+                       p->imbue_mode == 1   ? "Larzuk le hace los engarces que admite"
+                       : p->imbue_mode == 2 ? "Anya le pone tu nombre"
+                                            : "Charsi lo vuelve raro: de 3 a 6 propiedades",
+                       1, COL(R_STONE, 12));
+    font_draw_centered(x + w / 2, y + h + 4,
+                       p->imbue_mode == 1 ? "A: engarzar   B: volver" : p->imbue_mode == 2 ? "A: personalizar   B: volver" : "A: imbuir   B: volver",
+                       1, COL(R_STONE, 12));
 }
 
 /* ---- Registro de misiones (una página más del panel) ---- */
@@ -8228,13 +10239,20 @@ static const char *quest_goal(const Player *p, int q, int *state)
     }
 }
 
-#define QUEST_ACTS 3 /* los actos con registro (las solapas) */
+#define QUEST_ACTS 5 /* los actos con registro (las solapas) */
 #define QUEST_FIRE 48 /* cuadros que arde una misión recién cumplida (24 del ícono, de a 2) */
 
 /* ¿Llegó a ese acto? (si no, su solapa no está) */
 static int quest_act_reached(const Player *p, int act)
 {
-    return act == 1 || (act == 2 && (p->act >= 2 || p->andy_q >= 3)) || (act == 3 && (p->act >= 3 || p->tombs_q >= 6));
+    return act == 1 || (act == 2 && (p->act >= 2 || p->andy_q >= 3)) || (act == 3 && (p->act >= 3 || p->tombs_q >= 6)) ||
+           (act == 4 && (p->act >= 4 || p->act_top >= 4)) || (act == 5 && (p->act >= 5 || p->act_top >= 5));
+}
+
+/* Cuántas misiones tiene el acto (el IV, tres) */
+static int quest_slots(int act)
+{
+    return act == 4 ? 3 : 6;
 }
 
 /* Las del Acto 2 (los textos del registro del original, qstsa2q11...) */
@@ -8363,7 +10381,11 @@ static int a2_npc_news(const Player *p, int who)
    cumplida) y la clave del objetivo del momento (NULL = ninguno) */
 static const char *quest_info(const Player *p, int act, int q, int *state)
 {
-    return act == 1 ? quest_goal(p, q, state) : act == 2 ? quest_goal2(p, q, state) : quest_goal3(p, q, state);
+    return act == 1   ? quest_goal(p, q, state)
+           : act == 2 ? quest_goal2(p, q, state)
+           : act == 3 ? quest_goal3(p, q, state)
+           : act == 4 ? quest_goal4(p, q, state)
+                      : quest_goal5(p, q, state);
 }
 
 /* La que se muestra al abrirlo: la primera en curso del acto en que está; si
@@ -8372,7 +10394,7 @@ static void quest_log_pick(const Player *p, int *act, int *sel)
 {
     int state, pending = -1;
     *act = p->act >= 1 && p->act <= QUEST_ACTS && quest_act_reached(p, p->act) ? p->act : 1;
-    for (int q = 0; q < 6; q++) {
+    for (int q = 0; q < quest_slots(*act); q++) {
         quest_info(p, *act, q, &state);
         if (state == 1) {
             *sel = q;
@@ -8390,7 +10412,10 @@ static void quest_log_step(const Player *p, int *act, int *sel, int dir)
     int acts = 1;
     while (acts < QUEST_ACTS && quest_act_reached(p, acts + 1))
         acts++;
-    int i = ((*act - 1) * 6 + *sel + dir + acts * 6) % (acts * 6);
+    int i = (*act - 1) * 6 + *sel;
+    do /* (en el Acto 4 los lugares 3..5 están vacíos) */
+        i = (i + dir + acts * 6) % (acts * 6);
+    while (i % 6 >= quest_slots(i / 6 + 1));
     *act = i / 6 + 1;
     *sel = i % 6;
     audio_play_name("cursor_pass", AUDIO_NOPOS, AUDIO_NOPOS);
@@ -8400,7 +10425,7 @@ static void quest_log_step(const Player *p, int *act, int *sel, int dir)
 static void quest_log_seen(Player *p)
 {
     for (int a = 1; a <= QUEST_ACTS; a++)
-        for (int q = 0; q < 6; q++) {
+        for (int q = 0; q < quest_slots(a); q++) {
             int state;
             quest_info(p, a, q, &state);
             if (state == 2)
@@ -8453,7 +10478,7 @@ static void draw_quest_log(const Player *p, int x, int y, int act, int sel, uint
             ui_frame("menu/expquesttabs", (a - 1) * 2 + 1, x + 2 + (a - 1) * 63, y + 2);
     ui_frame("menu/expquesttabs", (act - 1) * 2, x + 2 + (act - 1) * 63, y + 2); /* la elegida adelante */
     uint32_t t = s_anim_ticks - anim_start;
-    for (int q = 0; q < 6; q++) {
+    for (int q = 0; q < quest_slots(act); q++) {
         int state, sx = x + 20 + (q % 3) * 100, sy = y + 36 + (q / 3) * 98;
         quest_info(p, act, q, &state);
         /* a1q1.dc6: 0 en curso, 1..23 el fuego, 24 cumplida, 26 todavía no */
@@ -8469,11 +10494,26 @@ static void draw_quest_log(const Player *p, int x, int y, int act, int sel, uint
     const char *goal = quest_info(p, act, sel, &state);
     static const char *const k_state[3] = { "Pendiente", "En curso", "Cumplida" };
     char key[24], lines[6][128];
-    snprintf(key, sizeof key, "qstsa%dq%d", act, sel + 1);
+    snprintf(key, sizeof key, "qstsa%dq%d", act, act == 4 ? k_a4_quest_key[sel] : sel + 1);
     font_draw_centered(x + PANEL_W / 2, y + 264, str_get(key), 2, COL(R_GOLD, 15));
     font_draw_centered(x + PANEL_W / 2, y + 284, k_state[state], 1,
                        state == 2 ? COL(R_GOLD, 12) : state == 1 ? COL(R_GRAY, 15) : COL(R_STONE, 12));
-    int n = state == 2 || !goal ? 0 : wrap_text(str_get(goal), PANEL_W - 44, FONT_FORMAL, lines, 5);
+    char goal_buf[160] = "";
+    if (goal && strcmp(goal, "qstsa5q22") == 0) { /* "Rescata a %d soldados más" */
+        snprintf(goal_buf, sizeof goal_buf, str_get(goal), 15 - p->rescued > 0 ? 15 - p->rescued : 0);
+        goal = NULL;
+    }
+    if (goal && strcmp(goal, "qstsa4q23") == 0) { /* "Rompe los %d sellos restantes" (el último: qstsa4q24) */
+        int left = a4_seals_left();
+        if (left == 1)
+            goal = "qstsa4q24";
+        else {
+            snprintf(goal_buf, sizeof goal_buf, str_get(goal), left);
+            goal = NULL;
+        }
+    }
+    int n = state == 2 || (!goal && !goal_buf[0]) ? 0
+          : wrap_text(goal ? str_get(goal) : goal_buf, PANEL_W - 44, FONT_FORMAL, lines, 5);
     for (int k = 0; k < n; k++)
         font_draw_centered(x + PANEL_W / 2, y + 302 + k * 15, lines[k], FONT_FORMAL, COL(R_GRAY, 14));
     /* Las Siete Tumbas: debajo, el símbolo de la tumba verdadera */
@@ -8514,13 +10554,15 @@ static void quest_page_tick(Player *p, const PlayerInput *pi)
     }
     if (pi->nav_left || pi->nav_right)
         quest_log_step(p, &p->qlog_act, &p->qlog_sel, pi->nav_right - pi->nav_left);
-    if (pi->nav_up || pi->nav_down) {
+    if ((pi->nav_up || pi->nav_down) && quest_slots(p->qlog_act) == 6) {
         p->qlog_sel = (p->qlog_sel + 3) % 6;
         audio_play_name("cursor_pass", AUDIO_NOPOS, AUDIO_NOPOS);
     }
     int da = (pi->automap ? 1 : 0) - (pi->potion_life ? 1 : 0);
     if (da && quest_act_reached(p, p->qlog_act + da) && p->qlog_act + da >= 1 && p->qlog_act + da <= QUEST_ACTS) {
         p->qlog_act += da;
+        if (p->qlog_sel >= quest_slots(p->qlog_act))
+            p->qlog_sel = quest_slots(p->qlog_act) - 1;
         audio_play_name("cursor_pass", AUDIO_NOPOS, AUDIO_NOPOS);
     }
 }
@@ -8613,10 +10655,22 @@ static int zone_occupied(int z)
 
 static int s_act_leaving; /* cambiando de acto: zone_unload también suelta el pueblo */
 
+/* El armado de una zona en partes (zone_build): la zona a medias y por qué parte va */
+enum { ZB_MAP, ZB_PRESETS, ZB_OBJECTS, ZB_MONSTERS };
+static int      s_zb_zone = -1, s_zb_stage, s_zb_ticks;
+static int      s_zb_part, s_zb_next;   /* cuántas veces va la parte de ahora y la unidad de los DS1 que sigue */
+static double   s_zb_ms[4], s_zb_worst; /* D2_ZONES: lo de cada parte y el tick que más tardó */
+static int      s_zb_worst_stage;       /* (y en qué parte) */
+static int      s_trim_pending;         /* una zona borrada: lo liberado vuelve al sistema en otro tick (zones_tick) */
+static uint32_t s_zb_wait;              /* desde cuándo espera los DT1 del hilo de trabajos */
+static uint32_t s_zb_begin;             /* cuándo empezó (las piezas esperan sus DT1 hasta ZONE_DT1_WAIT) */
+
 static void zone_unload(int z)
 {
-    if (!world_zone_loaded(z) || (world_zone_is_town(z) && !s_act_leaving))
+    if ((!world_zone_loaded(z) && z != s_zb_zone) || (world_zone_is_town(z) && !s_act_leaving))
         return;
+    if (z == s_zb_zone) /* a medio armar: se tira lo que haya */
+        s_zb_zone = -1;
     double t0 = wall_ms();
     /* Que nadie siga apuntando a los monstruos que se van */
     for (int i = 0; i < MAX_PLAYERS; i++) {
@@ -8637,55 +10691,212 @@ static void zone_unload(int z)
     world_zone_free(&s_map, z);
     waypoints_find();
     waypoints_light();
-#ifdef __GLIBC__
-    malloc_trim(0);
-#endif
+    s_trim_pending = 1;
     if (s_debug || getenv("D2_ZONES"))
         printf("zona borrada: %s (%d unidades, %.0f ms)\n", world_zone_name(z), freed, wall_ms() - t0);
     mem_report("borrar la zona");
 }
 
-/* Arma la zona si no estaba. Si ya hay demasiadas, antes borra la que hace
-   más tiempo que nadie usa (nunca una con alguien adentro o al lado). */
-static int zone_load(int z)
+/* El armado de una zona en partes (zones_tick, ZONE_BUDGET ms por tick
+   mientras los jugadores se acercan; en la Pi una zona entera tardaba de 30
+   a 400 ms de una vez): las piezas del mapa de a poco (world_zone_build_step),
+   la colisión, las unidades que traen las piezas, los objetos al azar de las
+   salas y los monstruos del nivel, cada cosa en un tick. Una zona a la vez. */
+
+/* Arma la zona z: con budget 0 entera ahora (y antes la que estaba a
+   medias); si no, la parte que sigue. Si ya hay demasiadas, al empezar
+   borra la que hace más tiempo que nadie usa (nunca una con alguien adentro
+   o al lado). 1 = armada, 0 = falta, -1 = error. */
+static int zone_build(int z, double budget)
 {
     if (z < 0 || z >= world_zone_count())
         return -1;
     if (z < ZONE_BITS)
         s_zone_seen[z] = s_ticks;
-    if (world_zone_loaded(z))
-        return 0;
-    while (zones_loaded_count() >= s_zone_max) {
-        int old = -1;
-        for (int k = 0; k < world_zone_count() && k < ZONE_BITS; k++) {
-            if (!world_zone_loaded(k) || world_zone_is_town(k) || ((s_zone_pinned >> k) & 1) || zone_occupied(k))
-                continue;
-            if (old < 0 || s_ticks - s_zone_seen[k] > s_ticks - s_zone_seen[old])
-                old = k;
-        }
-        if (old < 0)
-            break; /* todas en uso: se pasa del límite un rato */
-        zone_unload(old);
+    if (s_zb_zone != z && world_zone_loaded(z))
+        return 1;
+    if (s_zb_zone >= 0 && s_zb_zone != z) {
+        if (budget > 0)
+            return 0; /* otra a medias: después */
+        if (zone_build(s_zb_zone, 0) < 0)
+            return -1;
+        if (world_zone_loaded(z))
+            return 1;
     }
-    double t0 = wall_ms();
-    if (world_zone_build(&s_map, z) != 0)
-        return -1;
-    double t1 = wall_ms();
-    units_zone_begin(z);
-    units_spawn_presets(&s_map, monster_level_at);
-    for (int i = 0; i < world_level_count(); i++)
-        if (world_level(i)->zone == z)
-            spawn_zone_monsters(world_level(i));
-    units_zone_end();
+    if (s_zb_zone < 0) {
+        int evicted = 0;
+        while (zones_loaded_count() >= s_zone_max) {
+            int old = -1;
+            for (int k = 0; k < world_zone_count() && k < ZONE_BITS; k++) {
+                if (!world_zone_loaded(k) || world_zone_is_town(k) || ((s_zone_pinned >> k) & 1) || zone_occupied(k))
+                    continue;
+                if (old < 0 || s_ticks - s_zone_seen[k] > s_ticks - s_zone_seen[old])
+                    old = k;
+            }
+            if (old < 0)
+                break; /* todas en uso: se pasa del límite un rato */
+            zone_unload(old);
+            evicted = 1;
+        }
+        s_zb_zone = z;
+        s_zb_stage = ZB_MAP;
+        s_zb_part = 0;
+        s_zb_ticks = 0;
+        s_zb_begin = s_ticks;
+        s_zb_worst = 0;
+        s_zb_worst_stage = ZB_MAP;
+        memset(s_zb_ms, 0, sizeof s_zb_ms);
+        /* Borrar la vieja ya fue bastante para este tick (en la Pi, hasta 30
+           ms): se empieza a armar en el que viene */
+        if (evicted && budget > 0)
+            return 0;
+    }
+    /* D2_ZONE_PARTS=1: también la que se arma entera va de a una pieza por
+       pasada (para probar que en partes sale igual) */
+    static int parts = -1;
+    if (parts < 0)
+        parts = getenv("D2_ZONE_PARTS") != NULL;
+    double t_tick = wall_ms();
+    int last = s_zb_stage;
+    s_zb_ticks++;
+    for (;;) {
+        double t = wall_ms();
+        int stage = last = s_zb_stage;
+        if (stage == ZB_MAP) {
+            /* Sin el hilo de trabajos (las pruebas sin gráficos) el tope es de
+               piezas y no de tiempo: así salen siempre iguales */
+            int sync = budget > 0 && !jobs_running();
+            static int cap = -1;
+            if (cap < 0)
+                cap = getenv("D2_ZONE_PIECES") ? atoi(getenv("D2_ZONE_PIECES")) : ZONE_SYNC_PIECES;
+            s_map.dt1_defer = budget > 0 && s_ticks - s_zb_begin < ZONE_DT1_WAIT;
+            s_map.piece_cap = sync ? cap : 0;
+            int r = world_zone_build_step(&s_map, z, budget > 0 ? (sync ? 1e9 : budget) : parts ? 1e-6 : 0);
+            s_map.dt1_defer = s_map.piece_cap = 0;
+            s_zb_ms[ZB_MAP] += wall_ms() - t;
+            if (r < 0) {
+                s_zb_zone = -1;
+                return -1;
+            }
+            if (r > 0) {
+                s_zb_stage = ZB_PRESETS;
+                s_zb_part = 0;
+                if (getenv("D2_COLLHASH")) { /* depuración: la colisión de la zona recién armada (para comparar optimizaciones) */
+                    uint32_t h = 2166136261u;
+                    int vol = 0;
+                    for (int i = 0; i < s_map.cw * s_map.ch; i++) {
+                        const MapChunk *ch = s_map.chunks[i];
+                        if (!ch || ch->zone != z)
+                            continue;
+                        for (int k = 0; k < MAP_CHUNK_SUB * MAP_CHUNK_SUB; k++) {
+                            h = (h ^ ch->coll[k]) * 16777619u;
+                            vol += (ch->coll[k] & COLL_VOLUME) != 0;
+                        }
+                    }
+                    printf("colisión de %s: %08x (%d con grosor)\n", world_zone_name(z), h, vol);
+                }
+            }
+        } else {
+            /* Las unidades, de a partes también (las barricadas del Acto 5
+               traen unas 700: en la Pi eran 160 ms de una): lo que queda de
+               ZONE_BUDGET o, sin el hilo de trabajos, un tope de cada cosa */
+            int sync = budget > 0 && !jobs_running(), begin = s_zb_part++ == 0, done;
+            double left = budget > 0 && !sync ? budget - (wall_ms() - t_tick) : 0;
+            if (budget > 0 && !sync && left < 0.5)
+                left = 0.5;
+            units_zone_begin(z);
+            if (stage == ZB_PRESETS) {
+                s_zb_next = units_spawn_presets(&s_map, monster_level_at, begin ? 0 : s_zb_next, sync ? ZONE_SYNC_PRESETS : 0,
+                                                left);
+                done = s_zb_next >= s_map.num_objects;
+            } else if (stage == ZB_OBJECTS) {
+                /* los cofres y barriles al azar de sus salas, y lo que ya se abrió */
+                done = obj_zone_step(z, begin, sync ? ZONE_SYNC_ROOMS : 0, left);
+                if (done && getenv("D2_OBJ_TEST"))
+                    obj_report(z);
+            } else {
+                done = zone_monsters_step(z, begin, sync ? ZONE_SYNC_GROUPS : 0, left);
+            }
+            units_zone_end();
+            if (done) {
+                s_zb_stage++;
+                s_zb_part = 0;
+            }
+            s_zb_ms[stage] += wall_ms() - t;
+        }
+        if (s_zb_stage > ZB_MONSTERS)
+            break;
+        if (budget > 0) {
+            double took = wall_ms() - t_tick;
+            if (took > s_zb_worst) {
+                s_zb_worst = took;
+                s_zb_worst_stage = stage;
+            }
+            return 0;
+        }
+    }
     quest_zone_loaded(z);
     waypoints_find();
     waypoints_light();
-    int dt1_ready, dt1_loaded;
-    map_dt1_loads(&dt1_ready, &dt1_loaded);
+    double took = wall_ms() - t_tick;
+    if (took > s_zb_worst) {
+        s_zb_worst = took;
+        s_zb_worst_stage = last;
+    }
+    s_zb_zone = -1;
+    int dt1_ready, dt1_loaded, dt1_waits;
+    map_dt1_loads(&dt1_ready, &dt1_loaded, &dt1_waits);
+    double c_tiles, c_vol, c_cuts, s_all, s_ds1, s_dt1;
+    map_collision_times(&c_tiles, &c_vol, &c_cuts);
+    map_stamp_times(&s_all, &s_ds1, &s_dt1);
     if (s_debug || getenv("D2_ZONES"))
-        printf("zona armada: %s (mapa %.0f ms, unidades %.0f ms; %d zonas; DT1: %d preparados, %d leídos al armar)\n",
-               world_zone_name(z), t1 - t0, wall_ms() - t1, zones_loaded_count(), dt1_ready, dt1_loaded);
+        printf("zona armada: %s (mapa %.0f ms, unidades %.0f ms, de eso objetos %.0f ms; %d zonas; DT1: %d preparados, "
+               "%d leídos al armar, %d piezas los esperaron; colisión %.1f + grosor %.1f + recorte %.1f ms; estampar %.1f, de eso DS1 %.1f y DT1 "
+               "%.1f; unidades: presets %.1f, monstruos %.1f; en %d ticks, el peor %.1f ms, %s)\n",
+               world_zone_name(z), s_zb_ms[ZB_MAP], s_zb_ms[ZB_PRESETS] + s_zb_ms[ZB_OBJECTS] + s_zb_ms[ZB_MONSTERS],
+               s_zb_ms[ZB_OBJECTS], zones_loaded_count(), dt1_ready, dt1_loaded, dt1_waits, c_tiles, c_vol, c_cuts, s_all, s_ds1,
+               s_dt1, s_zb_ms[ZB_PRESETS], s_zb_ms[ZB_MONSTERS], s_zb_ticks, s_zb_worst,
+               s_zb_ticks == 1 ? "entera" : (const char *const[]){ "mapa", "presets", "objetos", "monstruos" }[s_zb_worst_stage]);
     mem_report("armar la zona");
+    return 1;
+}
+
+/* La zona entera, ahora (0 = bien, -1 = error) */
+static int zone_load(int z)
+{
+    return zone_build(z, 0) < 0 ? -1 : 0;
+}
+
+/* ¿Hay que terminar ya de armar la zona z? Si alguien (o su mercenario)
+   está adentro o a menos de ZONE_URGENT de un paso hacia ella */
+static int zone_needed_now(int z)
+{
+    for (int i = 0; i < s_num_players; i++) {
+        float px[2] = { s_pl[i].x, 0 }, py[2] = { s_pl[i].y, 0 };
+        int n = 1;
+        if (units_merc_alive(s_pl[i].merc_unit)) {
+            units_position(s_pl[i].merc_unit, 1.0f, &px[1], &py[1]);
+            n = 2;
+        }
+        for (int k = 0; k < n; k++) {
+            int here = zone_at(px[k], py[k]);
+            if (here == z)
+                return 1;
+            for (int l = 0; l < world_link_count(); l++) {
+                const WorldLink *wl = world_link(l);
+                float dx = wl->x - px[k], dy = wl->y - py[k];
+                if (((wl->a == here && wl->b == z) || (wl->b == here && wl->a == z)) &&
+                    dx * dx + dy * dy < ZONE_URGENT * ZONE_URGENT)
+                    return 1;
+            }
+            for (int w = 0; w < world_warp_count(); w++) {
+                const Warp *wp = world_warp(w);
+                float dx = (wp->x0 + wp->x1) / 2 - px[k], dy = (wp->y0 + wp->y1) / 2 - py[k];
+                if (wp->from == here && wp->to == z && dx * dx + dy * dy < ZONE_URGENT * ZONE_URGENT)
+                    return 1;
+            }
+        }
+    }
     return 0;
 }
 
@@ -8728,10 +10939,10 @@ static void zones_tick(void)
     }
     s_zone_pinned = pinned;
     /* Las que se van a armar pronto: sus DT1, en el hilo de trabajos (armar la
-       zona después no tiene que leerlos). Con la cola ocupada (al llegar al
-       acto, los gráficos del pueblo), en otro tick. */
+       zona después no tiene que leerlos). Van adelante de los que esperan (al
+       llegar al acto, los gráficos del pueblo: jobs_push_first). */
     s_zone_prepared &= soon;
-    if (jobs_running() && jobs_pending() <= 256)
+    if (jobs_running())
         for (int z = 0; z < world_zone_count() && z < ZONE_BITS; z++)
             if (((soon & ~s_zone_prepared) >> z & 1) && !world_zone_loaded(z)) {
                 char paths[34][96];
@@ -8742,15 +10953,38 @@ static void zones_tick(void)
                 if (s_debug || getenv("D2_ZONES"))
                     printf("zona por armar: %s (se preparan %d DT1; tick %u)\n", world_zone_name(z), n, s_ticks);
             }
-    /* Como mucho una zona nueva por tick (en la Pi armar una tarda de 30 a 300
-       ms): si hay varias cerca, las otras se arman en los ticks que siguen,
-       antes de llegar. Las ya armadas solo anotan que se vieron. */
-    int built = 0;
+    /* Las ya armadas solo anotan que se vieron. Las que faltan, de a una y
+       en partes (zone_build): en la Pi armar una entera tardaba de 30 a 400
+       ms, y así son unos ZONE_BUDGET por tick mientras uno se acerca. Si
+       alguien ya está encima, se termina de una. Antes de empezar, se
+       esperan un poco los DT1 que el hilo de trabajos está leyendo. */
+    int next = s_zb_zone;
     for (int z = 0; z < world_zone_count() && z < ZONE_BITS; z++)
-        if (((pinned >> z) & 1) && (world_zone_loaded(z) || !built)) {
-            built |= !world_zone_loaded(z);
-            zone_load(z);
+        if ((pinned >> z) & 1) {
+            if (world_zone_loaded(z) && z != s_zb_zone)
+                s_zone_seen[z] = s_ticks;
+            else if (next < 0)
+                next = z;
         }
+    /* Lo que liberó una zona borrada vuelve al sistema (malloc_trim) en un
+       tick sin armar nada más: en la Pi tarda de 5 a 25 ms */
+    int trimmed = s_trim_pending;
+    if (s_trim_pending) {
+        s_trim_pending = 0;
+#ifdef __GLIBC__
+        malloc_trim(0);
+#endif
+    }
+    if (next >= 0) {
+        static int wait_zone = -1;
+        int urgent = s_zone_budget <= 0 || zone_needed_now(next);
+        if (next != wait_zone) {
+            wait_zone = next;
+            s_zb_wait = s_ticks;
+        }
+        if (urgent || (!trimmed && (s_zb_zone >= 0 || !map_prep_busy() || s_ticks - s_zb_wait >= ZONE_PREP_WAIT)))
+            zone_build(next, urgent ? 0 : s_zone_budget);
+    }
     /* Si alguna vez hubo que pasarse del límite (todas en uso), se vuelve a
        él apenas se desocupa una */
     while (zones_loaded_count() > s_zone_max) {
@@ -8806,6 +11040,7 @@ static void act_switch(int act)
         p->target = p->cast_target = -1;
         p->level = NULL;
     }
+    tp_reset(); /* los portales al pueblo quedan en el acto que se deja */
     s_act_leaving = 1;
     zones_unload_all();
     s_act_leaving = 0;
@@ -8816,7 +11051,7 @@ static void act_switch(int act)
     skillfx_clear();
     automap_reset();
     map_free(&s_map);
-    s_act = act >= 1 && act <= 3 ? act : 1;
+    s_act = act >= 1 && act <= 5 ? act : 1;
     if (world_layout(&s_map, s_world_seed, s_act) != 0)
         fprintf(stderr, "no pude armar el acto %d\n", s_act);
     prefetch_act_tiles(s_act);
@@ -8833,6 +11068,10 @@ static void act_switch(int act)
         x += 3.0f;
     else if (s_act == 3 && units_find("meshif2", &x, &y) == 0) /* en Kurast: al bajar del barco de Meshif */
         x += 3.0f;
+    else if (s_act == 4 && units_find("WaypointAct4Town", &x, &y) == 0) /* en la Fortaleza: junto al waypoint */
+        y += 4.0f;
+    else if (s_act == 5 && units_find("WaypointExp", &x, &y) == 0) /* en Harrogath: junto al waypoint */
+        y += 4.0f;
     s_start_x = s_town_x = x;
     s_start_y = s_town_y = y;
     units_merc_hide_all();
@@ -8841,7 +11080,7 @@ static void act_switch(int act)
         place_at(p, i, x, y);
         set_player_state(p, PS_NORMAL, MODE_TN);
         p->act = s_act;
-        p->waypoints |= 1 << ((s_act - 1) * WP_ACT); /* el del pueblo */
+        p->waypoints |= 1ull << wp_first(s_act); /* el del pueblo */
         if (p->merc_name) {
             p->merc_unit = units_merc_spawn(i, merc_monster(p->merc_type), p->x, p->y);
             merc_apply(p, p->merc_hp > 0 ? p->merc_hp : -1);
@@ -8853,7 +11092,11 @@ static void act_switch(int act)
     waypoints_find();
     waypoints_light();
     printf("acto %d: %s\n", s_act,
-           s_act == 3 ? "el muelle de Kurast" : s_act == 2 ? "Lut Gholein" : "el campamento de las pícaras");
+           s_act == 5   ? "Harrogath"
+           : s_act == 4 ? "la Fortaleza del Pandemónium"
+           : s_act == 3 ? "el muelle de Kurast"
+           : s_act == 2 ? "Lut Gholein"
+                        : "el campamento de las pícaras");
 }
 
 /* Pruebas: todas las zonas a la vez, sin límite */
@@ -8885,6 +11128,81 @@ static int level_free_spot(const Level *lv, float *ox, float *oy)
 /* Pruebas: D2_TOUR="Stony Field,Dark Wood" (o números de zona) lleva al
    jugador 1 a esos niveles, a uno cada D2_TOUR_EVERY ticks (por defecto
    100), para ver cómo se arman y se borran */
+/* Prueba: D2_DIFFTEST=1 (en el Acto 1) muestra en cada dificultad lo de
+   algunos niveles (el nivel de los monstruos, cuáles salen y cuántos jefes)
+   y los números de algunos monstruos que hace salir: comunes, un jefe de
+   misión, uno de nombre propio, uno al azar con su escolta y campeones
+   (docs/plan-dificultades.md) */
+static void diff_test(void)
+{
+    static int done;
+    if (done || s_ticks < 5 || !getenv("D2_DIFFTEST") || s_act != 1)
+        return;
+    done = 1;
+    int start = s_diff;
+    static const char *const k_levels[] = { "Blood Moor", "Cold Plains", "Catacombs Level 4", "Moo Moo Farm" };
+    float x = s_pl[0].x + 12.0f, y = s_pl[0].y;
+    for (int d = 0; d < 3; d++) {
+        game_set_difficulty(d);
+        printf("DIF: === dificultad %d\n", d);
+        for (unsigned k = 0; k < sizeof k_levels / sizeof k_levels[0]; k++) {
+            const Level *lv = world_level_named(k_levels[k]);
+            if (!lv)
+                continue;
+            printf("DIF: %-18s nivel %d, jefes %d..%d, salen %d de:", lv->name, lv->mon_level, lv->umin, lv->umax, lv->num_mon);
+            for (int m = 0; m < LEVEL_MAX_MONSTERS && lv->monsters[m]; m++)
+                printf(" %s", lv->monsters[m]);
+            printf(" (jefes de:");
+            for (int m = 0; m < lv->num_umon; m++)
+                printf(" %s", lv->umons[m]);
+            printf(")\n");
+        }
+        const Level *moor = world_level_named("Blood Moor"), *cat = world_level_named("Catacombs Level 4");
+        int ml = moor ? moor->mon_level : 1;
+        struct { const char *what, *id; int level; } k_mon[] = {
+            { "común", "zombie1", ml },
+            { "común", "fallen1", ml },
+            { "de misión", "andariel", cat ? cat->mon_level : 1 },
+        };
+        for (unsigned k = 0; k < sizeof k_mon / sizeof k_mon[0]; k++) {
+            units_zone_begin(zone_at(x, y));
+            int u = units_spawn_monster(k_mon[k].id, x, y, k_mon[k].level);
+            units_zone_end();
+            if (u < 0)
+                continue;
+            char buf[256];
+            units_debug_stats(u, buf, sizeof buf);
+            printf("DIF: %-10s %-10s %s\n", k_mon[k].what, k_mon[k].id, buf);
+            units_remove(u);
+        }
+        int ids[16];
+        units_zone_begin(zone_at(x, y));
+        int b = units_spawn_superunique("Bishibosh", x, y, ml);
+        units_zone_end();
+        if (b >= 0) {
+            char buf[256];
+            units_debug_stats(b, buf, sizeof buf);
+            printf("DIF: %-10s %-10s %s\n", "de nombre", "Bishibosh", buf);
+        }
+        int n = units_find_all("fallenshaman1", ids, 16); /* (su escolta) */
+        for (int k = 0; k < n; k++)
+            units_remove(ids[k]);
+        if (b >= 0)
+            units_remove(b);
+        units_zone_begin(zone_at(x, y));
+        b = units_spawn_boss_pack("zombie1", x, y, ml);
+        units_zone_end();
+        n = units_find_all("zombie1", ids, 16);
+        for (int k = 0; k < n; k++) {
+            char buf[256];
+            units_debug_stats(ids[k], buf, sizeof buf);
+            printf("DIF: %-10s %-10s %s\n", ids[k] == b ? "jefe azar" : "escolta", "zombie1", buf);
+            units_remove(ids[k]);
+        }
+    }
+    game_set_difficulty(start);
+}
+
 /* Prueba: D2_TALKTEST=N abre el diálogo de cada NPC del campamento y
    aprieta "Hablar" N veces, mostrando qué dice cada vez (con las misiones
    como estén: D2_AUTOTEST_STATE no sirve acá, pero sí una partida guardada) */
@@ -8898,7 +11216,9 @@ static void talk_test(void)
     static const char *const npcs[] = { "akara", "kashya", "charsi", "gheed", "warriv1", "cain1",
                                         "atma", "drognan", "elzix", "fara", "geglash", "greiz",
                                         "jerhyn", "lysander", "meshif1", "warriv2", "cain2", "act2guard2",
-                                        "ormus", "alkor", "asheara", "hratli", "natalya", "meshif2", "cain3" };
+                                        "ormus", "alkor", "asheara", "hratli", "natalya", "meshif2", "cain3",
+                                        "tyrael2", "cain4", "halbu", "jamella",
+                                        "larzuk", "malah", "qual-kehk", "nihlathak", "cain6", "drehya" };
     Player *p = &s_pl[0];
     for (unsigned k = 0; k < sizeof npcs / sizeof npcs[0]; k++) {
         int u = -1;
@@ -8934,6 +11254,12 @@ static void talk_test(void)
                     printf("%s apuesta comprada: %s, quedan %d en la lista, pagó %d\n", npcs[k],
                            p->bag[p->bag_count - 1].type->name, p->gamble_count, 10000000 - p->gold);
                 p->gold = gold;
+            } else if (opts[o] == OPT_TRADE) { /* la tienda: cuántos objetos y los primeros */
+                const Shop *sh = shop_of(npcs[k]);
+                printf("%s tienda: %d objetos", npcs[k], sh ? sh->count : 0);
+                for (int i = 0; sh && i < sh->count && i < 6; i++)
+                    printf("%s %s", i ? "," : ":", sh->stock[i].type->name);
+                printf("\n");
             } else if (opts[o] == OPT_HIRE) { /* los que ofrece (los de su acto) */
                 merc_offers(p);
                 for (int i = 0; i < p->num_offers; i++) {
@@ -9309,6 +11635,8 @@ static void a2_quest_test(void)
 }
 
 #include "a3qtest.inc"
+#include "a4qtest.inc"
+#include "cowtest.inc"
 
 static void debug_tour(void)
 {
@@ -9413,6 +11741,207 @@ static int pet_groups(const Player *p, PetGroup *g, int *lost)
 #include "autotest.inc"
 #include "skilltest.inc"
 
+static int bots_playing(void)
+{
+    return s_demo || s_at.active;
+}
+
+/* D2_STASH_TEST=1: prueba sin gráficos del cofre, los Pergaminos de Portal
+   apilados y el oro al morir, con el J1 (después lo deja como estaba). Dice
+   BIEN o MAL por cada cosa. */
+static int stash_check(int ok, const char *what, int *bad)
+{
+    printf("  cofre: %s %s\n", ok ? "BIEN" : "MAL ", what);
+    *bad += !ok;
+    return ok;
+}
+
+static void stash_test(void)
+{
+    static int done;
+    if (done || s_ticks < 5 || !getenv("D2_STASH_TEST"))
+        return;
+    done = 1;
+    Player *p = &s_pl[0];
+    const ItemType *tsc = items_find("tsc"), *key = items_find("key"), *tbk = items_find("tbk");
+    int mode = atoi(getenv("D2_STASH_TEST"));
+    if (mode >= 2) { /* para las capturas: el cofre abierto con cosas (2: la pestaña "+", 3: un objeto, 4: en la mano) */
+        p->act_max = 3;
+        p->stash_bought = 1;
+        p->stash_gold = 12345;
+        p->gold = 70000;
+        const char *codes[] = { "qui", "key", "tsc", "rin", "hp1", "lsd", "amu", "cap" };
+        for (unsigned k = 0; k < sizeof codes / sizeof codes[0]; k++) {
+            const ItemType *t = items_find(codes[k]);
+            if (!t)
+                continue;
+            Item it = items_make(t);
+            if (t == key || t == tsc)
+                it.amount = t == key ? 12 : 17;
+            stash_add(p, 0, &it);
+        }
+        stash_show(p);
+        p->inv_sel = mode == 2 ? INV_STAB0 + stash_tabs(p) : INV_STASH0;
+        if (mode == 4) {
+            inventory_lift(p);
+            p->inv_sel = INV_STASH0 + 4 + STASH_W * 2;
+        }
+        return;
+    }
+    static Player saved; /* (para dejarlo como estaba) */
+    saved = *p;
+    int bad = 0;
+    printf("prueba del cofre (J1 en %s, acto %d, el más alto %d)\n", p->level ? p->level->name : "?", p->act, p->act_max);
+
+    /* Los pergaminos se apilan de a TP_STACK; el tomo ya no se vende ni cae */
+    p->bag_count = 0;
+    for (int k = 0; k < 25; k++) {
+        Item it = items_make(tsc);
+        bag_add(p, &it);
+    }
+    stash_check(p->bag_count == 2 && stack_count(&p->bag[0]) + stack_count(&p->bag[1]) == 25 &&
+                    (stack_count(&p->bag[0]) == TP_STACK || stack_count(&p->bag[1]) == TP_STACK),
+                "25 pergaminos: una pila de 20 y otra de 5", &bad);
+    stash_check(tp_find(p) >= 0 && stack_count(&p->bag[tp_find(p)]) == 5, "se gasta primero la pila chica", &bad);
+    stash_check(!items_supported(tbk), "el Tomo de Portal no se vende ni cae", &bad);
+    Item stack = p->bag[0];
+    stash_check(items_price(&stack, 0) == items_price(&(Item){ .type = tsc, .amount = 1 }, 0) * stack_count(&stack),
+                "una pila vale lo que sus pergaminos", &bad);
+    /* Una partida vieja con un tomo de 7 cargas: 7 pergaminos más */
+    p->bag_count = 0;
+    Item one = items_make(tsc), tome = items_make(tbk);
+    tome.amount = 7;
+    bag_add(p, &one);
+    bag_add_at(p, &tome, 5, 0);
+    tomes_to_scrolls(p);
+    stash_check(p->bag_count == 1 && stack_count(&p->bag[0]) == 8, "el tomo viejo pasa a ser 7 pergaminos", &bad);
+    stash_check(shop_fill_count(p, tsc) == TP_STACK - 8, "X en la tienda: los 12 que faltan para la pila", &bad);
+
+    /* Las pestañas: una por acto, más las compradas al triple cada vez */
+    int act_max = p->act_max;
+    p->stash_bought = 0;
+    p->act_max = 1;
+    stash_check(stash_tabs(p) == 1, "en el Acto 1, una pestaña", &bad);
+    p->act_max = 3;
+    stash_check(stash_tabs(p) == 3, "llegó al Acto 3: tres", &bad);
+    p->gold = 60000;
+    p->stash_gold = 0;
+    stash_buy(p);
+    stash_check(p->stash_bought == 1 && stash_tabs(p) == 4 && p->gold == 10000 && stash_price(p) == 3 * STASH_PRICE,
+                "compró la cuarta (50000) y la que sigue cuesta el triple", &bad);
+    p->gold = 100000;
+    stash_buy(p);
+    stash_check(p->stash_bought == 1 && p->gold == 100000, "sin oro suficiente no se compra", &bad);
+    p->stash_gold = 60000;
+    stash_buy(p);
+    stash_check(p->stash_bought == 2 && p->gold == 0 && p->stash_gold == 10000, "paga con lo que lleva y el resto del cofre",
+                &bad);
+    for (int k = 0; k < 10; k++) {
+        p->gold = p->stash_gold = 1000000000;
+        stash_buy(p);
+    }
+    stash_check(p->stash_bought == STASH_BUY_MAX && !stash_can_buy(p), "no se compran más de 5", &bad);
+
+    /* El oro: todo al cofre y de vuelta */
+    p->gold = 1234;
+    p->stash_gold = 100;
+    stash_move_gold(p, 1);
+    stash_check(p->gold == 0 && p->stash_gold == 1334, "guarda todo el oro", &bad);
+    stash_move_gold(p, 0);
+    stash_check(p->gold == 1334 && p->stash_gold == 0, "lo saca todo", &bad);
+
+    /* Los objetos: X de la mochila al cofre y vuelta, las pilas se juntan */
+    for (int t = 0; t < STASH_TABS; t++)
+        p->stash_count[t] = 0;
+    p->bag_count = 0;
+    Item keys = items_make(key);
+    keys.amount = 5;
+    bag_add(p, &keys);
+    stash_show(p);
+    stash_check(p->inv_open && p->stash_open && p->inv_sel == INV_STASH0, "A en el cofre lo abre en el inventario", &bad);
+    p->stash_tab = 2;
+    p->inv_sel = INV_CELL0;
+    inventory_use(p);
+    stash_check(p->bag_count == 0 && p->stash_count[2] == 1 && p->stash[2][0].amount == 5, "X pasa las llaves a la pestaña 3",
+                &bad);
+    bag_add(p, &keys);
+    inventory_use(p);
+    stash_check(p->stash_count[2] == 1 && p->stash[2][0].amount == 10, "y otras 5 se juntan con esas", &bad);
+    const ItemType *big = items_find("qui"); /* (una armadura de 2x3) */
+    int fit = 0;
+    for (int k = 0; big && k < 40; k++) {
+        Item it = items_make(big);
+        fit += stash_add(p, 0, &it);
+    }
+    stash_check(big && fit == (STASH_W / big->inv_w) * (STASH_H / big->inv_h), "la pestaña entera de armaduras", &bad);
+    p->inv_sel = INV_STASH0;
+    p->stash_tab = 0;
+    inventory_use(p);
+    stash_check(p->stash_count[0] == fit - 1 && p->bag_count == 1, "X del cofre a la mochila", &bad);
+    p->inv_sel = INV_STASH0 + 2; /* (la de x = 2, arriba) */
+    inventory_lift(p);
+    stash_check(p->held.type == big && p->stash_count[0] == fit - 2, "A levanta del cofre", &bad);
+    p->inv_sel = INV_STAB0 + 1;
+    inventory_place(p);
+    stash_check(p->stash_tab == 1 && p->held.type == big, "A en otra pestaña la muestra, con lo de la mano", &bad);
+    p->inv_sel = INV_STASH0;
+    inventory_place(p);
+    stash_check(!p->held.type && p->stash_count[1] == 1, "y lo suelta ahí", &bad);
+
+    /* Se guarda y se vuelve a cargar igual */
+    p->stash_gold = 4321;
+    int slot = p->slot;
+    if (!slot)
+        p->slot = SAVE_SLOTS;
+    save_character(p);
+    static Player back;
+    memset(&back, 0, sizeof back);
+    back.cls = p->cls;
+    back.slot = p->slot;
+    int loaded = load_character(&back);
+    int same = loaded && back.stash_gold == 4321 && back.stash_bought == p->stash_bought && back.act_max == p->act_max;
+    for (int t = 0; t < STASH_TABS; t++)
+        same &= back.stash_count[t] == p->stash_count[t];
+    same &= back.stash[2][0].type == key && back.stash[2][0].amount == 10 && back.stash_x[1][0] == p->stash_x[1][0];
+    stash_check(same, "se guarda y se carga igual (pestañas, lugares, pilas, oro)", &bad);
+    inventory_close(p);
+    stash_check(!p->inv_open && !p->stash_open, "B lo cierra", &bad);
+
+    /* A al lado del cofre del pueblo (en las pruebas automáticas no: los bots no lo usan) */
+    int bank;
+    if (units_find_all("Bank", &bank, 1) == 1) {
+        float bx, by;
+        units_position(bank, 1.0f, &bx, &by);
+        place_at(p, 0, bx + 1.5f, by + 1.5f);
+        int opened = obj_interact(p) && p->stash_open;
+        stash_check(bots_playing() ? !opened : opened,
+                    bots_playing() ? "los bots no abren el cofre del pueblo" : "A al lado del cofre del pueblo lo abre", &bad);
+        inventory_close(p);
+    } else {
+        stash_check(0, "hay un cofre en el pueblo", &bad);
+    }
+
+    /* Al morir: el nivel % (hasta 20) del oro que lleva; el del cofre no */
+    *p = saved;
+    int lvl = p->level_num;
+    p->level_num = 10;
+    p->gold = 10000;
+    p->stash_gold = 5000;
+    set_player_state(p, PS_DYING, MODE_DT);
+    stash_check(p->gold == 9000 && p->gold_lost == 1000 && p->stash_gold == 5000, "al morir en el nivel 10 pierde el 10%", &bad);
+    *p = saved;
+    p->level_num = lvl;
+    if (!slot) {
+        char path[300];
+        if (save_path(SAVE_SLOTS, path, sizeof path))
+            remove(path);
+    } else {
+        save_character(p);
+    }
+    (void)act_max;
+    printf("prueba del cofre: %s (%d mal)\n", bad ? "MAL" : "BIEN", bad);
+}
+
 static const int k_demo_rotation[][2] = {
     { 7, 3 }, /* primero el Brujo con el Paladín */
     { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 4 }, { 4, 5 }, { 5, 6 }, { 6, 7 }, { 7, 0 },
@@ -9446,12 +11975,15 @@ void game_demo_start_pair(int cls, int cls2)
     /* D2_DEMO_PLAYERS=1: uno solo (por defecto juegan los dos, cada uno con su bot) */
     int players = getenv("D2_DEMO_PLAYERS") && atoi(getenv("D2_DEMO_PLAYERS")) == 1 ? 1 : MAX_PLAYERS;
     s_demo = 1;
+    game_set_difficulty(0); /* (en Normal, aunque la última partida fuera en otra; D2_DIFF la cambia) */
     game_start_slots(players, slots, classes);
-    /* Por defecto, el Acto 2 entero con nivel 40 y todas las habilidades en 6
-       (las va usando una por una); D2_DEMO_ACT=1, el Acto 1 con nivel 30;
-       D2_DEMO_ACT=3, el Acto 3 con nivel 50 (y las habilidades en 8);
+    /* Por defecto, la campaña: los Actos 1 a 5 en Normal, Pesadilla e
+       Infierno, con todas las habilidades (las va usando una por una) y el
+       nivel de cada acto (demo_show_setup: 30, 40, 50, 60 y 70, y 25 más en
+       Pesadilla y 50 en Infierno); con D2_DEMO_ACT=1..5, solo ese acto;
        D2_DEMO_MODE=nuevo, desde el nivel 1 (sube y elige sus habilidades), y
        D2_DEMO_MODE=habilidades, la prueba contra Andariel */
+    memset(&s_camp, 0, sizeof s_camp);
     const char *mode = getenv("D2_DEMO_MODE");
     if (mode && (strcmp(mode, "habilidades") == 0 || strcmp(mode, "skills") == 0) && skilltest_start() == 0) {
         s_st.demo = 1;
@@ -9460,16 +11992,133 @@ void game_demo_start_pair(int cls, int cls2)
         printf("demostración: habilidades contra Andariel\n");
         return;
     }
-    int dact = getenv("D2_DEMO_ACT") ? atoi(getenv("D2_DEMO_ACT")) : 2;
-    game_autotest_start(dact == 1 ? "act1" : dact == 3 ? "act3" : "act2", players);
+    int dact = getenv("D2_DEMO_ACT") ? atoi(getenv("D2_DEMO_ACT")) : 0;
+    int from = getenv("D2_DEMO_FROM") ? atoi(getenv("D2_DEMO_FROM")) : 1; /* la campaña desde ese acto */
+    s_camp.on = dact < 1 || dact > 5;
+    s_camp.act = s_camp.first_act = !s_camp.on ? dact : from >= 1 && from <= 5 ? from : 1;
+    s_camp.first_diff = s_diff;
+    s_demo_all = !(mode && strcmp(mode, "nuevo") == 0);
+    printf("demostración: %s%s%s%s%s\n", game_class_name(cls), players > 1 ? " y " : "",
+           players > 1 ? game_class_name(classes[1]) : "", s_demo_all ? ", con todas las habilidades" : "",
+           s_camp.on ? "; la campaña: los cinco actos en cada dificultad" : "");
+    demo_act_start(s_camp.act);
+}
+
+/* Un acto de la demostración: la prueba de ese acto con los bots, desde
+   donde están (con el estado de los actos anteriores) */
+static void demo_act_start(int act)
+{
+    static const char *const k_names[5] = { "act1", "act2", "act3", "act4", "act5" };
+    /* En la campaña, lo de misión que quedó de antes (los Libros de habilidad
+       sin leer, la estatuilla o el Mangual de un acto que se cortó, el
+       Martillo) ya no sirve, menos el Cubo: se tira. Si no, se junta de un
+       acto a otro y de una dificultad a otra hasta llenar la mochila (en el
+       Acto 4 de Pesadilla no entraba el Martillo de la Forja) */
+    for (int i = 0; s_camp.on && i < s_num_players; i++) {
+        Player *p = &s_pl[i];
+        int gone = 0, box = bag_index_of(p, "box"); /* (uno solo: cada dificultad da otro en el Acto 2) */
+        for (int k = p->bag_count - 1; k >= 0; k--)
+            if (is_quest_item(p->bag[k].type) && k != box) {
+                bag_remove(p, k);
+                box -= box > k;
+                gone++;
+            }
+        for (int k = p->cube_count - 1; k >= 0; k--)
+            if (is_quest_item(p->cube[k].type)) {
+                cube_remove(p, k);
+                gone++;
+            }
+        for (int s = 0; s < SLOT_COUNT; s++)
+            if (p->equip[s].type && is_quest_item(p->equip[s].type)) {
+                memset(&p->equip[s], 0, sizeof p->equip[s]);
+                gone++;
+            }
+        if (gone) {
+            refresh_look(p);
+            refresh_stats(p);
+            printf("  demo J%d tira %d objetos de misión de antes\n", i + 1, gone);
+        }
+    }
+    game_autotest_start(k_names[act - 1], s_num_players);
     demo_start();
     s_one_hit = getenv("D2_ONEHIT") != NULL; /* pelea de verdad (la prueba mata de un golpe) */
     s_god = 2;                               /* recibe daño pero no muere */
-    s_demo_all = !(mode && strcmp(mode, "nuevo") == 0);
     for (int i = 0; s_demo_all && i < s_num_players; i++)
         demo_show_setup(i);
-    printf("demostración: %s%s%s%s\n", game_class_name(cls), players > 1 ? " y " : "",
-           players > 1 ? game_class_name(classes[1]) : "", s_demo_all ? ", con todas las habilidades" : "");
+    printf("demostración: el Acto %d en %s\n", act, k_diff_names[s_diff]);
+}
+
+/* Terminó un acto de la campaña (r: 0 bien, -1 mal; si falló se sigue igual,
+   con lo de ese acto dado por hecho): el que sigue o, después del Acto 5, el
+   Acto 1 de la dificultad que sigue, con los mismos personajes. 0 = se
+   terminó la campaña */
+static int demo_campaign_next(int r)
+{
+    if (!s_demo || !s_camp.on || s_camp.act < 1 || s_camp.act > 5)
+        return 0;
+    s_camp.result[s_diff][s_camp.act - 1] = r == 0 && at_all_ok() ? 1 : -1;
+    s_camp.ticks[s_diff][s_camp.act - 1] = s_at.ticks;
+    if (s_camp.act == 5 && s_diff == 2)
+        return 0; /* (el informe de este acto y el de la campaña: game_autotest_report) */
+    s_camp.mid = 1;
+    game_autotest_report(); /* el de este acto */
+    s_camp.mid = 0;
+    if (s_camp.act < 5) {
+        s_camp.act++;
+    } else { /* como una partida nueva en la otra dificultad, con el personaje guardado */
+        int slots[MAX_PLAYERS] = { 0 }, classes[MAX_PLAYERS] = { 0 };
+        for (int i = 0; i < s_num_players; i++) {
+            classes[i] = s_pl[i].cls;
+            FILE *f = open_memstream(&s_carry[i], &s_carry_len[i]);
+            if (f) {
+                save_character_to(f, &s_pl[i]);
+                fclose(f);
+            }
+        }
+        game_set_difficulty(s_diff + 1);
+        game_start_slots(s_num_players, slots, classes);
+        for (int i = 0; i < MAX_PLAYERS; i++) {
+            free(s_carry[i]);
+            s_carry[i] = NULL;
+        }
+        s_camp.act = 1;
+    }
+    printf("\nla campaña sigue: ");
+    demo_act_start(s_camp.act);
+    return 1;
+}
+
+/* Cómo fue cada acto de la campaña (al terminar o al cortarla) */
+static void demo_campaign_report(void)
+{
+    int ok = 1;
+    printf("\n== La campaña de la demostración ==\n");
+    for (int d = s_camp.first_diff; d < 3; d++) {
+        printf("%s:", k_diff_names[d]);
+        for (int a = d == s_camp.first_diff ? s_camp.first_act - 1 : 0; a < 5; a++) {
+            int res = s_camp.result[d][a];
+            ok &= res == 1;
+            printf(" Acto %d %s", a + 1, res > 0 ? "bien" : res < 0 ? "MAL" : "no se jugó");
+            if (res)
+                printf(" (%.0f min)", s_camp.ticks[d][a] / (double)TICK_RATE / 60.0);
+            printf(a < 4 ? "," : "\n");
+        }
+    }
+    printf("RESULTADO: %s\n", ok ? "BIEN" : "MAL");
+}
+
+static int demo_campaign_ok(void)
+{
+    for (int d = s_camp.first_diff; d < 3; d++)
+        for (int a = d == s_camp.first_diff ? s_camp.first_act - 1 : 0; a < 5; a++)
+            if (s_camp.result[d][a] != 1)
+                return 0;
+    return 1;
+}
+
+int game_demo_acts(void)
+{
+    return s_demo && s_camp.on ? 5 * (3 - s_camp.first_diff) - (s_camp.first_act - 1) : 1;
 }
 
 void game_demo_stop(void)
@@ -9493,7 +12142,10 @@ static void draw_demo_banner(void)
     ui_dark_box(SCREEN_W / 2 - w / 2 - 16, 70, w + 32, 52);
     if ((s_anim_ticks / 25) % 3 != 2)
         font_draw_centered(SCREEN_W / 2, 78, text, 3, COL(R_GOLD, 15));
-    font_draw_centered(SCREEN_W / 2, 104, "Demostración: el bot juega solo", 1, COL(R_GRAY, 13));
+    char sub[96];
+    snprintf(sub, sizeof sub, tr("Demostración: el bot juega solo (Acto %d, %s)"), s_at.act, tr(k_diff_names[s_diff]));
+    font_draw_centered(SCREEN_W / 2, 104, s_at.active && s_at.act >= 1 ? sub : tr("Demostración: el bot juega solo"), 1,
+                       COL(R_GRAY, 13));
 }
 
 /* Dónde está cada jugador (la zona y los subtiles), para poder decir
@@ -9812,8 +12464,13 @@ int game_tick(const InputState *in)
             automap_reveal(&s_pl[i]);
     debug_tour();
     talk_test();
+    diff_test();
     a2_quest_test();
     a3_quest_test();
+    a4_quest_test();
+    cow_test();
+    tp_test();
+    stash_test();
     zones_tick();
     prof_mark(PROF_ZONES);
     for (int i = 0; i < s_num_players; i++) {
@@ -9873,12 +12530,19 @@ int game_tick(const InputState *in)
         targets[i].in_town = p->level && p->level->town;
         targets[i].defense = player_defense(p);
         targets[i].level = p->level_num;
-        targets[i].amplified = p->amp_ticks > 0;
+        targets[i].amplified = (p->amp_ticks > 0 ? 100 : 0) + (p->curse == A4C_DECREPIFY ? 50 : 0);
+        targets[i].curse = p->curse;
+        targets[i].curse_len = targets[i].freeze_ticks = 0;
+        targets[i].mana_drained = p->drain_ticks;
         targets[i].damage = targets[i].curse_ticks = targets[i].mana_burn = 0;
         targets[i].poison_total = targets[i].poison_ticks = 0;
         targets[i].attacker = -1;
         targets[i].block = player_block_chance(p);
         targets[i].life_pct = p->hp_max > 0 ? p->hp * 100 / p->hp_max : 100;
+        targets[i].still = p->state == PS_NORMAL && !p->moving;
+        targets[i].more_mana = p->mana_max >= p->hp_max;
+        targets[i].player = 1;
+        targets[i].shout = p->shout_ticks > 0;
         for (int k = 0; k < 4; k++) /* para el fuego y el frío de los jefes */
             targets[i].res[k] = player_resist(p, k);
     }
@@ -9959,7 +12623,7 @@ int game_tick(const InputState *in)
         if (ally_kind[k] == 1 && dmg > 0 && units_converted(ally_unit[k]) && getenv("D2_AURA_DEBUG"))
             printf("  auras: el convertido %d (%s) recibe %d de daño\n", ally_unit[k], units_display_name(ally_unit[k]),
                    dmg);
-        if (ally_unit[k] < 0 || dmg <= 0)
+        if (ally_unit[k] < 0 || dmg <= 0 || units_ally_owner(ally_unit[k]) < 0) /* (los bárbaros del Acto 5 no tienen dueño) */
             continue;
         ally_thorns(o, ally_unit[k], attacker, dmg); /* Espinas sobre la mercenaria o un esbirro */
         int thorns = units_pet_thorns(ally_unit[k]); /* el gólem de hierro */
@@ -9995,6 +12659,8 @@ int game_tick(const InputState *in)
     while (units_pop_kill(&kill_unit, &kill_owner, &kill_exp))
         if (kill_owner >= 0 && kill_owner < s_num_players)
             award_kill(&s_pl[kill_owner], kill_unit, kill_exp);
+        else if (kill_owner == UNITS_KILL_ALLY) /* lo mató un bárbaro del Acto 5: suelta lo suyo, sin experiencia */
+            drop_loot(kill_unit, NULL);
     int heal_owner, heal_amount; /* el gólem de sangre le pasa vida a su dueño */
     while (units_pop_owner_heal(&heal_owner, &heal_amount))
         if (heal_owner >= 0 && heal_owner < s_num_players && s_pl[heal_owner].state < PS_DYING) {
@@ -10018,6 +12684,20 @@ int game_tick(const InputState *in)
         /* Lo que hacen los modificadores de los jefes y el golpe de Andariel */
         if (t->curse_ticks > p->amp_ticks)
             p->amp_ticks = t->curse_ticks;
+        /* El Acto 4: el toque frío de Diablo y las maldiciones de los Caballeros del Olvido (una a la vez) */
+        if (t->freeze_ticks > p->frozen_ticks && p->state < PS_DYING)
+            p->frozen_ticks = p->thaw_ticks > 0 ? t->freeze_ticks / 2 : t->freeze_ticks;
+        if (t->curse_len > 0 && p->state < PS_DYING) {
+            if (t->curse == A4C_AMPLIFY) {
+                p->amp_ticks = t->curse_len > p->amp_ticks ? t->curse_len : p->amp_ticks;
+            } else {
+                p->curse = t->curse;
+                p->curse_ticks = t->curse_len;
+                p->curse_lvl = t->curse_lvl;
+            }
+        }
+        if (p->curse == A4C_LIFETAP && t->damage > 0 && t->attacker >= 0) /* Robar vida: el que le pega se cura la mitad */
+            units_heal(t->attacker, t->damage / 2);
         if (t->mana_burn > 0)
             p->mana = p->mana > t->mana_burn ? p->mana - t->mana_burn : 0;
         if (t->chill_ticks > 0 && p->state < PS_DYING) { /* la poción de deshielo lo acorta a la mitad */
@@ -10026,12 +12706,8 @@ int game_tick(const InputState *in)
                 p->chill_ticks = len;
         }
         p->aura_slow = p->state < PS_DYING ? t->aura_slow : 0;
-        if (t->poison_total > 0 && p->state < PS_DYING) {
-            p->poison_ticks = t->poison_ticks;
-            p->poison_rate = (float)t->poison_total / (float)t->poison_ticks;
-            if (p->antidote_ticks > 0)
-                p->poison_rate *= 0.5f;
-        }
+        if (t->poison_total > 0 && p->state < PS_DYING)
+            player_poison(p, (float)t->poison_total / (float)t->poison_ticks, t->poison_ticks);
     }
 
     if (s_shown_ticks > 0 && --s_shown_ticks == 0)
@@ -10071,6 +12747,8 @@ int game_tick(const InputState *in)
     }
 
     quest_tick();
+    cow_tick();
+    obj_tick();
     bossfx_tick();
     if (s_den_light > 0 && s_den_light < 1000)
         s_den_light++;
@@ -10729,8 +13407,9 @@ static int draw_reserve(int n)
    ROOF_WIN tiles alrededor */
 #define ROOF_WIN 48
 typedef struct {
-    int     x0, y0, any;
+    int     x0, y0, any, walls;
     uint8_t in[ROOF_WIN][ROOF_WIN];
+    uint8_t wall_in[ROOF_WIN][ROOF_WIN]; /* las paredes-techo (roof_wall) */
 } RoofHide;
 
 static int has_roof(const Map *m, int tx, int ty)
@@ -10743,22 +13422,99 @@ static int has_roof(const Map *m, int tx, int ty)
     return 0;
 }
 
+/* Hasta cuántos tiles se busca techo para cada lado desde una baldosa
+   adentro de la casa que no tiene (las de algunas paredes de adentro) */
+#define ROOF_HOLE 8
+
+/* Los techos de paja de las chozas del muelle del Acto 3 (las de Alkor y
+   Asheara) no son baldosas de techo: son paredes sin colisión en una capa
+   de arriba, encima de las paredes de la choza */
+static int roof_wall(const Map *m, int l, int tx, int ty)
+{
+    const Dt1Tile *t = l > 0 ? map_wall(m, l, tx, ty) : NULL;
+    if (!t || !map_wall(m, 0, tx, ty) || t->orientation < ORI_LEFT_WALL || t->orientation > ORI_SOUTH_CORNER)
+        return 0;
+    for (int k = 0; k < TILE_SUB * TILE_SUB; k++)
+        if (t->subtile_flags[k] & 1)
+            return 0;
+    return 1;
+}
+
+/* ¿Hay una pared-techo de frente (row: las de la fila, 2 y 6; si no las de
+   la columna, 1 y 5) en ese tile? */
+static int roof_wall_front(const Map *m, int tx, int ty, int row)
+{
+    for (int l = 1; l < MAP_WALLS; l++)
+        if (roof_wall(m, l, tx, ty)) {
+            int o = map_wall(m, l, tx, ty)->orientation;
+            if (row ? o == ORI_RIGHT_WALL || o == ORI_RIGHT_END : o == ORI_LEFT_WALL || o == ORI_LEFT_END)
+                return 1;
+        }
+    return 0;
+}
+
+/* Adentro de una choza: con su pared de delante en la misma columna y la
+   del costado en la misma fila (las dos paredes que tapan desde la cámara);
+   así se esconden las paredes-techo unidas a esas */
+static void roof_walls_build(const Map *m, int ptx, int pty, RoofHide *h)
+{
+    static int16_t q[ROOF_WIN * ROOF_WIN][2];
+    int fr = 0, fc = 0, n = 0;
+    for (int k = 1; k <= ROOF_HOLE && !fr; k++)
+        fr = roof_wall_front(m, ptx, pty + k, 1) ? k : 0;
+    for (int k = 1; k <= ROOF_HOLE && !fc; k++)
+        fc = roof_wall_front(m, ptx + k, pty, 0) ? k : 0;
+    h->walls = fr && fc;
+    if (!h->walls)
+        return;
+    memset(h->wall_in, 0, sizeof h->wall_in);
+    h->wall_in[ROOF_WIN / 2 + fr][ROOF_WIN / 2] = 1;
+    q[n][0] = ROOF_WIN / 2;
+    q[n++][1] = (int16_t)(ROOF_WIN / 2 + fr);
+    for (int k = 0; k < n; k++)
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++) {
+                int x = q[k][0] + dx, y = q[k][1] + dy, any = 0;
+                if (x < 0 || y < 0 || x >= ROOF_WIN || y >= ROOF_WIN || h->wall_in[y][x])
+                    continue;
+                for (int l = 1; l < MAP_WALLS && !any; l++)
+                    any = roof_wall(m, l, h->x0 + x, h->y0 + y);
+                if (!any)
+                    continue;
+                h->wall_in[y][x] = 1;
+                q[n][0] = (int16_t)x;
+                q[n++][1] = (int16_t)y;
+            }
+}
+
 static void roof_hide_build(const Map *m, float px, float py, RoofHide *h)
 {
     static int16_t q[ROOF_WIN * ROOF_WIN][2];
+    static const int8_t d[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
     int ptx = (int)floorf(px / TILE_SUB), pty = (int)floorf(py / TILE_SUB), n = 0;
     h->x0 = ptx - ROOF_WIN / 2;
     h->y0 = pty - ROOF_WIN / 2;
     h->any = 0;
-    if (!has_roof(m, ptx, pty))
-        return;
+    roof_walls_build(m, ptx, pty, h);
+    /* Sin techo encima: adentro igual si para los cuatro lados hay techo de
+       la misma casa. En las de Kurast hay baldosas de adentro sin techo (las
+       de algunas paredes) y parado ahí el techo lo tapaba. */
+    int hit[4] = { 0, 0, 0, 0 };
+    if (!has_roof(m, ptx, pty)) {
+        for (int j = 0; j < 4; j++) {
+            for (int s = 1; s <= ROOF_HOLE && !hit[j]; s++)
+                if (has_roof(m, ptx + d[j][0] * s, pty + d[j][1] * s))
+                    hit[j] = s;
+            if (!hit[j])
+                return;
+        }
+    }
     memset(h->in, 0, sizeof h->in);
-    h->any = 1;
-    h->in[ROOF_WIN / 2][ROOF_WIN / 2] = 1;
-    q[n][0] = ROOF_WIN / 2;
-    q[n++][1] = ROOF_WIN / 2;
+    int sx = ROOF_WIN / 2 + d[0][0] * hit[0], sy = ROOF_WIN / 2;
+    h->in[sy][sx] = 1;
+    q[n][0] = (int16_t)sx;
+    q[n++][1] = (int16_t)sy;
     for (int k = 0; k < n; k++) {
-        static const int8_t d[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
         for (int j = 0; j < 4; j++) {
             int x = q[k][0] + d[j][0], y = q[k][1] + d[j][1];
             if (x < 0 || y < 0 || x >= ROOF_WIN || y >= ROOF_WIN || h->in[y][x] || !has_roof(m, h->x0 + x, h->y0 + y))
@@ -10768,12 +13524,31 @@ static void roof_hide_build(const Map *m, float px, float py, RoofHide *h)
             q[n++][1] = (int16_t)y;
         }
     }
+    /* (de la misma: entre dos casas vecinas no) */
+    h->any = 1;
+    for (int j = 1; j < 4 && hit[0]; j++)
+        if (!h->in[ROOF_WIN / 2 + d[j][1] * hit[j]][ROOF_WIN / 2 + d[j][0] * hit[j]])
+            h->any = 0;
 }
 
 static int roof_hidden(const RoofHide *h, int tx, int ty)
 {
     int x = tx - h->x0, y = ty - h->y0;
     return h->any && x >= 0 && y >= 0 && x < ROOF_WIN && y < ROOF_WIN && h->in[y][x];
+}
+
+static RoofHide s_roof_hide[MAX_PLAYERS];
+
+/* ¿Esa pared es un techo de choza escondido por algún jugador? */
+static int roof_wall_hidden(const Map *m, int l, int tx, int ty)
+{
+    for (int i = 0; i < s_num_players; i++) {
+        const RoofHide *h = &s_roof_hide[i];
+        int x = tx - h->x0, y = ty - h->y0;
+        if (h->walls && x >= 0 && y >= 0 && x < ROOF_WIN && y < ROOF_WIN && h->wall_in[y][x] && roof_wall(m, l, tx, ty))
+            return 1;
+    }
+    return 0;
 }
 
 static void render_world_body(float cam_x, float cam_y, float alpha)
@@ -10847,7 +13622,8 @@ static void render_world_body(float cam_x, float cam_y, float alpha)
         iso_to_screen(ux, uy, &sx, &sy);
         if (ox + sx < s_vis_x0 - 200 || ox + sx > s_vis_x1 + 200 || oy + sy < s_vis_y0 - 100 || oy + sy > s_vis_y1 + 300)
             continue;
-        list[n++] = (Drawable){ unit_depth(ux, uy) - (units_is_corpse(i) ? 3.0f : 0.0f), 0, 0, 0, DRAW_UNIT, (int16_t)i };
+        list[n++] = (Drawable){ unit_depth(ux, uy) - (units_is_corpse(i) ? 3.0f : 0.0f) + (units_riding(i) ? 0.05f : 0.0f), 0, 0, 0,
+                                DRAW_UNIT, (int16_t)i };
     }
     /* Objetos en el suelo: van debajo de los que están parados en el mismo lugar */
     for (int i = 0; i < items_ground_count(); i++) {
@@ -10871,6 +13647,13 @@ static void render_world_body(float cam_x, float cam_y, float alpha)
     }
     qsort(list, (size_t)n, sizeof list[0], cmp_drawable);
 
+    /* Los techos que no se dibujan (los de la casa donde hay un jugador):
+       antes, por los de las chozas, que van con las paredes */
+    for (int i = 0; i < s_num_players; i++) {
+        float px, py;
+        player_world_pos(&s_pl[i], alpha, &px, &py);
+        roof_hide_build(m, px, py, &s_roof_hide[i]);
+    }
     for (int i = 0; i < n; i++) {
         const Drawable *dr = &list[i];
         if (dr->kind == DRAW_DECOY) {
@@ -10913,16 +13696,11 @@ static void render_world_body(float cam_x, float cam_y, float alpha)
         }
         int sx = (dr->tx - dr->ty) * (TILE_W / 2) + ox, sy = (dr->tx + dr->ty) * (TILE_H / 2) + oy;
         draw_wall_tile(map_wall_extra(m, dr->layer, dr->tx, dr->ty), sx, sy);
-        draw_wall_tile(map_wall(m, dr->layer, dr->tx, dr->ty), sx, sy);
+        if (!dr->layer || !roof_wall_hidden(m, dr->layer, dr->tx, dr->ty))
+            draw_wall_tile(map_wall(m, dr->layer, dr->tx, dr->ty), sx, sy);
     }
 
     /* Techos (sin los de la casa donde hay un jugador) */
-    static RoofHide s_roof_hide[MAX_PLAYERS];
-    for (int i = 0; i < s_num_players; i++) {
-        float px, py;
-        player_world_pos(&s_pl[i], alpha, &px, &py);
-        roof_hide_build(m, px, py, &s_roof_hide[i]);
-    }
     for (int ty = ty0; ty <= ty1; ty++) {
         int tx0, tx1;
         visible_cols(m, ox, oy, ty, &tx0, &tx1);
@@ -11082,28 +13860,49 @@ static void draw_frame(int x, int y, int w, int h, uint8_t c)
 
 /* ---- Íconos de habilidades ----
    <clase>skillicon.dc6 trae dos cuadros por habilidad; skillicon.dc6 tiene
-   los genéricos (el 2 es el ataque normal, según skilldesc.txt). Se cargan
-   la primera vez. */
+   los genéricos (el 2 es el ataque normal, según skilldesc.txt). Se leen en
+   el hilo de trabajos: los de los jugadores al empezar (preload_ui), los
+   otros (los efectos de otra clase) la primera vez que se dibujan. */
 
 #define ICONS_GENERIC NUM_CLASSES
 #define ICON_ATTACK   2
+enum { ICONS_NONE, ICONS_LOADING, ICONS_READY, ICONS_MISSING };
 static Sprite s_icons[NUM_CLASSES + 1];
-static int    s_icons_state[NUM_CLASSES + 1]; /* 0 = sin cargar, 1 = bien, -1 = falta */
+static int    s_icons_state[NUM_CLASSES + 1]; /* ICONS_* (job_flag_get/set) */
+
+static void icons_job(void *ptr, int set)
+{
+    (void)ptr;
+    char path[96];
+    snprintf(path, sizeof path, "data/global/ui/spells/%s.dc6", set < NUM_CLASSES ? skills_icon_file(set) : "skillicon");
+    size_t n;
+    uint8_t *d = fs_read(path, &n);
+    int ok = d && dc6_load(d, n, &s_icons[set]) == 0;
+    free(d);
+    job_flag_set(&s_icons_state[set], ok ? ICONS_READY : ICONS_MISSING);
+}
+
+/* Que se lean: en su turno o (`first`) adelante de lo que espera */
+static void skill_icons_load(int set, int first)
+{
+    if (job_flag_get(&s_icons_state[set]) != ICONS_NONE)
+        return;
+    if (set == 7) { /* el Brujo: los arma con sus efectos (skillwar.inc) al dibujarlos, con la paleta del acto */
+        if (first)
+            job_flag_set(&s_icons_state[set], war_icons_build(&s_icons[set]) ? ICONS_READY : ICONS_MISSING);
+        return;
+    }
+    job_flag_set(&s_icons_state[set], ICONS_LOADING);
+    if (!first)
+        jobs_push(icons_job, NULL, set);
+    else if (!jobs_push_first(icons_job, NULL, set))
+        icons_job(NULL, set);
+}
 
 static const Sprite *skill_icons(int set)
 {
-    if (s_icons_state[set] == 0 && set == 7) /* el Brujo: los arma con sus efectos (skillwar.inc) */
-        s_icons_state[set] = war_icons_build(&s_icons[set]) ? 1 : -1;
-    if (s_icons_state[set] == 0) {
-        char path[96];
-        snprintf(path, sizeof path, "data/global/ui/spells/%s.dc6",
-                 set < NUM_CLASSES ? skills_icon_file(set) : "skillicon");
-        size_t n;
-        uint8_t *d = fs_read(path, &n);
-        s_icons_state[set] = d && dc6_load(d, n, &s_icons[set]) == 0 ? 1 : -1;
-        free(d);
-    }
-    return s_icons_state[set] > 0 ? &s_icons[set] : NULL;
+    skill_icons_load(set, 1);
+    return job_flag_get(&s_icons_state[set]) == ICONS_READY ? &s_icons[set] : NULL;
 }
 
 /* level: tabla de luz (LIGHT_LEVELS - 1 = normal, menos = más oscuro) */
@@ -11278,9 +14077,16 @@ static int item_tip_req(const Item *it, TipLine *l, int str, int dex, int level)
         if (buf[0])
             n = tip_add(l, n, TIP_WHITE, buf);
         if (is_potion(t)) {
-            snprintf(buf, sizeof buf, tr("Tragos: %d de %d"), it->amount, POTION_CHARGES);
+            int top = it->amount % POTION_CHARGES ? it->amount % POTION_CHARGES : POTION_CHARGES;
+            if (stack_count(it) > 1) {
+                snprintf(buf, sizeof buf, tr("Cantidad: %d"), stack_count(it));
+                n = tip_add(l, n, TIP_WHITE, buf);
+            }
+            snprintf(buf, sizeof buf, tr("Tragos: %d de %d"), top, POTION_CHARGES);
             n = tip_add(l, n, TIP_WHITE, buf);
         }
+        if (strcmp(t->code, "tsc") == 0)
+            n = tip_add(l, n, TIP_WHITE, "X: abrir el portal");
     }
     int rstr, rdex;
     item_reqs(s_tip_owner, t, it, &rstr, &rdex);
@@ -11340,10 +14146,33 @@ static void inv_entry_rect(const Player *p, int i, int *x, int *y, int *w, int *
 {
     int px = panel_x(p), py = PANEL_Y;
     *x = *y = *w = *h = 0;
-    if (i < SLOT_COUNT && p->cube_open)
-        return; /* el cubo tapa el equipo */
-    if (i >= INV_CUBE0 && !p->cube_open)
+    if (i < SLOT_COUNT && (p->cube_open || p->stash_open))
+        return; /* el cubo o el cofre tapan el equipo */
+    if (i >= INV_CUBE0 && i <= INV_TRANSMUTE && !p->cube_open)
         return;
+    if (i >= INV_STASH0) { /* el cofre: sus casillas, las pestañas (y "+") y los botones del oro */
+        if (!p->stash_open)
+            return;
+        if (i < INV_STAB0) {
+            *x = px + STASH_GX + (i - INV_STASH0) % STASH_W * CELL;
+            *y = py + STASH_GY + (i - INV_STASH0) / STASH_W * CELL;
+            *w = *h = CELL;
+        } else if (i < INV_GOLD_IN) {
+            int k = i - INV_STAB0, n = stash_tabs(p);
+            if (k > n || (k == n && !stash_can_buy(p)))
+                return;
+            *x = px + STASH_GX + k * CELL;
+            *y = py + 8;
+            *w = CELL - 2;
+            *h = 22;
+        } else {
+            *x = px + (i == INV_GOLD_IN ? 160 : 236);
+            *y = py + STASH_GY + STASH_H * CELL + 5;
+            *w = 70;
+            *h = 24;
+        }
+        return;
+    }
     if (i >= INV_CUBE0 && i < INV_TRANSMUTE) {
         *x = px + CUBE_X + (i - INV_CUBE0) % CUBE_W * CELL;
         *y = py + CUBE_Y + (i - INV_CUBE0) / CUBE_W * CELL;
@@ -11437,6 +14266,7 @@ static void draw_cube(const Player *p, int px, int py)
         fb_blend_rect(x, y, t->inv_w * CELL, t->inv_h * CELL, COL(R_BLUE, 4), BLEND_50);
         items_inv_size(t, &w, &h);
         items_draw_item(&p->cube[i], x + (t->inv_w * CELL - w) / 2, y + (t->inv_h * CELL - h) / 2);
+        draw_stack_count(&p->cube[i], x, y, t->inv_w * CELL, t->inv_h * CELL);
     }
     int x, y, w, h;
     inv_entry_rect(p, INV_TRANSMUTE, &x, &y, &w, &h);
@@ -11445,20 +14275,89 @@ static void draw_cube(const Player *p, int px, int py)
     text_in(px + 14, y + h + 6, 296, 14, "Las recetas: Opciones, Guía del cubo", 1, COL(R_GRAY, 11));
 }
 
+/* El cofre abierto: tapa el equipo con sus pestañas, la grilla de la que se
+   ve y el oro guardado */
+static void draw_stash(const Player *p, int px, int py)
+{
+    ui_dark_box(px + 14, py + 4, 296, 238);
+    int n = stash_tabs(p), x, y, w, h;
+    for (int k = 0; k <= n && k < STASH_TABS; k++) {
+        inv_entry_rect(p, INV_STAB0 + k, &x, &y, &w, &h);
+        if (w <= 0)
+            continue;
+        ui_box(x, y, w, h);
+        if (k == p->stash_tab)
+            fb_blend_rect(x + 1, y + 1, w - 2, h - 2, COL(R_GOLD, 6), BLEND_50);
+        if (k < n) {
+            char label[12];
+            snprintf(label, sizeof label, "%d", k + 1);
+            text_in(x, y, w, h, label, 2, k == p->stash_tab ? COL(R_GOLD, 15) : COL(R_GRAY, 13));
+        } else { /* "+" (la letra grande no lo tiene): dos rayas */
+            int cx = x + w / 2, cy = y + h / 2;
+            uint8_t c = p->inv_sel == INV_STAB0 + k ? COL(R_GOLD, 15) : COL(R_GRASS, 13);
+            for (int d = -1; d <= 0; d++) {
+                fb_hline(cx - 5, cx + 5, cy + d, c);
+                fb_vline(cx + d, cy - 5, cy + 5, c);
+            }
+        }
+    }
+    int gx = px + STASH_GX, gy = py + STASH_GY, tab = p->stash_tab;
+    fb_blend_rect(gx, gy, STASH_W * CELL, STASH_H * CELL, COL(R_STONE, 3), BLEND_50);
+    for (int c = 0; c < STASH_CELLS; c++)
+        draw_frame(gx + c % STASH_W * CELL, gy + c / STASH_W * CELL, CELL, CELL, COL(R_STONE, 7));
+    for (int i = 0; i < p->stash_count[tab]; i++) {
+        const Item *it = &p->stash[tab][i];
+        const ItemType *t = it->type;
+        int ix = gx + p->stash_x[tab][i] * CELL, iy = gy + p->stash_y[tab][i] * CELL;
+        fb_blend_rect(ix, iy, t->inv_w * CELL, t->inv_h * CELL, meets_reqs(p, t) ? COL(R_BLUE, 4) : COL(R_RED, 8),
+                      BLEND_50);
+        items_inv_size(t, &w, &h);
+        items_draw_item(it, ix + (t->inv_w * CELL - w) / 2, iy + (t->inv_h * CELL - h) / 2);
+        draw_stack_count(it, ix, iy, t->inv_w * CELL, t->inv_h * CELL);
+    }
+    char text[48];
+    snprintf(text, sizeof text, tr("Oro guardado: %d"), p->stash_gold);
+    inv_entry_rect(p, INV_GOLD_IN, &x, &y, &w, &h);
+    font_draw(px + STASH_GX, y + (h - font_height(1)) / 2, text, 1, COL(R_GOLD, 14));
+    for (int b = INV_GOLD_IN; b <= INV_GOLD_OUT; b++) {
+        inv_entry_rect(p, b, &x, &y, &w, &h);
+        ui_box(x, y, w, h);
+        text_in(x, y, w, h, b == INV_GOLD_IN ? "Guardar oro" : "Sacar oro", 1,
+                p->inv_sel == b ? COL(R_GOLD, 15) : COL(R_GRAY, 14));
+    }
+}
+
+/* Cuántas hay en una pila (pociones, llaves, pergaminos), abajo a la derecha
+   de su lugar */
+static void draw_stack_count(const Item *it, int x, int y, int w, int h)
+{
+    int n = stack_count(it);
+    if (n <= 1)
+        return;
+    char q[12];
+    snprintf(q, sizeof q, "%d", n);
+    int qw = font_width(q, 1);
+    fb_blend_rect(x + w - qw - 3, y + h - 11, qw + 2, 10, COL(R_GRAY, 0), BLEND_50);
+    font_draw(x + w - qw - 2, y + h - 11, q, 1, COL(R_GRAY, 15));
+}
+
 static void draw_inventory(const Player *p)
 {
     int px = panel_x(p), py = PANEL_Y, x0, x1;
     half_range(p, &x0, &x1);
-    draw_panel_header(p, p->cube_open ? "Cubo Horádrico" : "Inventario",
+    draw_panel_header(p, p->cube_open ? "Cubo Horádrico" : p->stash_open ? "Cofre" : "Inventario",
                       p->held.type ? "A o X: soltar acá   RB o Y: tirar al suelo   B: guardar"
                       : p->cube_open ? "A: levantar   X: pasar   RB: tirar al suelo   B: cerrar"
-                                     : "A: levantar  X: usar  RB: tirar  LB: ordenar  Y: más");
+                      : p->stash_open ? "A: levantar   X: pasar   LB: ordenar   B: cerrar"
+                                      : "A: levantar  X: usar  RB: tirar  LB: ordenar  Y: más");
     ui_grid("panel/invchar6", 4, 4, 2, px, py);
 
     if (p->cube_open)
         draw_cube(p, px, py);
+    else if (p->stash_open)
+        draw_stash(p, px, py);
     /* Equipo: centrado en su lugar; en rojo si no le alcanzan los requisitos */
-    for (int s = 0; s < SLOT_COUNT && !p->cube_open; s++) {
+    for (int s = 0; s < SLOT_COUNT && !p->cube_open && !p->stash_open; s++) {
         const Item *it = &p->equip[s];
         if (!it->type)
             continue;
@@ -11476,6 +14375,7 @@ static void draw_inventory(const Player *p)
                       meets_reqs(p, t) ? COL(R_BLUE, 4) : COL(R_RED, 8), BLEND_50);
         items_inv_size(t, &w, &h);
         items_draw_item(&p->bag[i], x + (t->inv_w * CELL - w) / 2, y + (t->inv_h * CELL - h) / 2);
+        draw_stack_count(&p->bag[i], x, y, t->inv_w * CELL, t->inv_h * CELL);
     }
     char text[32];
     snprintf(text, sizeof text, "%d", p->gold);
@@ -11536,6 +14436,25 @@ static void draw_inventory(const Player *p)
                     if (k >= 0)
                         first = k;
                 }
+        } else if (p->inv_sel >= INV_STASH0 && p->inv_sel < INV_STAB0) {
+            int cx = (p->inv_sel - INV_STASH0) % STASH_W, cy = (p->inv_sel - INV_STASH0) / STASH_W;
+            if (cx + t->inv_w > STASH_W) cx = STASH_W - t->inv_w;
+            if (cy + t->inv_h > STASH_H) cy = STASH_H - t->inv_h;
+            gx = px + STASH_GX + cx * CELL;
+            gy = py + STASH_GY + cy * CELL;
+            gw = t->inv_w * CELL;
+            gh = t->inv_h * CELL;
+            int first = -1;
+            for (int a = 0; a < t->inv_h; a++)
+                for (int b = 0; b < t->inv_w; b++) {
+                    int k = stash_at(p, p->stash_tab, cx + b, cy + a);
+                    if (k >= 0 && first >= 0 && k != first)
+                        ok = 0;
+                    if (k >= 0)
+                        first = k;
+                }
+        } else if (p->inv_sel >= INV_STAB0 && p->inv_sel < INV_GOLD_IN) {
+            ok = p->inv_sel - INV_STAB0 < stash_tabs(p); /* A: se ve esa pestaña, con lo de la mano */
         } else if (p->inv_sel < SLOT_COUNT) {
             const Item *on = &p->equip[p->inv_sel];
             ok = (items_slot_ok(t, p->inv_sel) && meets_item(p, &p->held)) || (on->type && items_can_socket(on, &p->held));
@@ -11548,6 +14467,7 @@ static void draw_inventory(const Player *p)
         int iw, ih;
         items_inv_size(t, &iw, &ih);
         items_draw_item(&p->held, gx + (gw - iw) / 2, gy + (gh - ih) / 2);
+        draw_stack_count(&p->held, gx, gy, gw, gh);
         draw_frame(gx - 1, gy - 1, gw + 2, gh + 2, COL(R_GOLD, 15));
         n = item_tip(p, &p->held, tip);
         draw_tip(tip, n, gx, gy, gw, gh, x0, x1);
@@ -11565,6 +14485,12 @@ static void draw_inventory(const Player *p)
         y = py + CUBE_Y + p->cube_y[k] * CELL;
         w = under->type->inv_w * CELL;
         h = under->type->inv_h * CELL;
+    } else if (under && p->inv_sel >= INV_STASH0 && p->inv_sel < INV_STAB0) {
+        int k = (int)(under - p->stash[p->stash_tab]);
+        x = px + STASH_GX + p->stash_x[p->stash_tab][k] * CELL;
+        y = py + STASH_GY + p->stash_y[p->stash_tab][k] * CELL;
+        w = under->type->inv_w * CELL;
+        h = under->type->inv_h * CELL;
     }
     draw_frame(x - 1, y - 1, w + 2, h + 2, COL(R_GOLD, (s_ticks / 6) % 2 ? 15 : 11));
     if (under) {
@@ -11579,6 +14505,28 @@ static void draw_inventory(const Player *p)
         n = tip_add(tip, n, COL(R_GRAY, 15), "si es una de las recetas (Opciones, Guía del cubo)");
     } else if (p->inv_sel >= INV_CUBE0 && p->inv_sel < INV_TRANSMUTE) {
         n = tip_add(tip, 0, COL(R_GRAY, 15), "X sobre algo de la mochila lo pasa al cubo");
+    } else if (p->inv_sel >= INV_STASH0 && p->inv_sel < INV_STAB0) {
+        n = tip_add(tip, 0, COL(R_GRAY, 15), "X sobre algo de la mochila lo pasa al cofre");
+    } else if (p->inv_sel >= INV_STAB0 && p->inv_sel < INV_GOLD_IN) {
+        char buf[64];
+        int k = p->inv_sel - INV_STAB0;
+        if (k < stash_tabs(p)) {
+            snprintf(buf, sizeof buf, tr("Pestaña %d del cofre"), k + 1);
+            n = tip_add(tip, 0, COL(R_GOLD, 15), buf);
+            n = tip_add(tip, n, COL(R_GRAY, 15), "Una por cada acto al que llegás");
+        } else {
+            n = tip_add(tip, 0, COL(R_GOLD, 15), "Comprar otra pestaña");
+            snprintf(buf, sizeof buf, tr("Cuesta %d de oro"), stash_price(p));
+            n = tip_add(tip, n, (int64_t)p->gold + p->stash_gold >= stash_price(p) ? COL(R_GRAY, 15) : TIP_RED, buf);
+            n = tip_add(tip, n, COL(R_GRAY, 15), "Cada una cuesta el triple que la anterior");
+            snprintf(buf, sizeof buf, tr("Se pueden comprar %d más"), STASH_BUY_MAX - p->stash_bought);
+            n = tip_add(tip, n, COL(R_GRAY, 15), buf);
+            n = tip_add(tip, n, COL(R_BLUE, 15), p->stash_confirm ? "A otra vez: comprarla" : "A: comprarla");
+        }
+    } else if (p->inv_sel == INV_GOLD_IN || p->inv_sel == INV_GOLD_OUT) {
+        n = tip_add(tip, 0, COL(R_GOLD, 15), p->inv_sel == INV_GOLD_IN ? "Guardar todo el oro que llevás" : "Sacar todo el oro del cofre");
+        n = tip_add(tip, n, COL(R_GRAY, 15), "Al morir se pierde parte del oro que llevás,");
+        n = tip_add(tip, n, COL(R_GRAY, 15), "el del cofre no");
     } else if (p->inv_sel == INV_SORT) {
         n = tip_add(tip, 0, COL(R_GRAY, 15), "Acomoda la mochila (también con LB)");
     } else if (p->inv_sel == INV_STATS) {
@@ -11614,10 +14562,10 @@ static void draw_stats_page(const Player *p)
     snprintf(text, sizeof text, "%d", p->level_num);
     text_in(px + 11, py + 45, 45, 20, text, 2, white);
     text_in(px + 65, py + 31, 116, 12, str_get("strchrexp"), 1, white);
-    snprintf(text, sizeof text, "%d", p->exp);
+    snprintf(text, sizeof text, "%u", (unsigned)p->exp);
     text_in(px + 66, py + 45, 116, 20, text, 2, white);
     text_in(px + 193, py + 31, 116, 12, str_get("strchrnxtlvl"), 1, white);
-    snprintf(text, sizeof text, "%d", c->exp_next[p->level_num]);
+    snprintf(text, sizeof text, "%u", (unsigned)c->exp_next[p->level_num]);
     text_in(px + 194, py + 45, 116, 20, text, 2, white);
 
     /* Atributos; con puntos para repartir, el botón "+" al lado de cada uno */
@@ -11686,6 +14634,37 @@ static const int k_tree_row[6] = { 14, 82, 150, 218, 287, 355 };
 static const char *tree_file(int cls)
 {
     return s_classes[cls].tree;
+}
+
+/* Al empezar la partida, los paneles y los íconos que se van a dibujar, en
+   el hilo de trabajos (en la Pi, abrir los waypoints por primera vez eran
+   18 ms en el hilo del juego, y los íconos de una clase de 8 a 11). Sin el
+   hilo no: se leen al dibujarlos, como siempre. */
+static void preload_ui(void)
+{
+    static const char *const k_panels[] = {
+        CTRL_PANEL, "panel/hlthmana", "panel/overlap", "panel/menubutton", "panel/runbutton", "panel/level",
+        "panel/levelsocket", "panel/skillpoints", "panel/invchar6", "panel/buysell", "panel/buysellbtn",
+        "panel/buyselltabs", "panel/npcinv", "menu/waygatebackground", "menu/waygatetabs", "menu/waygateicons",
+        "menu/questbackground", "menu/expquesttabs", "menu/questsockets", "cursor/pentspin",
+    };
+    if (!jobs_running())
+        return;
+    for (unsigned k = 0; k < sizeof k_panels / sizeof k_panels[0]; k++)
+        ui_preload(k_panels[k]);
+    skill_icons_load(ICONS_GENERIC, 0);
+    for (int i = 0; i < s_num_players; i++) {
+        ui_preload(tree_file(s_pl[i].cls));
+        skill_icons_load(s_pl[i].cls, 0);
+    }
+    for (unsigned k = 0; k < sizeof k_merc_act / sizeof k_merc_act[0]; k++)
+        ui_preload(k_merc_act[k].icon);
+    for (int a = 1; a <= QUEST_ACTS; a++)
+        for (int q = 0; q < quest_slots(a); q++) {
+            char icon[24];
+            snprintf(icon, sizeof icon, "menu/a%dq%d", a, q + 1);
+            ui_preload(icon);
+        }
 }
 
 /* Cuadrito de Ataque y Lanzar: del lado de adentro de la pantalla */
@@ -12170,6 +15149,8 @@ static void draw_shop(Player *p)
         items_inv_size(t, &w, &h);
         Item base = items_make(t); /* lo de la apuesta se ve como el objeto común */
         items_draw_item(p->gambling ? &base : items[i], x + (t->inv_w * CELL - w) / 2, y + (t->inv_h * CELL - h) / 2);
+        if (!p->gambling)
+            draw_stack_count(items[i], x, y, t->inv_w * CELL, t->inv_h * CELL);
     }
     char text[48];
     text_in(px + 21, py + 358, 55, 16, "Oro", 2, COL(R_GOLD, 14));
@@ -12202,6 +15183,11 @@ static void draw_shop(Player *p)
     int price = items_price(items[p->shop_sel], p->shop_tab == SHOP_SELL);
     snprintf(text, sizeof text, "%s: %d", p->shop_tab == SHOP_SELL ? tr("Te pagan") : tr("Costo"), price);
     k = tip_add(tip, k, p->shop_tab != SHOP_SELL && p->gold < price ? TIP_RED : TIP_GOLD, text);
+    if (p->shop_tab != SHOP_SELL && strcmp(items[p->shop_sel]->type->code, "tsc") == 0) {
+        int fill = shop_fill_count(p, items[p->shop_sel]->type);
+        snprintf(text, sizeof text, tr("X: llenar la pila (%d por %d)"), fill, fill * price);
+        k = tip_add(tip, k, TIP_WHITE, text);
+    }
     draw_tip(tip, k, x, y, w, h, x0, x1);
 }
 
@@ -12268,8 +15254,8 @@ static void draw_stamina_exp(const Player *p, int sx, int sy, int ex, int ey)
     fb_fill_rect(sx, sy, fill, 18, c);
     fb_hline(sx, sx + fill - 1, sy, COL(R_GOLD, 14));
     const CharClass *cl = &s_classes[p->cls];
-    int lo = p->level_num > 1 ? cl->exp_next[p->level_num - 1] : 0, hi = cl->exp_next[p->level_num];
-    int xp_w = hi > lo ? (int)(119LL * (p->exp - lo) / (hi - lo)) : 0;
+    long long lo = p->level_num > 1 ? cl->exp_next[p->level_num - 1] : 0, hi = cl->exp_next[p->level_num];
+    int xp_w = hi > lo ? (int)(119LL * ((long long)p->exp - lo) / (hi - lo)) : 0;
     fb_fill_rect(ex, ey, xp_w < 0 ? 0 : xp_w > 119 ? 119 : xp_w, 2, COL(R_GRAY, 14));
 }
 
@@ -12431,6 +15417,150 @@ static void draw_hud_half(const Player *p, int right)
     draw_skill_up(p, right ? bx - 34 : bx + 2 * size + 8, by + size + 8);
     if (p->stat_points > 0)
         ui_frame("panel/level", (s_ticks / 10) % 2, right ? bx - 34 : bx + 2 * size + 8, by);
+}
+
+/* ---- Lo que lo afecta (pedido del usuario) ----
+   Las mejoras y los males que duran, con su ícono, arriba de la barra entre
+   la experiencia y el cinturón (con dos jugadores, arriba de la franja de
+   cada uno). El original no los muestra: son los íconos de la habilidad que
+   lo hace (para lo que no es una habilidad, la que más se parece) o el de la
+   poción; abajo, los segundos que le quedan, y titila al terminarse. */
+typedef struct {
+    int set, icon;    /* draw_icon (la clase o ICONS_GENERIC); set < 0: el objeto `item` */
+    const char *item; /* las pociones: su ícono de la mochila */
+    int ticks;        /* lo que le queda (-1: mientras dure, como las auras) */
+    int bad;          /* un mal (veneno, frío, maldición): marco rojo */
+} Effect;
+
+#define EFFECTS_MAX  16
+#define EFFECT_ICON  28
+#define EFFECT_STEP  31
+
+static int effect_idx(Effect *e, int n, int cls, int skill, int ticks, int bad)
+{
+    if (n >= EFFECTS_MAX || ticks == 0 || cls < 0 || cls >= NUM_CLASSES || skill < 0 || skill >= skills_count(cls))
+        return n;
+    e[n] = (Effect){ cls, skills_get(cls, skill)->icon, NULL, ticks, bad };
+    return n + 1;
+}
+
+static int effect_skill(Effect *e, int n, int cls, const char *skill, int ticks, int bad)
+{
+    return ticks ? effect_idx(e, n, cls, skills_find(cls, skill), ticks, bad) : n;
+}
+
+static int effect_item(Effect *e, int n, const char *code, int ticks)
+{
+    if (n >= EFFECTS_MAX || ticks <= 0 || !items_find(code))
+        return n;
+    e[n] = (Effect){ -1, 0, code, ticks, 0 };
+    return n + 1;
+}
+
+static int player_effects(const Player *p, Effect *e)
+{
+    enum { BAR = 0, AMA = 1, SOR = 2, PAL = 3, NEC = 4, ASS = 5, DRU = 6, WAR = 7 };
+    int n = 0;
+    /* Las mejoras de las habilidades (propias o de un compañero) */
+    n = effect_skill(e, n, BAR, "Shout", p->shout_ticks, 0);
+    n = effect_skill(e, n, BAR, "Battle Orders", p->bo_ticks, 0);
+    n = effect_skill(e, n, BAR, "Battle Command", p->bc_ticks, 0);
+    n = effect_skill(e, n, BAR, "Frenzy", p->frenzy_ticks, 0);
+    n = effect_skill(e, n, BAR, "Berserk", p->berserk_ticks, 0);
+    if (p->armor_ticks > 0)
+        n = effect_idx(e, n, p->cls, p->armor_skill, p->armor_ticks, 0);
+    if (p->es_ticks > 0)
+        n = effect_idx(e, n, p->cls, p->es_skill, p->es_ticks, 0);
+    n = effect_skill(e, n, SOR, "Enchant", p->enchant_ticks, 0);
+    if (p->blaze_ticks > 0)
+        n = effect_idx(e, n, p->cls, p->blaze_skill, p->blaze_ticks, 0);
+    if (p->storm_ticks > 0)
+        n = effect_idx(e, n, p->cls, p->storm_skill, p->storm_ticks, 0);
+    if (p->hs_ticks > 0)
+        n = effect_idx(e, n, PAL, p->hs_skill, p->hs_ticks, 0);
+    for (int k = 0; k < p->au_got_n; k++) /* las auras que lo alcanzan (la suya y las de otros) */
+        n = effect_idx(e, n, p->au_got_cls[k], p->au_got_skill[k], -1, 0);
+    n = effect_skill(e, n, NEC, "Bone Armor", p->bone_armor > 0 ? -1 : 0, 0);
+    n = effect_skill(e, n, ASS, "Burst of Speed", p->quick_ticks, 0);
+    n = effect_skill(e, n, ASS, "Fade", p->fade_ticks, 0);
+    n = effect_skill(e, n, ASS, "Venom", p->venom_ticks, 0);
+    if (p->bshield_ticks > 0)
+        n = effect_idx(e, n, ASS, p->bshield_skill, p->bshield_ticks, 0);
+    if (p->form != FORM_NONE)
+        n = effect_idx(e, n, DRU, p->form_skill, p->form_ticks > 0 ? p->form_ticks : -1, 0);
+    n = effect_skill(e, n, DRU, "Cyclone Armor", p->cyclone > 0 ? -1 : 0, 0);
+    if (p->hurr_ticks > 0)
+        n = effect_idx(e, n, DRU, p->hurr_skill, p->hurr_ticks, 0);
+    if (p->arma_ticks > 0)
+        n = effect_idx(e, n, DRU, p->arma_skill, p->arma_ticks, 0);
+    if (p->hex_ticks > 0)
+        n = effect_idx(e, n, WAR, p->hex_skill, p->hex_ticks, 0);
+    if (p->ward > 0)
+        n = effect_idx(e, n, WAR, p->ward_skill, -1, 0);
+    /* El santuario que dura: el ícono de la habilidad que hace algo parecido */
+    if (p->shrine_ticks > 0) {
+        static const struct { int code, cls; const char *skill; } k_shrine[] = {
+            { 6, PAL, "Defiance" },        { 7, PAL, "Might" },       { 8, PAL, "Resist Fire" },
+            { 9, PAL, "Resist Cold" },     { 10, PAL, "Resist Lightning" }, { 11, PAL, "Cleansing" },
+            { 12, BAR, "Battle Command" }, { 13, SOR, "Warmth" },     { 14, PAL, "Vigor" },
+            { 15, PAL, "Meditation" },
+        };
+        for (unsigned k = 0; k < sizeof k_shrine / sizeof k_shrine[0]; k++)
+            if (k_shrine[k].code == p->shrine_kind)
+                n = effect_skill(e, n, k_shrine[k].cls, k_shrine[k].skill, p->shrine_ticks, 0);
+    }
+    /* Las pociones que duran */
+    n = effect_item(e, n, "hp3", p->regen_life_ticks);
+    n = effect_item(e, n, "mp3", p->regen_mana_ticks);
+    n = effect_item(e, n, "vps", p->stamina_boost_ticks);
+    n = effect_item(e, n, "yps", p->antidote_ticks);
+    n = effect_item(e, n, "wms", p->thaw_ticks);
+    /* Los males */
+    n = effect_skill(e, n, NEC, "Poison Nova", p->poison_ticks, 1);
+    n = effect_skill(e, n, SOR, "Frost Nova", p->chill_ticks, 1);
+    n = effect_skill(e, n, NEC, "Amplify Damage", p->amp_ticks, 1);
+    n = effect_skill(e, n, PAL, "Holy Freeze", p->aura_slow > 0 ? -1 : 0, 1);
+    /* los del Acto 4: las maldiciones de los Caballeros del Olvido, el toque frío de Diablo y el abrazo de los Gropers */
+    /* (y las de las súcubos: Defense Curse con el ícono de Convicción, Blood Mana con el del Gólem de sangre) */
+    static const struct { int cls; const char *skill; } k_curses[A4C_COUNT] = {
+        { 0, NULL }, { 0, NULL }, { NEC, "Weaken" }, { NEC, "Iron Maiden" }, { NEC, "Life Tap" },
+        { NEC, "Decrepify" }, { NEC, "Lower Resist" }, { PAL, "Conviction" }, { NEC, "Blood Golem" },
+    };
+    if (p->curse > A4C_AMPLIFY && p->curse < A4C_COUNT)
+        n = effect_skill(e, n, k_curses[p->curse].cls, k_curses[p->curse].skill, p->curse_ticks, 1);
+    n = effect_skill(e, n, SOR, "Frozen Armor", p->frozen_ticks, 1);
+    n = effect_skill(e, n, NEC, "Dim Vision", p->drain_ticks, 1);
+    return n;
+}
+
+/* La fila de íconos centrada en `cx`, con la base en `y` (dos filas si no entran en `width`) */
+static void draw_effects(const Player *p, int cx, int y, int width)
+{
+    Effect e[EFFECTS_MAX];
+    int n = player_effects(p, e);
+    if (n <= 0 || p->state >= PS_DEAD)
+        return;
+    int per_row = width / EFFECT_STEP > 0 ? width / EFFECT_STEP : 1;
+    for (int k = 0; k < n; k++) {
+        int row = k / per_row, in_row = n - row * per_row < per_row ? n - row * per_row : per_row;
+        int x = cx - (in_row * EFFECT_STEP - (EFFECT_STEP - EFFECT_ICON)) / 2 + (k % per_row) * EFFECT_STEP;
+        int top = y - EFFECT_ICON - row * (EFFECT_ICON + 4);
+        if (e[k].ticks > 0 && e[k].ticks < 3 * TICK_RATE && (s_anim_ticks / 6) % 2) /* se está por terminar */
+            continue;
+        fb_fill_rect(x, top, EFFECT_ICON, EFFECT_ICON, COL(R_GRAY, 0));
+        if (e[k].set >= 0)
+            draw_icon(e[k].set, e[k].icon, x, top, EFFECT_ICON, LIGHT_LEVELS - 1);
+        else
+            items_draw_inv(items_find(e[k].item), x, top);
+        draw_frame(x - 1, top - 1, EFFECT_ICON + 2, EFFECT_ICON + 2, e[k].bad ? COL(R_RED, 12) : COL(R_GOLD, 11));
+        if (e[k].ticks > 0) {
+            char t[12];
+            snprintf(t, sizeof t, "%d", (e[k].ticks + TICK_RATE - 1) / TICK_RATE);
+            int tw = font_width(t, 1);
+            fb_blend_rect(x + EFFECT_ICON - tw - 3, top + EFFECT_ICON - 11, tw + 2, 10, COL(R_GRAY, 0), BLEND_50);
+            font_draw(x + EFFECT_ICON - tw - 2, top + EFFECT_ICON - 11, t, 1, COL(R_GRAY, 15));
+        }
+    }
 }
 
 /* ---- Equipo de la mercenaria ----
@@ -12707,17 +15837,17 @@ static void draw_panel_page(const Player *p)
    donde está con el gris y los que faltan apagados */
 static void draw_waypoints(const Player *p)
 {
-    int px = panel_x(p), py = PANEL_Y, here = waypoint_near(p), tab = p->wp_sel / WP_ACT;
+    int px = panel_x(p), py = PANEL_Y, here = waypoint_near(p), tab = wp_act(p->wp_sel) - 1;
     ui_grid("menu/waygatebackground", 0, 4, 2, px, py);
-    /* Las solapas de los actos: la elegida adelante (las de los III a V no se abren todavía) */
+    /* Las solapas de los actos: la elegida adelante */
     for (int t = 3; t >= 0; t--)
         if (t != tab)
             ui_frame("menu/waygatetabs", t * 2 + 1, px + 5 + t * 77, py + 3);
     ui_frame("menu/waygatetabs", tab * 2, px + 5 + tab * 77, py + 3);
     font_draw_centered(px + PANEL_W / 2, py + 33, str_get("waypointsheader"), 2, COL(R_GOLD, 15));
-    for (int k = tab * WP_ACT; k < (tab + 1) * WP_ACT; k++) {
-        int by = py + 61 + (k - tab * WP_ACT) * 36;
-        int active = (p->waypoints >> k) & 1 && (k / WP_ACT + 1 != s_act || world_waypoint_zone(k) >= 0);
+    for (int k = k_wp_first[tab]; k < k_wp_first[tab + 1]; k++) {
+        int by = py + 61 + (k - k_wp_first[tab]) * 36;
+        int active = (p->waypoints >> k) & 1 && (wp_act(k) != s_act || world_waypoint_zone(k) >= 0);
         int icon = k == here ? 2 : active ? (k == p->wp_sel ? 1 : 0) : 3;
         ui_frame("menu/waygateicons", icon, px + 17, by);
         uint8_t color = k == here ? COL(R_BLUE, 15) : active ? COL(R_GRAY, 15) : COL(R_STONE, 9);
@@ -12726,7 +15856,7 @@ static void draw_waypoints(const Player *p)
             draw_pentagram(px + 17 + 52 + font_width(str_get(k_wp_levels[k]), FONT_FORMAL), by + 3, 20, 1);
     }
     ui_frame("panel/buysellbtn", 10, px + 272, py + 386); /* cerrar (B) */
-    font_draw(px + 24, py + 396, wp_act_open(p, 2) ? "A: viajar   B: cerrar   <>: acto" : "A: viajar   B: cerrar", 1,
+    font_draw(px + 24, py + 396, wp_act_open(p, 2) || wp_act_open(p, 3) || wp_act_open(p, 4) ? "A: viajar   B: cerrar   <>: acto" : "A: viajar   B: cerrar", 1,
               COL(R_STONE, 12));
 }
 
@@ -12758,10 +15888,14 @@ static void draw_hud_body(void)
     draw_target_bar();
     if (s_num_players == 1) {
         draw_hud_single(p1);
+        draw_effects(p1, SCREEN_W / 2, MIDDLE_TOP - 3, 683 - 165);
     } else {
         fb_fill_rect(0, SCREEN_H - 48, SCREEN_W, 48, COL(R_GRAY, 0));
         draw_hud_half(p1, 0);
         draw_hud_half(p2, 1);
+        int half = (STRIP_TO - STRIP_FROM) / 2; /* arriba de la franja del medio de cada uno */
+        draw_effects(p1, 117 + half, MIDDLE_TOP - 3, STRIP_TO - STRIP_FROM);
+        draw_effects(p2, SCREEN_W - 117 - half, MIDDLE_TOP - 3, STRIP_TO - STRIP_FROM);
     }
     draw_merc_portrait(p1, 10, 10);
     if (s_num_players > 1)
@@ -12801,7 +15935,8 @@ static void draw_hud(void)
 /* D2_COLL_DEBUG: la colisión de cada subtile cerca de la cámara, un rombo por
    subtile: rojo pared que frena proyectiles, amarillo solo no se camina (agua,
    cosas bajas), naranja solo frena proyectiles, celeste solo tapa la vista,
-   azul puerta, violeta objeto, verde salida o camino de pieza prearmada */
+   azul puerta, violeta objeto, verde salida o camino de pieza prearmada,
+   gris el grosor de una pared (COLL_VOLUME) */
 static void draw_coll_debug(float cam_x, float cam_y)
 {
     static int on = -1;
@@ -12823,6 +15958,7 @@ static void draw_coll_debug(float cam_x, float cam_y)
                         : c & COLL_WALL                                 ? COL(R_GOLD, 14)
                         : c & COLL_MISSILE_BARRIER                      ? COL(R_WOOD, 12)
                         : c & COLL_VISIBLE                              ? COL(R_BLUE, 15)
+                        : c == COLL_VOLUME                              ? COL(R_GRAY, 13)
                                                                         : COL(R_GRASS, 12);
             float sx, sy;
             iso_to_screen((float)x + 0.5f, (float)y + 0.5f, &sx, &sy);
@@ -12895,10 +16031,17 @@ static void use_warp(Player *p, const Warp *warp)
     }
     if (!a3_warp_open(p, &w))
         return;
-    if (zone_load(w.to) == 0 && world_warp_arrival(&w, &ax, &ay) == 0) {
+    int loaded = zone_load(w.to) == 0;
+    for (int i = 0; loaded && w.portal && i < world_warp_count(); i++) /* (armar la zona puede cambiar adónde lleva el portal) */
+        if (world_warp(i)->portal == w.portal)
+            w = *world_warp(i);
+    if (loaded && world_warp_arrival(&w, &ax, &ay) == 0) {
         p->x = ax;
         p->y = ay;
-        find_free_spot(&p->x, &p->y);
+        if (w.portal) /* (por un portal: del mismo lado de las paredes que donde se llega) */
+            reach_free_spot(ax, ay, &p->x, &p->y);
+        else
+            find_free_spot(&p->x, &p->y);
         /* Las de pisar (la boca de la cueva): se llega al lado, no encima, así
            se puede volver a entrar caminando */
         for (int i = 0; i < world_warp_count(); i++) {
@@ -12953,6 +16096,7 @@ static void use_warp(Player *p, const Warp *warp)
         p->lock_to = w.from;
         if (w.portal)
             audio_play_name("player_townportal_enter", p->x, p->y);
+        tp_used(p, &w);
     }
 }
 
@@ -13037,7 +16181,8 @@ static void draw_prompts(float cam_x, float cam_y)
             target = s_wp_unit[wp];
             snprintf(text, sizeof text, tr("A: Usar el %s"), str_get("Waypoint"));
             lift = 70;
-        } else if ((p->level && p->level->town) || (talk_npc_near(p, 0) >= 0 && !portal_near(p))) {
+        } else if ((p->level && p->level->town && !portal_first(p, talk_npc_near(p, 1))) ||
+                   (talk_npc_near(p, 0) >= 0 && !portal_near(p))) {
             target = talk_npc_near(p, p->level && p->level->town);
             snprintf(text, sizeof text, tr("A: Hablar con %s"), target >= 0 ? units_display_name(target) : "");
             lift = 118;
@@ -13048,6 +16193,14 @@ static void draw_prompts(float cam_x, float cam_y)
             else
                 target = -1;
             lift = 90;
+            /* si no, el cofre, el barril o el santuario de al lado */
+            int obj = -1;
+            const char *oact = target < 0 ? obj_action(p, &obj) : NULL;
+            if (oact && (!portal_near(p) || obj_first(p))) {
+                snprintf(text, sizeof text, "%s", oact);
+                target = obj;
+                lift = 60;
+            }
         }
         if (target < 0)
             draw_warp_label(p, ox, oy);
@@ -13431,6 +16584,9 @@ static void draw_pause(void)
     int ox = qx + PANEL_W + 24, ow = SCREEN_W - 28 - ox, oy = qy;
     ui_dark_box(ox, oy, ow, PANEL_H);
     font_draw_centered(ox + ow / 2, oy + 12, "PAUSA", 6, COL(R_GOLD, 15));
+    char diff[48];
+    snprintf(diff, sizeof diff, tr("Dificultad: %s"), tr(k_diff_names[s_diff]));
+    font_draw_centered(ox + ow / 2, oy + 52, diff, 2, s_diff ? COL(R_RED, 14) : COL(R_GRAY, 13));
     for (int i = 0; i < PAUSE_COUNT; i++) {
         int y = oy + 76 + i * 36, chosen = i == s_pause_sel;
         uint8_t c = chosen ? COL(R_GOLD, 15) : COL(R_GRAY, 13);

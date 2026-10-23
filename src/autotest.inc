@@ -25,6 +25,7 @@ typedef enum {
     AT_SAVE,        /* guardar y revisar el archivo */
     AT_USE,         /* usar un objeto de la mochila (arg = código); si está en el piso, levantarlo antes */
     AT_CUBE,        /* armar el Báculo Horádrico en el cubo */
+    AT_WAVES,       /* las oleadas del Trono: matar lo que salga en el nivel (arg) hasta que se cumpla la verificación */
 } AtKind;
 
 typedef struct {
@@ -191,7 +192,7 @@ static const AtStep k_act3_steps[] = {
     { AT_ACTIVATE_WP, NULL, 20, "wp=20", "Activar el waypoint del Great Marsh", 0 },
     { AT_GOTO_LEVEL, "Flayer Jungle", 0, NULL, "Ir al Flayer Jungle", 0 },
     { AT_ACTIVATE_WP, NULL, 21, "wp=21", "Activar el waypoint del Flayer Jungle", 0 },
-    { AT_TOUCH, "GidBInnDecoy", 0, NULL, "Tocar el altar de la Gidbinn (es un señuelo)", 0 },
+    { AT_TOUCH, "GidBInnDecoy", 0, "decoy", "Tocar el altar de la Gidbinn (es un señuelo)", 0 },
     { AT_KILL, "fetish11", 0, NULL, "Matar al fetiche que sale (tiene la Gidbinn)", 0 },
     { AT_USE, "g33", 0, "has=g33", "Levantar la Gidbinn", 0 },
     { AT_GOTO_LEVEL, "Flayer Dungeon Level 1", 0, NULL, "Entrar al Flayer Dungeon", 0 },
@@ -255,6 +256,116 @@ static const AtStep k_act3_steps[] = {
     { AT_USE, "xyz", 0, "life", "Tomar la Poción de la vida", 0 },
     { AT_SAVE, NULL, 0, "saved", "Guardar y revisar la partida", 0 },
 };
+/* El Acto 4, en el orden en que lo juega una persona: Izual en el Plains
+   of Despair (y su espíritu), el City of the Damned, la Forja Infernal en el
+   River of Flame (Hephasto, la piedra y el Martillo), el Santuario del Caos
+   (los cinco sellos, sus tres jefes y Diablo) y el portal del final */
+static const AtStep k_act4_steps[] = {
+    { AT_TALK, "tyrael2", OPT_TALK, "izual=1", "Tyrael se presenta y pide matar a Izual", 0 },
+    { AT_TALK, "cain4", OPT_TALK, "forge=1", "Caín pide la Forja Infernal (y da la piedra)", 0 },
+    { AT_GOTO_LEVEL, "Outer Steppes", 0, NULL, "Salir al Outer Steppes", 0 },
+    { AT_GOTO_LEVEL, "Plains of Despair", 0, "izual=2", "Ir al Plains of Despair", 0 },
+    { AT_KILL, "izual", 0, "izual=3", "Matar a Izual", 0 },
+    { AT_TALK, "izualghost", OPT_TALK, "izual=4", "Hablar con el espíritu de Izual", 0 },
+    { AT_GOTO_LEVEL, "City of the Damned", 0, NULL, "Ir al City of the Damned", 0 },
+    { AT_ACTIVATE_WP, NULL, 28, "wp=28", "Activar el waypoint del City of the Damned", 0 },
+    { AT_WAYPOINT, NULL, 27, NULL, "Waypoint a la Fortaleza", 0 },
+    { AT_TALK, "tyrael2", OPT_TALK, "izual=5", "Recompensa de Tyrael (dos puntos de habilidad)", 0 },
+    { AT_TALK, "tyrael2", OPT_TALK, "diablo=1", "Tyrael pide matar a Diablo", 0 },
+    { AT_TALK, "jamella", OPT_TRADE, NULL, "Jamella: la tienda", 1 },
+    { AT_WAYPOINT, NULL, 28, NULL, "Waypoint al City of the Damned", 0 },
+    { AT_GOTO_LEVEL, "River of Flame", 0, NULL, "Bajar al River of Flame", 0 },
+    { AT_KILL, "The Feature Creep", 0, NULL, "Matar a Hephasto el Armero", 0 },
+    { AT_USE, "hfh", 0, "has=hfh", "Levantar el Martillo de la Forja Infernal", 0 },
+    { AT_TOUCH, "SoulStoneForge", 0, "stone", "Poner la Piedra de Mefisto en la Forja", 0 },
+    { AT_USE, "hfh", 0, "wield=hfh", "Ponerse el Martillo en la mano", 0 },
+    { AT_TOUCH, "SoulStoneForge", 0, "forge=4", "Romper la piedra (tres golpes)", 0 },
+    { AT_ACTIVATE_WP, NULL, 29, "wp=29", "Activar el waypoint del River of Flame", 0 },
+    { AT_GOTO_LEVEL, "Chaos Sanctum", 0, "diablo=2", "Entrar al Santuario del Caos", 0 },
+    { AT_TOUCH, "DiabloSeal2", 0, "seal=2", "Abrir el segundo sello", 0 },
+    { AT_TOUCH, "DiabloSeal1", 0, "seal=1", "Abrir el primer sello (sale el Infector de Almas)", 0 },
+    { AT_KILL, "Infector of Souls", 0, NULL, "Matar al Infector de Almas", 0 },
+    { AT_TOUCH, "DiabloSeal3", 0, "seal=3", "Abrir el tercer sello (sale Lord De Seis)", 0 },
+    { AT_KILL, "Lord De Seis", 0, NULL, "Matar a Lord De Seis", 0 },
+    { AT_TOUCH, "DiabloSeal4", 0, "seal=4", "Abrir el cuarto sello", 0 },
+    { AT_TOUCH, "DiabloSeal5", 0, "seal=5", "Abrir el quinto sello (sale el Gran Visir del Caos)", 0 },
+    { AT_KILL, "Grand Vizier of Chaos", 0, NULL, "Matar al Gran Visir (sale Diablo)", 0 },
+    { AT_KILL, "diablo", 0, "diablo=4", "Matar a Diablo", 0 },
+    { AT_GOTO_LEVEL, "River of Flame", 0, NULL, "Volver al río caminando", 0 },
+    { AT_WAYPOINT, NULL, 27, NULL, "Waypoint a la Fortaleza", 0 },
+    { AT_TALK, "cain4", OPT_TALK, "forge=5", "Contarle a Caín lo de la Forja", 0 },
+    { AT_TALK, "tyrael2", OPT_TALK, "portal", "Tyrael abre el portal del final", 0 },
+    { AT_TOUCH, "ReallyTheLastPortal", 0, "end", "Entrar al portal: el epílogo", 0 },
+    { AT_SAVE, NULL, 0, "saved", "Guardar y revisar la partida", 0 },
+};
+/* El Acto 5, en el orden en que lo juega una persona: Shenk en el Bloody
+   Foothills, los presos del Frigid Highlands, Anya en el Frozen River,
+   Nihlathak en su templo (por el portal de Anya), los Antiguos en la cumbre,
+   las oleadas del Trono y Baal en la Cámara; el portal de Tyrael al final */
+static const AtStep k_act5_steps[] = {
+    { AT_TALK, "larzuk", OPT_TALK, "shenk=1", "Larzuk pide matar a Shenk", 0 },
+    { AT_TALK, "qual-kehk", OPT_TALK, "rescue=1", "Qual-Kehk pide rescatar a los bárbaros", 0 },
+    { AT_TALK, "malah", OPT_TALK, "anya=1", "Malah pide buscar a Anya", 0 },
+    { AT_GOTO_LEVEL, "Bloody Foothills", 0, NULL, "Salir al Bloody Foothills", 0 },
+    { AT_KILL, "Siege Boss", 0, "shenk=2", "Matar a Shenk el Capataz", 0 },
+    { AT_GOTO_LEVEL, "Rigid Highlands", 0, NULL, "Ir al Frigid Highlands", 0 },
+    { AT_ACTIVATE_WP, NULL, 31, "wp=31", "Activar el waypoint del Frigid Highlands", 0 },
+    { AT_KILL, "prisondoor", 0, "rescued=15", "Romper las tres prisiones (15 bárbaros)", 0 },
+    { AT_WAYPOINT, NULL, 30, NULL, "Waypoint a Harrogath", 0 },
+    { AT_TALK, "larzuk", OPT_TALK, "shenk=3", "Larzuk se entera de Shenk", 0 },
+    { AT_TALK, "larzuk", OPT_SOCKET, "socketed", "Larzuk engarza un objeto", 0 },
+    { AT_TALK, "qual-kehk", OPT_TALK, "rescue=3", "Recompensa de Qual-Kehk (tres runas)", 0 },
+    { AT_WAYPOINT, NULL, 31, NULL, "Waypoint al Frigid Highlands", 0 },
+    { AT_GOTO_LEVEL, "Arreat Plateau", 0, NULL, "Ir al Arreat Plateau", 0 },
+    { AT_ACTIVATE_WP, NULL, 32, "wp=32", "Activar el waypoint del Arreat Plateau", 0 },
+    { AT_GOTO_LEVEL, "Crystalized Cavern Level 1", 0, NULL, "Entrar al Crystalline Passage", 0 },
+    { AT_ACTIVATE_WP, NULL, 33, "wp=33", "Activar el waypoint del Crystalline Passage", 0 },
+    { AT_GOTO_LEVEL, "Cellar of Pity", 0, NULL, "Bajar al Frozen River", 0 },
+    { AT_TOUCH, "AnyaYetAgain", 0, "anya=2", "Encontrar a Anya congelada", 0 },
+    { AT_WAYPOINT, NULL, 30, NULL, "Volver a Harrogath", 0 },
+    { AT_TALK, "malah", OPT_TALK, "anya=3", "Malah da su poción", 0 },
+    { AT_WAYPOINT, NULL, 33, NULL, "Waypoint al Crystalline Passage", 0 },
+    { AT_GOTO_LEVEL, "Cellar of Pity", 0, NULL, "Volver al Frozen River", 0 },
+    { AT_TOUCH, "AnyaYetAgain", 0, "anya=4", "Descongelar a Anya con la poción", 0 },
+    { AT_WAYPOINT, NULL, 30, NULL, "Volver a Harrogath", 0 },
+    { AT_TALK, "malah", OPT_TALK, "anya=5", "Recompensa de Malah (Pergamino de Resistencia)", 0 },
+    { AT_USE, "tr2", 0, "resist", "Leer el Pergamino de Resistencia", 0 },
+    { AT_TALK, "drehya", OPT_TALK, "anyatold", "Anya agradece el rescate", 0 },
+    { AT_TALK, "drehya", OPT_TALK, "nihl=1", "Anya abre el portal al templo de Nihlathak", 0 },
+    { AT_GOTO_LEVEL, "Nihlathaks Temple", 0, "nihl=2", "Entrar al templo por el portal de Anya", 0 },
+    { AT_GOTO_LEVEL, "Halls of Anguish", 0, NULL, "Bajar a los Halls of Anguish", 0 },
+    { AT_GOTO_LEVEL, "Halls of Death's Calling", 0, NULL, "Bajar a los Halls of Pain", 0 },
+    { AT_ACTIVATE_WP, NULL, 35, "wp=35", "Activar el waypoint de los Halls of Pain", 0 },
+    { AT_GOTO_LEVEL, "Halls of Vaught", 0, NULL, "Bajar a los Halls of Vaught", 0 },
+    { AT_KILL, "Nihlathak Boss", 0, "nihl=3", "Matar a Nihlathak", 0 },
+    { AT_WAYPOINT, NULL, 30, NULL, "Volver a Harrogath", 0 },
+    { AT_TALK, "drehya", OPT_TALK, "nihl=4", "Anya se entera de Nihlathak", 0 },
+    { AT_TALK, "drehya", OPT_PERSONAL, "personal", "Anya personaliza un objeto", 0 },
+    { AT_TALK, "qual-kehk", OPT_TALK, "ancients=1", "Qual-Kehk pide el rito de iniciación", 0 },
+    { AT_WAYPOINT, NULL, 33, NULL, "Waypoint al Crystalline Passage", 0 },
+    { AT_GOTO_LEVEL, "Crystalized Cavern Level 2", 0, NULL, "Ir al Glacial Trail", 0 },
+    { AT_ACTIVATE_WP, NULL, 34, "wp=34", "Activar el waypoint del Glacial Trail", 0 },
+    { AT_GOTO_LEVEL, "Tundra Wastelands", 0, NULL, "Salir a la Frozen Tundra", 0 },
+    { AT_ACTIVATE_WP, NULL, 36, "wp=36", "Activar el waypoint de la Frozen Tundra", 0 },
+    { AT_GOTO_LEVEL, "Glacial Caves Level 1", 0, NULL, "Entrar al Ancients' Way", 0 },
+    { AT_ACTIVATE_WP, NULL, 37, "wp=37", "Activar el waypoint del Ancients' Way", 0 },
+    { AT_GOTO_LEVEL, "Rocky Summit", 0, NULL, "Subir a la cumbre del Arreat", 0 },
+    { AT_TOUCH, "AncientsAltar", 0, "ancients=2", "Tocar el altar: despiertan los Antiguos", 0 },
+    { AT_KILL, "Ancient Barbarian 1", 0, NULL, "Matar a Talic", 0 },
+    { AT_KILL, "Ancient Barbarian 2", 0, NULL, "Matar a Madawc", 0 },
+    { AT_KILL, "Ancient Barbarian 3", 0, "ancients=3", "Matar a Korlic", 0 },
+    { AT_GOTO_LEVEL, "The Worldstone Keep Level 1", 0, NULL, "Entrar a la Fortaleza de la Piedra del Mundo", 0 },
+    { AT_GOTO_LEVEL, "The Worldstone Keep Level 2", 0, NULL, "Bajar al nivel 2", 0 },
+    { AT_ACTIVATE_WP, NULL, 38, "wp=38", "Activar el waypoint del nivel 2", 0 },
+    { AT_GOTO_LEVEL, "The Worldstone Keep Level 3", 0, NULL, "Bajar al nivel 3", 0 },
+    { AT_GOTO_LEVEL, "Throne of Destruction", 0, "baal=2", "Llegar al Trono de la Destrucción", 0 },
+    { AT_WAVES, "Throne of Destruction", 0, "baal=3", "Las cinco oleadas: Baal se va a la Cámara", 0 },
+    { AT_GOTO_LEVEL, "The Worldstone Chamber", 0, NULL, "Seguir a Baal a la Cámara", 0 },
+    { AT_KILL, "baalcrab", 0, "baal=4", "Matar a Baal", 0 },
+    { AT_TALK, "tyrael3", OPT_TALK, "baal=5", "Hablar con Tyrael: abre el portal", 0 },
+    { AT_TOUCH, "NotKiddingLastPortal", 0, "end5", "Entrar al portal de Tyrael: el final", 0 },
+    { AT_SAVE, NULL, 0, "saved", "Guardar y revisar la partida", 0 },
+};
 #define AT_MAX_STEPS 96 /* el más largo */
 
 /* Un bot por jugador: su navegación (bot.c) y lo de los botones */
@@ -266,6 +377,8 @@ typedef struct {
     int      fighting; /* ticks seguidos con un monstruo pegado */
     int      swinging; /* ticks pegando parado antes de volver a intentar caminar */
     float    anchor_x, anchor_y; /* dónde estaba hace un segundo */
+    int      nav_r, nav_dest; /* lo último de la navegación (para el informe si se traba) */
+    float    nav_x, nav_y, nav_dx, nav_dy;
 } AtBot;
 
 static struct {
@@ -285,6 +398,8 @@ static struct {
     int      step_time[AT_MAX_STEPS];
     int      max_zones, zone_loads;
     int      unreachable; /* monstruos a los que no se pudo llegar caminando */
+    int      kill_unit, kill_hp, kill_since; /* el jefe del paso, su vida más baja y desde cuándo no baja */
+    int      clear_unit; /* el monstruo que va a matar para limpiar el nivel, + 1 (0: ninguno) */
     long     max_rss_kb;
     double   peak_map_mb, peak_gfx_mb; /* en el pico de memoria */
     int      peak_step, slow_ticks;
@@ -336,6 +451,7 @@ static void demo_step_begin(const AtStep *st);
 static void demo_step_end(const AtStep *st, int ok);
 static void demo_report(void);
 static int  demo_farming(void); /* farmeando o volviendo al pueblo a curarse */
+static int  demo_escape(int i, PlayerInput *in, AtBot *b, float x, float y);
 
 /* Pegar: A (el ataque) o, en la demostración, el botón que convenga */
 static void at_swing(Player *p, PlayerInput *in)
@@ -348,10 +464,19 @@ static void at_swing(Player *p, PlayerInput *in)
             units_position(e, 1.0f, &ex, &ey);
         b = demo_button((int)(p - s_pl), e, sqrtf((ex - p->x) * (ex - p->x) + (ey - p->y) * (ey - p->y)));
     }
-    if (s_demo)
+    if (s_demo) {
         demo_press((int)(p - s_pl), in, b);
-    else
-        in->action = in->button[0] = 1;
+        return;
+    }
+    /* El segundo no aprieta A con lo de la misión al lado: A también levanta,
+       y se quedaba con el Mazo que tenía que tomar el primero */
+    for (int k = 0; p != &s_pl[0] && k < items_ground_count(); k++) {
+        float x, y;
+        const Item *g = items_ground_item(k, &x, &y);
+        if (g && is_quest_item(g->type) && (x - p->x) * (x - p->x) + (y - p->y) * (y - p->y) < 2.5f * 2.5f)
+            return;
+    }
+    in->action = in->button[0] = 1;
 }
 
 static void at_move(PlayerInput *in, float wx, float wy)
@@ -371,6 +496,12 @@ static int at_goto(AtBot *b, Player *p, PlayerInput *in, int dest, float x, floa
         b->nav = bot_nav_new(0x9E3779B9u * (uint32_t)(p - s_pl + 1));
     float dx, dy;
     int r = bot_nav_step(b->nav, &s_map, s_ticks, p->x, p->y, dest, x, y, reach, &dx, &dy);
+    b->nav_r = r;
+    b->nav_dest = dest;
+    b->nav_x = x;
+    b->nav_y = y;
+    b->nav_dx = r == BOT_MOVING ? dx : 0.0f;
+    b->nav_dy = r == BOT_MOVING ? dy : 0.0f;
     if (r != BOT_NO_PATH)
         b->no_path = 0;
     if (s_at.trace > 1) /* D2_AT_TRACE=2: cada paso de la navegación */
@@ -379,15 +510,77 @@ static int at_goto(AtBot *b, Player *p, PlayerInput *in, int dest, float x, floa
     switch (r) {
     case BOT_ARRIVED:
         return 1;
-    case BOT_MOVING:
+    case BOT_MOVING: {
+        /* Trabado contra una urna o un barril que tapa el pasillo (el camino
+           pasa por ahí: bot_breakable): se usa, como lo haría una persona */
+        int u;
+        if (b->stuck && p->state == PS_NORMAL && obj_action(p, &u) && u >= 0 && obj_breakable_unit(u)) {
+            in->move_x = in->move_y = 0.0f;
+            if (b->pulse++ % 3 == 0)
+                in->action = in->button[0] = 1;
+            return 0;
+        }
         at_move(in, dx, dy);
         return 0;
-    case BOT_USE: /* la escalera o el portal */
+    }
+    case BOT_USE: /* la escalera, el portal o la almohadilla */
         if (b->pulse++ % 3 == 0)
             in->action = in->button[0] = 1;
         return 0;
-    default:
+    default: /* (la demostración, si cayó en un hueco cerrado, sale como entró) */
+        if (s_demo && b->no_path > TICK_RATE / 2)
+            demo_escape((int)(p - s_pl), in, b, x, y);
         return ++b->no_path > 3 * TICK_RATE ? -1 : 0;
+    }
+}
+
+/* Para el informe de un paso que falló: qué hacía la navegación de cada bot
+   y qué tenía alrededor (un atraso de carga no se repite con el rastro) */
+static void at_stuck_report(void)
+{
+    for (int i = 0; i < s_num_players; i++) {
+        const Player *p = &s_pl[i];
+        const AtBot *b = &s_at.bot[i];
+        int a_unit;
+        const char *a_does = quest_action(p, &a_unit);
+        printf("  J%d bot: navegación %d hacia la zona %d (%.1f, %.1f), dir (%.2f, %.2f), trabado %d, peleando %d, "
+               "pegando %d, sin camino %d; A: %s %s\n",
+               i + 1, b->nav_r, b->nav_dest, b->nav_x, b->nav_y, b->nav_dx, b->nav_dy, b->stuck, b->fighting,
+               b->swinging, b->no_path, a_does ? a_does : "nada", a_does && a_unit >= 0 ? units_id(a_unit) : "");
+        if (b->stuck || b->no_path) { /* ¿un rincón cerrado o es cosa del bot? */
+            int region, reach = map_reach(p->x, p->y, b->nav_x, b->nav_y, &region);
+            printf("    en el mapa %s hasta ahí (%d subtiles a los que se llega)\n", reach ? "hay camino" : "no hay camino",
+                   region);
+            /* y las salidas que tiene anotadas su zona (si falta la escalera, el bot no tiene ruta) */
+            int z = zone_at(p->x, p->y);
+            printf("    saltos de la zona %d (%s), de %d:", z, world_zone_name(z), world_warp_count());
+            for (int w = 0; w < world_warp_count(); w++) {
+                const Warp *wp = world_warp(w);
+                if (wp->from == z)
+                    printf(" a %s en (%.0f, %.0f)%s;", world_zone_name(wp->to), (wp->x0 + wp->x1) / 2, (wp->y0 + wp->y1) / 2,
+                           wp->portal ? " (portal)" : "");
+            }
+            printf(" armada %d\n", world_zone_loaded(z));
+        }
+        for (int u = 0; u < units_count(); u++) {
+            float x, y;
+            units_position(u, 1.0f, &x, &y);
+            if (fabsf(x - p->x) < 4.0f && fabsf(y - p->y) < 4.0f)
+                printf("    al lado: %s en (%.1f, %.1f)%s\n", units_id(u), x, y,
+                       units_alive_enemy(u) ? ", enemigo vivo" : "");
+        }
+    }
+    /* Los enemigos vivos a menos de 64 subtiles del primero (lo que cuenta el
+       trono de Baal antes de cada oleada), hasta 8 */
+    int shown = 0;
+    for (int u = 0; u < units_count() && shown < 8; u++) {
+        float x, y;
+        units_position(u, 1.0f, &x, &y);
+        if (!units_alive_enemy(u) || fabsf(x - s_pl[0].x) >= 64.0f || fabsf(y - s_pl[0].y) >= 64.0f)
+            continue;
+        const Level *lv = world_level_at(x, y);
+        printf("    vivo cerca: %s en (%.1f, %.1f), %s, zona %d\n", units_id(u), x, y, lv ? lv->name : "?", zone_at(x, y));
+        shown++;
     }
 }
 
@@ -403,13 +596,29 @@ static int at_fight(Player *p, PlayerInput *in, AtBot *b, float range)
     return 1;
 }
 
+/* Le habló sin querer a un NPC de afuera: con el espíritu de Izual o Hadriel
+   a menos de 4, A habla en lugar de pegar, levantar o abrir. Se cierra el
+   diálogo; si no, se queda ahí hasta que se pasa el tiempo del paso (peleando
+   al lado del espíritu de Izual). 1 = en eso */
+static int at_close_dialog(Player *p, AtBot *b, PlayerInput *in)
+{
+    if (p->dialog_npc < 0 || p->state >= PS_DYING)
+        return 0;
+    if (b->pulse++ % 2 == 0)
+        in->back = in->button[1] = 1;
+    return 1;
+}
+
 /* Caminar hasta (x, y) peleando con lo que lo trabe (al bajar una escalera
    puede haber un montón de monstruos esperando): si no avanza con un
    monstruo pegado, pega un segundo y vuelve a intentar. Si la pelea no se
    termina nunca porque un chamán revive a los Caídos, va primero por él. */
 static int at_travel(AtBot *b, Player *p, PlayerInput *in, int dest, float x, float y, float reach)
 {
-    int near = units_find_enemy(p->x, p->y, 1.6f) >= 0;
+    /* (trabado, también lo que está a un paso: las piezas de la prisión de
+       hueso de Diablo lo rodean a 2 subtiles y hay que romper una para salir) */
+    float range = b->stuck || b->swinging > 0 ? 2.1f : 1.6f;
+    int near = units_find_enemy(p->x, p->y, range) >= 0;
     b->fighting = near ? b->fighting + 1 : 0;
     int hunt = -1;
     if (b->fighting > 3 * TICK_RATE)
@@ -420,7 +629,7 @@ static int at_travel(AtBot *b, Player *p, PlayerInput *in, int dest, float x, fl
         reach = 1.2f;
     }
     if (near && (b->stuck || b->swinging > 0)) {
-        at_fight(p, in, b, 1.6f);
+        at_fight(p, in, b, range);
         if (++b->swinging > TICK_RATE) { /* a caminar de nuevo (un segundo de prueba) */
             b->swinging = b->stuck = 0;
             b->anchor_x = p->x;
@@ -503,6 +712,18 @@ static int at_player_step(int i, const AtStep *st, PlayerInput *in)
         int dest = world_waypoint_zone(st->num);
         if (zone_at(p->x, p->y) == dest && !p->wp_open)
             return 1;
+        /* Al pueblo, con un portal si tiene (como un jugador después de una
+           misión): lo abre al lado y entra, en vez de ir hasta un waypoint */
+        /* (en la cumbre con el rito empezado no: el portal hace volver a los Antiguos a sus estatuas) */
+        if (!p->wp_open && st->num == wp_first(s_act) && p->level && !p->level->town && tp_find(p) >= 0 &&
+            p->dialog_npc < 0 && !(p->level->id == 120 && p->ancients_q == 2)) {
+            int i = (int)(p - s_pl);
+            if (tp_cast(p, tp_find(p)) && tp_warp(PORTAL_TP_FIELD(i))) {
+                use_warp(p, tp_warp(PORTAL_TP_FIELD(i)));
+                printf("  J%d vuelve al pueblo por su portal\n", i + 1);
+            }
+            return 0;
+        }
         if (p->wp_open) { /* elegir el destino en el panel y viajar */
             if (b->pulse++ % 2)
                 return 0;
@@ -558,7 +779,9 @@ static void at_follow(int i, PlayerInput *in)
             in->back = in->button[1] = 1;
         return;
     }
-    if (p->state >= PS_DYING || p->dialog_npc >= 0 || p->inv_open)
+    if (at_close_dialog(p, b, in)) /* (el que acompaña no habla con nadie) */
+        return;
+    if (p->state >= PS_DYING || p->inv_open)
         return;
     if (p->wp_open) {
         if (b->pulse++ % 2 == 0)
@@ -629,6 +852,36 @@ static int at_check(const char *check, char *why, size_t cap)
         else if (strcmp(name, "meph") == 0) ok = (have = p->meph_q) >= want;
         else if (strcmp(name, "freehire") == 0) ok = i > 0 || (p->a3_flags & A3F_HIRED);
         else if (strcmp(name, "lever") == 0) ok = s_a3_lever;
+        else if (strcmp(name, "decoy") == 0) /* el señuelo ya se tocó (peleando al lado, A) o alguien tiene la Gidbinn */
+            ok = (s_a3_opened & a3_once_bit("GidBInnDecoy")) || s_a3_gid_boss >= 0 || player_has(&s_pl[0], "g33") ||
+                 player_has(&s_pl[1], "g33") || p->blade_q >= 3;
+        /* Las del Acto 4: los pedidos y lo que pasa en el mundo, de los dos; las recompensas, del que habla */
+        else if (strcmp(name, "izual") == 0) ok = (have = p->izual_q) >= want || (i > 0 && (want == 2 || want == 5));
+        else if (strcmp(name, "forge") == 0) ok = (have = p->forge_q) >= want || (i > 0 && want != 4);
+        else if (strcmp(name, "diablo") == 0) ok = (have = p->diablo_q) >= want || (i > 0 && want == 2);
+        else if (strcmp(name, "stone") == 0) ok = (p->a4_flags & A4F_STONE) != 0;
+        else if (strcmp(name, "seal") == 0) ok = (s_a4_seals >> (want - 1)) & 1;
+        else if (strcmp(name, "portal") == 0) ok = (p->a4_flags & A4F_PORTAL) != 0;
+        else if (strcmp(name, "end") == 0) ok = (p->a4_flags & A4F_END) != 0;
+        /* Las del Acto 5: igual (los pedidos y lo que pasa en el mundo, de los dos; las recompensas, del que habla) */
+        else if (strcmp(name, "shenk") == 0) ok = (have = p->shenk_q) >= want || (i > 0 && want != 2);
+        else if (strcmp(name, "rescue") == 0) ok = (have = p->rescue_q) >= want || (i > 0 && want == 3);
+        else if (strcmp(name, "rescued") == 0) ok = (have = p->rescued) >= want;
+        else if (strcmp(name, "anya") == 0) ok = (have = p->anya_q) >= want || (i > 0 && (want == 3 || want == 5));
+        else if (strcmp(name, "nihl") == 0) ok = (have = p->nihl_q) >= want || (i > 0 && (want == 2 || want == 4));
+        else if (strcmp(name, "ancients") == 0) ok = (have = p->ancients_q) >= want;
+        else if (strcmp(name, "baal") == 0) ok = (have = p->baal_q) >= want || (i > 0 && want == 2);
+        else if (strcmp(name, "socketed") == 0) ok = i > 0 || p->shenk_q >= 4;
+        else if (strcmp(name, "personal") == 0) { /* (sin objetos mágicos no hay nada que personalizar) */
+            ok = i > 0 || p->nihl_q >= 5;
+            int saved = s_pl[i].imbue_mode, list[BAG_MAX + SLOT_COUNT];
+            s_pl[i].imbue_mode = 2;
+            ok |= imbue_candidates(p, list) == 0;
+            s_pl[i].imbue_mode = saved;
+        }
+        else if (strcmp(name, "resist") == 0) ok = i > 0 || (p->a5_flags & A5F_RESIST);
+        else if (strcmp(name, "anyatold") == 0) ok = i > 0 || (p->a5_flags & A5F_ANYA_TOLD);
+        else if (strcmp(name, "end5") == 0) ok = (p->a5_flags & A5F_END) != 0;
         else if (strcmp(name, "wield") == 0) ok = i > 0 || (p->equip[SLOT_WEAPON].type && !strcmp(p->equip[SLOT_WEAPON].type->code, val));
         else if (strcmp(name, "life") == 0) ok = i > 0 || (p->a3_flags & A3F_LIFE);
         else if (strcmp(name, "has") == 0) ok = i > 0 || player_has(p, val); /* (cada uno tiene su pieza en el piso) */
@@ -656,7 +909,13 @@ static int at_check(const char *check, char *why, size_t cap)
                 FILE *f = fopen(path, "r");
                 int q[7];
                 while (f && fgets(line, sizeof line, f))
-                    if (s_at.act == 3) /* las seis misiones (el pájaro, el Orbe, el tomo, el Consejo y Mefisto) */
+                    if (s_at.act == 5) /* las seis misiones (con las recompensas del que habla y el final) */
+                        ok |= sscanf(line, "act5 %d %d %d %d %d %d %d", &q[0], &q[1], &q[2], &q[3], &q[4], &q[5], &q[6]) == 7 &&
+                              (i > 0 || (q[0] >= 4 && q[1] >= 3 && q[2] >= 5 && q[3] >= 4 && q[4] >= 3 && q[5] >= 6));
+                    else if (s_at.act == 4) /* las tres misiones (Izual cobrado, la Forja contada a Caín, Diablo) */
+                        ok |= sscanf(line, "act4 %d %d %d %d", &q[0], &q[1], &q[2], &q[3]) == 4 &&
+                              (i > 0 || (q[0] >= 5 && q[1] >= 5 && q[2] >= 4));
+                    else if (s_at.act == 3) /* las seis misiones (el pájaro, el Orbe, el tomo, el Consejo y Mefisto) */
                         ok |= sscanf(line, "act3 %d %d %d %d %d %d %d", &q[0], &q[1], &q[2], &q[3], &q[4], &q[5], &q[6]) == 7 &&
                               (i > 0 || (q[0] >= 6 && q[2] >= 3 && q[3] >= 3 && q[4] >= 4 && q[5] >= 2));
                     else if (s_at.act == 2) /* las seis misiones (Radament contada a Atma; Meshif) */
@@ -689,19 +948,27 @@ static int at_step_timeout(const AtStep *st)
     }
 }
 
-/* ¿Entra ese objeto en algún lugar de la mochila? */
-static int at_bag_room(const Player *p, const ItemType *t)
+/* ¿Entra ese objeto en algún lugar de la mochila (sin contar el objeto
+   `ignore`, el que sale de ella para ponerse)? */
+static int at_bag_room_but(const Player *p, const ItemType *t, int ignore)
 {
     for (int x = 0; x + t->inv_w <= BAG_W; x++)
         for (int y = 0; y + t->inv_h <= BAG_H; y++)
-            if (bag_fits(p, t, x, y, -1))
+            if (bag_fits(p, t, x, y, ignore))
                 return 1;
     return 0;
+}
+
+static int at_bag_room(const Player *p, const ItemType *t)
+{
+    return at_bag_room_but(p, t, -1);
 }
 
 /* Para que entre un objeto de misión: deja en el piso lo más barato de la
    mochila (no de misión ni pociones). Devuelve dónde quedó en el piso, -1 si
    no hacía falta y -2 si no hay nada que dejar */
+static void demo_forget_item(const Player *p, int ground); /* (demobot.inc) */
+
 static int at_make_room(Player *p, const ItemType *t, float qx, float qy)
 {
     if (at_bag_room(p, t))
@@ -709,16 +976,27 @@ static int at_make_room(Player *p, const ItemType *t, float qx, float qy)
     int drop = -1, worst = 1 << 30;
     for (int k = 0; k < p->bag_count; k++) {
         const ItemType *bt = p->bag[k].type;
-        if (is_quest_item(bt) || is_potion(bt))
+        if (is_quest_item(bt))
             continue;
-        int v = bt->cost > 0 ? bt->cost : 1;
+        /* lo que menos sirve; las pociones al final (si no hay otra cosa: la
+           Hechicera con la mochila de pociones no levantaba la Gidbinn) */
+        int v = (bt->cost > 0 ? bt->cost : 1) + (is_potion(bt) ? 1 << 24 : 0);
         if (v < worst) {
             worst = v;
             drop = k;
         }
     }
-    if (drop < 0)
+    if (drop < 0) {
+        static uint32_t s_told;
+        if (s_ticks - s_told > 30 * TICK_RATE) { /* para ver qué tenía */
+            s_told = s_ticks;
+            printf("  J%d no tiene lugar para %s y no hay qué dejar:", (int)(p - s_pl) + 1, t->name);
+            for (int k = 0; k < p->bag_count; k++)
+                printf(" %s;", p->bag[k].type->name);
+            printf("\n");
+        }
         return -2;
+    }
     Item it = p->bag[drop];
     bag_remove(p, drop);
     printf("  J%d deja en el piso %s para levantar lo de la misión\n", (int)(p - s_pl) + 1, it.type->name);
@@ -755,15 +1033,28 @@ static int at_quest_pickup(Player *p, AtBot *b, PlayerInput *in)
     int room = at_make_room(p, g->type, bx, by);
     if (room == -2)
         return 0;
-    if (room >= 0)
+    if (room >= 0) {
+        demo_forget_item(p, room); /* que la demo no lo vuelva a levantar (una poción) */
         return 1;
-    if (bd < 1.2f * 1.2f) {
+    }
+    /* A levanta lo más cerca (a menos de 1,8): si hay otra cosa más cerca (el
+       botín de la escolta del fetiche, al lado de la Gidbinn), se para encima */
+    if (s_at.trace && s_ticks % 25 == 0) { /* D2_AT_TRACE: por qué no lo levanta */
+        int nb = items_ground_nearest(p->x, p->y, 1.8f, 0);
+        const Item *ng = nb >= 0 ? items_ground_item(nb, NULL, NULL) : NULL;
+        printf("  J%d va por %s a %.2f; lo más cerca: %s; lugar %d; mochila %d\n", (int)(p - s_pl) + 1, g->type->name,
+               sqrtf(bd), ng ? ng->type->name : "-", at_bag_room(p, g->type), p->bag_count);
+    }
+    /* (al lado alcanza: la estatuilla de jade cayó una vez en un subtile que el
+       pie del jugador no pisa, con todo lo de alrededor libre, y pararse
+       encima no se podía) */
+    if (bd < 1.5f * 1.5f && (items_ground_nearest(p->x, p->y, 1.8f, 0) == best || bd < 0.15f * 0.15f)) {
         in->move_x = in->move_y = 0.0f;
         if (b->pulse++ % 3 == 0)
             in->action = in->button[0] = 1;
         return 1;
     }
-    return at_travel(b, p, in, zone_at(bx, by), bx, by, 0.5f) >= 0; /* peleando con lo que lo trabe (Bloodwitch, al lado del cubo) */
+    return at_travel(b, p, in, zone_at(bx, by), bx, by, bd < 1.5f * 1.5f ? 0.1f : 1.0f) >= 0; /* peleando con lo que lo trabe (Bloodwitch, al lado del cubo) */
 }
 
 /* ¿Hay en el piso, a menos de r, un objeto con ese código? */
@@ -822,6 +1113,55 @@ static int at_back_to_level(Player *p, AtBot *b, PlayerInput *in)
     return -1;
 }
 
+/* Como una persona, al pasar abre los cofres, ataúdes, urnas, barriles y
+   cadáveres que tiene cerca (objects.inc), sin monstruos al lado ni un objeto
+   de misión que A tocaría antes; al que no llega en 6 s lo deja. 1 = en eso. */
+static int at_open_objects(Player *p, AtBot *b, PlayerInput *in)
+{
+    static int cur = -1;
+    static uint32_t since, seen;
+    int qobj;
+    if (!p->level || p->level->town || p->state != PS_NORMAL || p->dialog_npc >= 0 || p->inv_open || p->wp_open ||
+        units_find_enemy(p->x, p->y, 8.0f) >= 0 || quest_action(p, &qobj))
+        return 0;
+    int u = obj_bot_target(p, 6.0f);
+    if (u < 0)
+        return 0;
+    if (u != cur || s_ticks - seen > TICK_RATE) { /* (un monstruo que se asoma un momento no lo reinicia) */
+        cur = u;
+        since = s_ticks;
+    }
+    seen = s_ticks;
+    if (s_at.trace && s_ticks % 50 == 0) {
+        float ux, uy;
+        units_position(u, 1.0f, &ux, &uy);
+        printf("  J1 va a abrir %s en (%.1f, %.1f), hace %u ticks\n", units_id(u), ux, uy, s_ticks - since);
+    }
+    if (s_ticks - since > 6 * TICK_RATE) { /* no llega (detrás de una pared) */
+        if (s_at.trace)
+            printf("  J1 deja %s: no llega\n", units_id(u));
+        obj_bot_skip(u);
+        cur = -1;
+        return 0;
+    }
+    int near;
+    if (obj_action(p, &near) && near == u) {
+        in->move_x = in->move_y = 0.0f;
+        if (b->pulse++ % 3 == 0)
+            in->action = in->button[0] = 1;
+        return 1;
+    }
+    float x, y;
+    units_position(u, 1.0f, &x, &y);
+    find_free_spot(&x, &y); /* al lado: lo que ocupa no se camina */
+    if (at_travel(b, p, in, zone_at(x, y), x, y, 0.4f) < 0) {
+        obj_bot_skip(u);
+        cur = -1;
+        return 0;
+    }
+    return 1;
+}
+
 /* Lo que hace el jugador 1 en el paso actual; 1 = terminó, -1 = falló */
 static int at_lead_step(const AtStep *st, PlayerInput *in)
 {
@@ -834,12 +1174,16 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
             in->back = in->button[1] = 1;
         return 0;
     }
+    if (st->kind != AT_TALK && at_close_dialog(p, b, in))
+        return 0;
     /* Lo que suelta un monstruo en el Acto 3 en cualquier paso (la estatuilla
        de jade, el primer jefe; el Mangual, el primer consejero): como una
        persona, se levanta al verlo */
     if (s_at.act == 3 && ((p->bird_q == 0 && at_ground_has(p, "j34", 14.0f)) ||
                           (a3_needs_part(p, "qf1") && at_ground_has(p, "qf1", 14.0f))) &&
         at_quest_pickup(p, b, in))
+        return 0;
+    if (st->kind != AT_TALK && at_open_objects(p, b, in))
         return 0;
     switch (st->kind) {
     case AT_TALK: {
@@ -851,11 +1195,13 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
                 return 0;
             }
             int town = world_zone_at(&s_map, s_town_x, s_town_y), id;
-            if (units_find(st->arg, &x, &y) != 0)
-                return -1;
+            if (units_find(st->arg, &x, &y) != 0) /* (el espíritu de Izual sale un momento después) */
+                return s_at.step_ticks > 5 * TICK_RATE ? -1 : 0;
             if (units_find_all(st->arg, &id, 1) == 1 && units_zone(id) >= 0) /* Tyrael está en la guarida */
                 town = units_zone(id);
             npc = units_find_npc(p->x, p->y, 4.0f);
+            if (s_at.trace && s_ticks % 50 == 0)
+                printf("  J1 va a %s en (%.1f, %.1f); al lado: %s\n", st->arg, x, y, npc >= 0 ? units_id(npc) : "nadie");
             if (npc >= 0 && strcmp(units_id(npc), st->arg) == 0) {
                 if (b->pulse++ % 3 == 0)
                     in->action = in->button[0] = 1;
@@ -870,6 +1216,10 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
                 s_at.phase = 0;
                 return 0;
             }
+            /* lo que dio y no entró en la mochila quedó en el piso (la poción de
+               Malah: sin ella, en el Frozen River no se descongelaba a Anya) */
+            if (at_quest_pickup(p, b, in))
+                return 0;
             return 1;
         }
         if (s_at.phase == 1) { /* elegir la opción */
@@ -905,6 +1255,49 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
         in->back = in->button[1] = 1; /* cerrar (la lista y después el diálogo) */
         return 0;
     }
+    case AT_WAVES: { /* las oleadas: lo más cercano de lo que cuenta el trono; sin nadie, cerca del trono */
+        char why[160];
+        if (at_check(st->check, why, sizeof why))
+            return 1;
+        const Level *lv = world_level_named(st->arg);
+        int target = -1;
+        float best = 1e9f, x, y, bx, by;
+        int has_throne = units_find("baalthrone", &bx, &by) == 0;
+        for (int u = 0; u < units_count(); u++) {
+            if (!units_alive_enemy(u)) /* (Baal en su trono no cuenta: no se lo puede matar, killable 0) */
+                continue;
+            units_position(u, 1.0f, &x, &y);
+            /* Baal espera a que no quede nadie a 64 subtiles de él en su zona
+               (monai5.inc): esos primero; el resto del nivel no lo frena (antes
+               el bot recorría todo el Trono y el paso casi no entraba en el tope) */
+            if (has_throne ? zone_at(x, y) != zone_at(bx, by) || (x - bx) * (x - bx) + (y - by) * (y - by) >= 64.0f * 64.0f
+                           : world_level_at(x, y) != lv)
+                continue;
+            float d = (x - p->x) * (x - p->x) + (y - p->y) * (y - p->y);
+            if (d < best) {
+                best = d;
+                target = u;
+            }
+        }
+        if (target < 0) { /* sin nadie: cerca del trono, donde Baal ve al grupo */
+            if (units_find("baalthrone", &x, &y) != 0)
+                return 0;
+            return at_travel(b, p, in, zone_at(x, y), x, y + 12.0f, 3.0f) < 0 ? -1 : 0;
+        }
+        units_position(target, 1.0f, &x, &y);
+        if ((x - p->x) * (x - p->x) + (y - p->y) * (y - p->y) < MELEE_RANGE * MELEE_RANGE * 0.8f) {
+            if (b->pulse++ % 4 == 0)
+                at_swing(p, in);
+            return 0;
+        }
+        if (at_fight(p, in, b, 1.4f))
+            return 0;
+        if (at_goto(b, p, in, zone_at(x, y), x, y, 1.2f) < 0) {
+            units_damage(target, 1 << 20);
+            s_at.unreachable++;
+        }
+        return 0;
+    }
     case AT_KILL: case AT_CLEAR: {
         int target = -1;
         if (st->kind == AT_KILL && strcmp(st->arg, "#jade") == 0) {
@@ -914,8 +1307,27 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
             float gx = 0.0f, gy = 0.0f;
             if (p->bird_q > 0 || player_has(p, "j34") || player_has(p, "g34"))
                 return 1;
-            if (at_ground_find(p, "j34", &gx, &gy))
-                return at_quest_pickup(p, b, in) ? 0 : at_travel(b, p, in, zone_at(gx, gy), gx, gy, 0.5f) < 0 ? -1 : 0;
+            if (at_ground_find(p, "j34", &gx, &gy)) {
+                if (at_quest_pickup(p, b, in) || at_travel(b, p, in, zone_at(gx, gy), gx, gy, 1.0f) >= 0)
+                    return 0;
+                /* Cayó donde no se llega (el jefe estaba en un rincón al que el
+                   bot no llegó y se lo dio por muerto): como con él, se la da y
+                   se anota */
+                int region, reach = map_reach(p->x, p->y, gx, gy, &region);
+                printf("  J1 no llega a la estatuilla en (%.1f, %.1f): en el mapa %s; se la da\n", gx, gy,
+                       reach ? "hay camino (es cosa del bot)" : "no hay camino");
+                for (int k = items_ground_count() - 1; k >= 0; k--) {
+                    float ix, iy;
+                    const Item *g = items_ground_item(k, &ix, &iy);
+                    if (g && g->type && strcmp(g->type->code, "j34") == 0 && fabsf(ix - gx) < 2.0f && fabsf(iy - gy) < 2.0f)
+                        items_ground_remove(k);
+                }
+                for (int i = 0; i < s_num_players; i++)
+                    if (!player_has(&s_pl[i], "j34"))
+                        give_quest_item(&s_pl[i], "j34");
+                s_at.unreachable++;
+                return 0;
+            }
             if (!a3_bird_open() || s_a3_bird_boss < 0 || !units_alive_enemy(s_a3_bird_boss))
                 return 1;
             target = s_a3_bird_boss;
@@ -924,6 +1336,11 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
                 s_at.unreachable++;
                 return 0;
             }
+        } else if (st->kind == AT_KILL && strncmp(st->arg, "Ancient Barbarian", 17) == 0 && p->ancients_q == 1) {
+            /* el rito se reinició (un portal en la cumbre, o murieron todos allá): de nuevo el altar */
+            static const AtStep k_altar = { AT_TOUCH, "AncientsAltar", 0, NULL, "Tocar el altar de nuevo", 0 };
+            int r = at_lead_step(&k_altar, in);
+            return r < 0 ? r : 0;
         } else if (st->kind == AT_KILL) {
             int ids[4], n = units_find_all(st->arg, ids, 4);
             for (int k = 0; k < n && target < 0; k++)
@@ -933,12 +1350,24 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
                 for (int k = 0; k < n; k++)
                     if (units_is_corpse(ids[k]))
                         return 1;
+                if (n == 0 && s_at.step_ticks < 5 * TICK_RATE) /* (Diablo sale un momento después del último jefe) */
+                    return 0;
                 return at_back_to_level(p, b, in); /* no está en las zonas armadas */
             }
         } else {
+            /* Limpiar el nivel: el más cercano, y después ese mientras viva. Si
+               se elegía de nuevo a cada tick, con dos casi a la misma distancia
+               y los caminos saliendo para el lado del otro iba y venía sin
+               llegar a ninguno (la Guarida del Mal en la semilla 19) */
             const Level *lv = world_level_named(st->arg);
-            float best = 1e9f;
-            for (int u = 0; u < units_count(); u++) {
+            float best = 1e9f, cx, cy;
+            int keep = s_at.clear_unit - 1;
+            if (units_alive_enemy(keep)) {
+                units_position(keep, 1.0f, &cx, &cy);
+                if (world_level_at(cx, cy) == lv)
+                    target = keep;
+            }
+            for (int u = 0; target < 0 && u < units_count(); u++) {
                 float x, y;
                 if (!units_alive_enemy(u))
                     continue;
@@ -953,6 +1382,7 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
             }
             if (target < 0)
                 return 1;
+            s_at.clear_unit = target + 1;
         }
         float x, y;
         units_position(target, 1.0f, &x, &y);
@@ -960,6 +1390,26 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
         if (getenv("D2_AUTOTEST_DEBUG") && s_ticks % 100 == 0)
             printf("  bot: (%.1f, %.1f) contra %s en (%.1f, %.1f), a %.1f\n", p->x, p->y, units_id(target), x, y,
                    sqrtf(dx * dx + dy * dy));
+        /* En la demostración, si en 3 minutos no le bajó la vida, se lo saltea
+           como a los inalcanzables (una vez, en 70 corridas, quedó media hora
+           parado al lado del Gran Visir sin pegarle); el log dice cómo estaba */
+        if (s_demo && st->kind == AT_KILL) {
+            int hp, mx;
+            units_health(target, &hp, &mx);
+            if (target != s_at.kill_unit || hp < s_at.kill_hp || s_at.kill_since > s_at.step_ticks) {
+                s_at.kill_unit = target;
+                s_at.kill_hp = hp;
+                s_at.kill_since = s_at.step_ticks;
+            } else if (s_at.step_ticks - s_at.kill_since > 3 * 60 * TICK_RATE) {
+                printf("  J1 en 3 minutos no le bajó la vida a %s (%d/%d): J1 en (%.1f, %.1f) estado %d, él en (%.1f, %.1f) "
+                       "a %.1f, J2 en (%.1f, %.1f); se lo saltea\n",
+                       units_id(target), hp, mx, p->x, p->y, p->state, x, y, sqrtf(dx * dx + dy * dy), s_pl[1].x, s_pl[1].y);
+                units_damage(target, 1 << 20);
+                s_at.unreachable++;
+                s_at.kill_since = s_at.step_ticks;
+                return 0;
+            }
+        }
         if (dx * dx + dy * dy < MELEE_RANGE * MELEE_RANGE * 0.8f) {
             if (b->pulse++ % 4 == 0)
                 at_swing(p, in);
@@ -969,6 +1419,9 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
             return 0;
         int r = at_goto(b, p, in, zone_at(x, y), x, y, 1.2f);
         if (r < 0) { /* inalcanzable (dentro de una pared): se lo saltea y se anota */
+            int region, reach = map_reach(p->x, p->y, x, y, &region);
+            printf("  J1 no llega a %s en (%.1f, %.1f) desde (%.1f, %.1f): en el mapa %s (%d subtiles a los que se llega)\n",
+                   units_id(target), x, y, p->x, p->y, reach ? "hay camino (es cosa del bot)" : "no hay camino", region);
             units_damage(target, 1 << 20);
             s_at.unreachable++;
             return 0;
@@ -1004,7 +1457,14 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
             printf("  J1 va a %s en (%.1f, %.1f), a %.1f: %s (fase %d)\n", cls, ox, oy,
                    sqrtf((ox - p->x) * (ox - p->x) + (oy - p->y) * (oy - p->y)), act ? act : "nada", s_at.phase);
         }
-        if (act && target == u) {
+        /* Con un NPC al lado al que A le habla, A es suyo si está más cerca que
+           el objeto (quest_nearer, la cuenta del juego): acercarse hasta el
+           objeto. (Antes pedía estar a menos de 2, y la llegada a 1,5 por eje
+           podía quedar en una esquina a 2,1: al lado de Tyrael no apretaba
+           nunca.) */
+        const Level *here = world_level_at(p->x, p->y);
+        int npc = talk_npc_near(p, here && here->town), npc_near = npc >= 0;
+        if (act && target == u && (!npc_near || quest_nearer(p, npc))) {
             if (b->pulse++ % 3 == 0) {
                 in->action = in->button[0] = 1;
                 s_at.phase = 1;
@@ -1015,7 +1475,7 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
             return at_quest_pickup(p, b, in) ? 0 : 1;
         float x, y;
         units_position(u, 1.0f, &x, &y);
-        return at_travel(b, p, in, units_zone(u), x, y, 2.5f) < 0 ? -1 : 0;
+        return at_travel(b, p, in, units_zone(u), x, y, npc_near ? 0.6f : 2.5f) < 0 ? -1 : 0;
     }
     case AT_USE: { /* el Libro de Habilidad: levantarlo y usarlo con X, como una persona */
         char why[160];
@@ -1026,7 +1486,19 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
         if (k < 0 && at_quest_pickup(p, b, in))
             return 0;
         if (k < 0) /* lo soltó un monstruo lejos (el Mangual, el primer consejero que murió): ir a buscarlo */
-            return at_ground_find(p, st->arg, &gx, &gy) && at_travel(b, p, in, zone_at(gx, gy), gx, gy, 0.5f) >= 0 ? 0 : -1;
+            return at_ground_find(p, st->arg, &gx, &gy) && at_travel(b, p, in, zone_at(gx, gy), gx, gy, 1.0f) >= 0 ? 0 : -1;
+        /* Ponérsela: el arma que tiene va a la mochila. Si no entra ni en el
+           lugar que deja (un arco largo o una guadaña, 2x4, por la Voluntad de
+           Khalim, 2x3), el juego deshace el cambio ("Inventario lleno") a cada
+           intento: antes deja en el piso lo que menos le sirve */
+        const ItemType *hand = p->equip[SLOT_WEAPON].type;
+        if (hand && st->check && strncmp(st->check, "wield=", 6) == 0 && !at_bag_room_but(p, hand, k)) {
+            int room = at_make_room(p, hand, p->x, p->y);
+            if (room >= 0) {
+                demo_forget_item(p, room); /* que la demo no lo vuelva a levantar */
+                return 0;
+            }
+        }
         if (b->pulse++ % 3 == 0) {
             p->inv_sel = INV_CELL0 + p->bag_y[k] * BAG_W + p->bag_x[k];
             inventory_use(p);
@@ -1096,19 +1568,28 @@ static int skilltest_on(void);
 
 int game_autotest_start(const char *name, int players)
 {
+    bot_nav_set_breakable(obj_breakable_cell); /* (sus caminos pasan por las urnas y los barriles que se rompen) */
+    bot_nav_set_jumps(obj_pad_jumps);          /* (y por las almohadillas del Santuario Arcano) */
     if (strcmp(name, "skills") == 0) { /* la prueba de habilidades contra Andariel */
         s_one_hit = 0;
         s_god = 1;
         return skilltest_start();
     }
-    if (strcmp(name, "act1") != 0 && strcmp(name, "act2") != 0 && strcmp(name, "act3") != 0)
+    if (strcmp(name, "act1") != 0 && strcmp(name, "act2") != 0 && strcmp(name, "act3") != 0 && strcmp(name, "act4") != 0 &&
+        strcmp(name, "act5") != 0)
         return -1;
     memset(&s_at, 0, sizeof s_at);
     s_at.active = 1;
     s_at.players = players;
     s_at.act = name[3] - '0';
-    s_at.steps = s_at.act == 3 ? k_act3_steps : s_at.act == 2 ? k_act2_steps : k_act1_steps;
-    s_at.nsteps = s_at.act == 3   ? (int)(sizeof k_act3_steps / sizeof k_act3_steps[0])
+    s_at.steps = s_at.act == 5   ? k_act5_steps
+                 : s_at.act == 4 ? k_act4_steps
+                 : s_at.act == 3 ? k_act3_steps
+                 : s_at.act == 2 ? k_act2_steps
+                                 : k_act1_steps;
+    s_at.nsteps = s_at.act == 5   ? (int)(sizeof k_act5_steps / sizeof k_act5_steps[0])
+                  : s_at.act == 4 ? (int)(sizeof k_act4_steps / sizeof k_act4_steps[0])
+                  : s_at.act == 3 ? (int)(sizeof k_act3_steps / sizeof k_act3_steps[0])
                   : s_at.act == 2 ? (int)(sizeof k_act2_steps / sizeof k_act2_steps[0])
                                   : (int)(sizeof k_act1_steps / sizeof k_act1_steps[0]);
     if (s_at.nsteps > AT_MAX_STEPS)
@@ -1133,6 +1614,7 @@ int game_autotest_start(const char *name, int players)
         state += len + (state[len] == ',');
         char *eq = strchr(item, '=');
         int v = eq ? (int)strtol(eq + 1, NULL, 0) : 1;
+        unsigned long long v64 = eq ? strtoull(eq + 1, NULL, 0) : 1; /* (los waypoints del Acto 5 pasan de 32 bits) */
         if (eq)
             *eq = '\0';
         for (int i = 0; i < s_num_players; i++) {
@@ -1145,13 +1627,25 @@ int game_autotest_start(const char *name, int players)
             else if (!strcmp(item, "malus")) p->malus_q = v;
             else if (!strcmp(item, "tower")) p->tower_q = v;
             else if (!strcmp(item, "andy")) p->andy_q = v;
-            else if (!strcmp(item, "wp")) p->waypoints |= v;
+            else if (!strcmp(item, "wp")) p->waypoints |= v64;
             else if (!strcmp(item, "rada")) p->rada_q = v;
             else if (!strcmp(item, "staff")) p->staff_q = v;
             else if (!strcmp(item, "sun")) p->sun_q = v;
             else if (!strcmp(item, "arcane")) p->arcane_q = v;
             else if (!strcmp(item, "summ")) p->summ_q = v;
             else if (!strcmp(item, "tombs")) p->tombs_q = v;
+            else if (!strcmp(item, "izual")) p->izual_q = v;
+            else if (!strcmp(item, "forge")) p->forge_q = v;
+            else if (!strcmp(item, "diablo")) p->diablo_q = v;
+            else if (!strcmp(item, "a4f")) p->a4_flags |= v;
+            else if (!strcmp(item, "shenk")) p->shenk_q = v;
+            else if (!strcmp(item, "rescue")) p->rescue_q = v;
+            else if (!strcmp(item, "rescued")) p->rescued = v;
+            else if (!strcmp(item, "anya")) p->anya_q = v;
+            else if (!strcmp(item, "nihl")) p->nihl_q = v;
+            else if (!strcmp(item, "ancients")) p->ancients_q = v;
+            else if (!strcmp(item, "baal")) p->baal_q = v;
+            else if (!strcmp(item, "a5f")) p->a5_flags |= v;
         }
     }
     if (s_at.act >= 2) { /* el Acto 1 hecho (y el viaje con Warriv), con oro para el guerrero y la apuesta */
@@ -1166,7 +1660,7 @@ int game_autotest_start(const char *name, int players)
             p->waypoints |= 0x1ff;
             if (p->gold < 200000)
                 p->gold = 200000;
-            if (s_at.act == 3) { /* y el Acto 2 (el viaje con Meshif), con el cubo */
+            if (s_at.act >= 3) { /* y el Acto 2 (el viaje con Meshif), con el cubo */
                 p->rada_q = 3;
                 p->staff_q = 3;
                 p->sun_q = 4;
@@ -1176,6 +1670,25 @@ int game_autotest_start(const char *name, int players)
                 p->waypoints |= 0x3fe00;
                 if (!player_has(p, "box"))
                     give_quest_item(p, "box");
+            }
+            if (s_at.act >= 4) { /* y el Acto 3 (hasta el portal rojo) */
+                p->bird_q = 6;
+                p->blade_q = p->will_q = p->tome_q = 3;
+                p->temple_q = 4;
+                p->meph_q = 2;
+                p->a3_flags |= A3F_HRATLI | A3F_HELLGATE;
+                p->waypoints |= 0x7fc0000;
+                p->act_max = p->act_top = 4;
+            }
+            if (s_at.act >= 5) { /* y el Acto 4 (el portal del final), con el nivel del rito de los Antiguos */
+                p->izual_q = 5;
+                p->forge_q = 5;
+                p->diablo_q = 4;
+                p->a4_flags |= A4F_PORTAL | A4F_END | A4F_STONE;
+                p->waypoints |= 7ull << 27;
+                p->act_max = p->act_top = 5;
+                if (p->level_num < 20)
+                    gain_exp(p, s_classes[p->cls].exp_next[19] - p->exp);
             }
         }
         if (s_act != s_at.act)
@@ -1202,6 +1715,11 @@ static int autotest_input_fill(InputState *in, double last_tick_ms);
 int game_autotest_input(InputState *in, double last_tick_ms)
 {
     int r = autotest_input_fill(in, last_tick_ms);
+    if (r != 1 && s_demo && s_camp.on) { /* la campaña de la demostración: el acto que sigue */
+        if (demo_campaign_next(r))
+            return 1;
+        r = demo_campaign_ok() ? 0 : -1;
+    }
     for (int i = 0; i < s_num_players && i < MAX_PLAYERS; i++) {
         const Player *p = &s_pl[i];
         int hp = 0, mx = 0;
@@ -1292,10 +1810,11 @@ static int autotest_input_fill(InputState *in, double last_tick_ms)
             float ex = p->x, ey = p->y;
             if (e >= 0)
                 units_position(e, 1.0f, &ex, &ey);
-            printf("  t%u J%d (%.1f, %.1f) %s, estado %d%s%s%s, monstruo %s a %.1f\n", s_ticks, i + 1, p->x, p->y,
+            printf("  t%u J%d (%.1f, %.1f) %s, estado %d%s%s%s, monstruo %s a %.1f%s%s\n", s_ticks, i + 1, p->x, p->y,
                    p->level ? p->level->name : "?", p->state, p->wp_open ? ", waypoints abiertos" : "",
                    p->dialog_npc >= 0 ? ", hablando" : "", p->inv_open ? ", inventario" : "", e >= 0 ? units_id(e) : "-",
-                   sqrtf((ex - p->x) * (ex - p->x) + (ey - p->y) * (ey - p->y)));
+                   sqrtf((ex - p->x) * (ex - p->x) + (ey - p->y) * (ey - p->y)), p->message_ticks > 0 ? ", dice: " : "",
+                   p->message_ticks > 0 ? p->message : "");
         }
     int r;
     if (s_demo && st->optional) {
@@ -1362,6 +1881,7 @@ static int autotest_input_fill(InputState *in, double last_tick_ms)
            sin lo que haya quedado abierto */
         s_at.failed = 1;
         game_print_status();
+        at_stuck_report();
         for (int i = 0; i < s_num_players; i++) {
             Player *p = &s_pl[i];
             p->dialog_npc = -1;
@@ -1371,6 +1891,7 @@ static int autotest_input_fill(InputState *in, double last_tick_ms)
     } else if (r < 0) {
         s_at.failed = 1;
         game_print_status();
+        at_stuck_report();
         return -1;
     } else {
         s_at.demo_fails = 0;
@@ -1397,6 +1918,15 @@ void game_autotest_render_time(double ms)
     s_at.iv_renders++;
     if (ms > s_at.iv_render_max)
         s_at.iv_render_max = ms;
+}
+
+/* ¿Salió bien cada paso? (la demostración sigue después de uno que falla) */
+static int at_all_ok(void)
+{
+    int ok = 0;
+    for (int k = 0; k < AT_STEPS; k++)
+        ok += s_at.step_result[k] > 0;
+    return !s_at.failed && ok == AT_STEPS;
 }
 
 void game_autotest_report(void)
@@ -1440,6 +1970,8 @@ void game_autotest_report(void)
         bot_nav_free(s_at.bot[i].nav);
         s_at.bot[i].nav = NULL;
     }
+    if (s_demo && s_camp.on && !s_camp.mid)
+        demo_campaign_report();
 }
 
 #include "demobot.inc"
