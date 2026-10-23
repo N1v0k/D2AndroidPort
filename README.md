@@ -1,5 +1,7 @@
 # Diablo II for Raspberry Pi (Batocera) fan-made
 
+[![d2port: split screen on a Raspberry Pi](https://img.youtube.com/vi/zcsaPHeL3lw/hqdefault.jpg)](https://youtube.com/shorts/zcsaPHeL3lw)
+
 A Diablo II–style engine **written from scratch** in C99 + SDL2, to play on
 **Batocera on a Raspberry Pi 3B** with a gamepad, alone or two players on
 the same screen. It uses the graphics, maps, tables, sounds and voices of
