@@ -1476,6 +1476,31 @@ GPU de una Pi 3B.
   y "Guardar oro"/"Sacar oro" mueven todo el oro. Se guarda en la partida
   (`stash` y `stashat`) y al cerrarlo. Los bots no lo abren
   (`bots_playing`): no sabrían cerrarlo.
+  - Al lado (a 2,2 subtiles, `OBJ_REACH`) se ve el cartel "A: Tu Arcón
+    privado" (el nombre del juego). Hasta el 2026-10-23 en el pueblo no
+    salía: `draw_prompts` entraba siempre al cartel de hablar con un NPC,
+    aunque no hubiera ninguno al lado.
+  - Dónde se abre (2026-10-23, pedido del usuario: "un menú para colocar
+    bien los objetos"): con **un jugador**, en su propio panel a la
+    izquierda (`stash_side`, `draw_stash_side`), con el inventario entero a
+    la derecha (el equipo también), como el original; abajo de la grilla,
+    una leyenda de cómo se usa (lo que no entra va en otro renglón). Con
+    **dos**, cada uno tiene su mitad de la pantalla y no entran dos paneles:
+    va en el panel del inventario, en el lugar del equipo, con la mochila
+    abajo. Las casillas, las pestañas y los botones son los mismos en los
+    dos casos: cambia su esquina (`stash_px`); el cursor pasa de un panel
+    al otro solo, porque se mueve por la posición en pantalla
+    (`nav_nearest`). El nombre es el del juego: "Arcón" (`stash` de
+    objects.json) y "Oro en Arcón:" (`strGoldInStash`).
+  - El fondo de la grilla es casi negro (no se ven los lugares del equipo
+    detrás), el oro guardado va en dos renglones y los botones del oro
+    miden lo que su texto en el idioma de la pantalla. Si la ayuda de
+    arriba de un panel no entra, se le achican los espacios
+    (`draw_panel_header_at`). La descripción de un objeto va debajo de él
+    si arriba taparía el cartel del panel (`draw_tip`).
+  - `D2_STASH_TEST=1` guarda y carga una partida: con una carpeta de
+    partidas vieja (sin `D2_SAVE_DIR`) puede dar MAL "se guarda y se carga
+    igual" sin que sea un error del juego.
 - **Al morir se pierde oro** (`set_player_state`, como
   `PLAYER_ApplyDeathPenalty`): el nivel % (hasta 20) del oro que lleva. El
   original lo cuenta con el del cofre y tira el resto en el cadáver; acá

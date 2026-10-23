@@ -3327,7 +3327,7 @@ static void stash_move_gold(Player *p, int to_stash)
 {
     int *from = to_stash ? &p->gold : &p->stash_gold, *to = to_stash ? &p->stash_gold : &p->gold;
     if (*from <= 0) {
-        show_message(p, to_stash ? "No llevás oro" : "No hay oro en el cofre");
+        show_message(p, to_stash ? "No llevás oro" : "No hay oro en el arcón");
         return;
     }
     int64_t sum = (int64_t)*to + *from;
@@ -3357,7 +3357,7 @@ static void stash_buy(Player *p)
     p->stash_tab = stash_tabs(p) - 1;
     audio_play_name("item_gold", AUDIO_NOPOS, AUDIO_NOPOS);
     char msg[64];
-    snprintf(msg, sizeof msg, tr("Pestaña %d del cofre"), p->stash_tab + 1);
+    snprintf(msg, sizeof msg, tr("Pestaña %d del arcón"), p->stash_tab + 1);
     show_message(p, msg);
 }
 
@@ -13952,13 +13952,39 @@ static void half_range(const Player *p, int *x0, int *x1)
     *x1 = s_num_players == 1 || player_index(p) == 1 ? SCREEN_W : SCREEN_W / 2;
 }
 
-/* Cartel arriba del panel: nombre y botones */
-static void draw_panel_header(const Player *p, const char *title, const char *help)
+/* El arcón (el cofre del pueblo) con un solo jugador va en su propio panel a
+   la izquierda, con el inventario entero a la derecha, como el original. Con
+   dos cada uno tiene su mitad de la pantalla y no entran dos paneles: el
+   arcón va en el panel del inventario, en el lugar del equipo (arriba el
+   arcón, abajo la mochila). Sus casillas, pestañas y botones son los mismos:
+   cambia su esquina. */
+static int stash_side(const Player *p)
 {
-    int px = panel_x(p);
+    return p->stash_open && s_num_players == 1;
+}
+
+static int stash_px(const Player *p)
+{
+    return stash_side(p) ? 0 : panel_x(p);
+}
+
+/* Cartel arriba del panel: nombre y botones */
+static void draw_panel_header_at(int px, const char *title, const char *help)
+{
     ui_dark_box(px, PANEL_Y - 40, PANEL_W, 38);
     font_draw_centered(px + PANEL_W / 2, PANEL_Y - 37, title, 2, COL(R_GOLD, 15));
-    font_draw_centered(px + PANEL_W / 2, PANEL_Y - 17, help, 1, COL(R_STONE, 12));
+    /* Si la ayuda (en el idioma de la pantalla) no entra en el panel, con
+       menos espacio entre los botones */
+    char fit[160];
+    snprintf(fit, sizeof fit, "%s", lang_screen(help));
+    for (char *d; font_width(fit, 1) > PANEL_W - 8 && (d = strstr(fit, "  ")) != NULL;)
+        memmove(d, d + 1, strlen(d));
+    font_draw_centered(px + PANEL_W / 2, PANEL_Y - 17, fit, 1, COL(R_STONE, 12));
+}
+
+static void draw_panel_header(const Player *p, const char *title, const char *help)
+{
+    draw_panel_header_at(panel_x(p), title, help);
 }
 
 /* Texto centrado dentro de un rectángulo del panel */
@@ -14011,7 +14037,7 @@ static void draw_tip(const TipLine *l, int n, int ax, int ay, int aw, int ah, in
     if (x + w > x1 - 2) x = x1 - 2 - w;
     if (x < x0 + 2) x = x0 + 2;
     int y = ay - h - 4;
-    if (y < 2)
+    if (y < PANEL_Y) /* (debajo, si arriba tapa el cartel del panel: los de la fila de arriba del arcón) */
         y = ay + ah + 4;
     if (y + h > PANEL_TOP)
         y = PANEL_TOP - h;
@@ -14146,13 +14172,14 @@ static void inv_entry_rect(const Player *p, int i, int *x, int *y, int *w, int *
 {
     int px = panel_x(p), py = PANEL_Y;
     *x = *y = *w = *h = 0;
-    if (i < SLOT_COUNT && (p->cube_open || p->stash_open))
-        return; /* el cubo o el cofre tapan el equipo */
+    if (i < SLOT_COUNT && (p->cube_open || (p->stash_open && !stash_side(p))))
+        return; /* el cubo o el arcón (con dos jugadores) tapan el equipo */
     if (i >= INV_CUBE0 && i <= INV_TRANSMUTE && !p->cube_open)
         return;
-    if (i >= INV_STASH0) { /* el cofre: sus casillas, las pestañas (y "+") y los botones del oro */
+    if (i >= INV_STASH0) { /* el arcón: sus casillas, las pestañas (y "+") y los botones del oro */
         if (!p->stash_open)
             return;
+        px = stash_px(p);
         if (i < INV_STAB0) {
             *x = px + STASH_GX + (i - INV_STASH0) % STASH_W * CELL;
             *y = py + STASH_GY + (i - INV_STASH0) / STASH_W * CELL;
@@ -14165,10 +14192,12 @@ static void inv_entry_rect(const Player *p, int i, int *x, int *y, int *w, int *
             *y = py + 8;
             *w = CELL - 2;
             *h = 22;
-        } else {
-            *x = px + (i == INV_GOLD_IN ? 160 : 236);
+        } else { /* los del oro, a la derecha debajo de la grilla, del ancho de su texto (en cada idioma) */
+            int win = font_width("Guardar oro", 1) + 14, wout = font_width("Sacar oro", 1) + 14;
+            int right = px + STASH_GX + STASH_W * CELL;
+            *x = i == INV_GOLD_OUT ? right - wout : right - wout - 4 - win;
             *y = py + STASH_GY + STASH_H * CELL + 5;
-            *w = 70;
+            *w = i == INV_GOLD_OUT ? wout : win;
             *h = 24;
         }
         return;
@@ -14279,7 +14308,7 @@ static void draw_cube(const Player *p, int px, int py)
    ve y el oro guardado */
 static void draw_stash(const Player *p, int px, int py)
 {
-    ui_dark_box(px + 14, py + 4, 296, 238);
+    fb_shade_rect(px + 14, py + 4, 296, 238, 1); /* (casi negro: que no se vean los lugares del equipo detrás) */
     int n = stash_tabs(p), x, y, w, h;
     for (int k = 0; k <= n && k < STASH_TABS; k++) {
         inv_entry_rect(p, INV_STAB0 + k, &x, &y, &w, &h);
@@ -14315,15 +14344,51 @@ static void draw_stash(const Player *p, int px, int py)
         items_draw_item(it, ix + (t->inv_w * CELL - w) / 2, iy + (t->inv_h * CELL - h) / 2);
         draw_stack_count(it, ix, iy, t->inv_w * CELL, t->inv_h * CELL);
     }
+    /* El oro guardado en dos renglones, a la izquierda de los botones */
     char text[48];
-    snprintf(text, sizeof text, tr("Oro guardado: %d"), p->stash_gold);
+    snprintf(text, sizeof text, "%d", p->stash_gold);
     inv_entry_rect(p, INV_GOLD_IN, &x, &y, &w, &h);
-    font_draw(px + STASH_GX, y + (h - font_height(1)) / 2, text, 1, COL(R_GOLD, 14));
+    font_draw(px + STASH_GX, y + h / 2 - font_height(1), str_get("strGoldInStash"), 1, COL(R_GOLD, 14));
+    font_draw(px + STASH_GX, y + h / 2 + 1, text, 1, COL(R_GOLD, 15));
     for (int b = INV_GOLD_IN; b <= INV_GOLD_OUT; b++) {
         inv_entry_rect(p, b, &x, &y, &w, &h);
         ui_box(x, y, w, h);
         text_in(x, y, w, h, b == INV_GOLD_IN ? "Guardar oro" : "Sacar oro", 1,
                 p->inv_sel == b ? COL(R_GOLD, 15) : COL(R_GRAY, 14));
+    }
+}
+
+/* El arcón en su propio panel, a la izquierda (con un solo jugador): sus
+   pestañas, la grilla y el oro, y abajo cómo se usa */
+static void draw_stash_side(const Player *p)
+{
+    int sx = stash_px(p), sy = PANEL_Y;
+    draw_panel_header_at(sx, str_get("stash"), p->held.type ? "A o X: soltar acá   B: guardar en la mochila"
+                                                             : "A: levantar   X: a la mochila   B: cerrar");
+    ui_box(sx, sy, PANEL_W, 432);
+    draw_stash(p, sx, sy);
+    static const char *const k_legend[] = {
+        "A: levantar y soltar donde quieras",
+        "X: pasar entre la mochila y el arcón",
+        "LB: ordenar esta pestaña",
+        "Pestañas: una por acto; + compra otra",
+        "El oro del arcón no se pierde al morir",
+    };
+    int y = sy + 262, room = PANEL_W - 2 * STASH_GX;
+    for (size_t k = 0; k < sizeof k_legend / sizeof k_legend[0]; k++, y += 8) {
+        /* en el idioma de la pantalla; lo que no entra, en otro renglón (cortando en un espacio) */
+        const char *s = lang_screen(k_legend[k]);
+        uint8_t col = k <= 1 ? COL(R_GRAY, 15) : COL(R_STONE, 13);
+        while (*s) {
+            char line[160];
+            snprintf(line, sizeof line, "%s", s);
+            for (char *cut; font_width(line, 1) > room && (cut = strrchr(line, ' ')) != NULL;)
+                *cut = 0;
+            font_draw(sx + STASH_GX, y, line, 1, col);
+            y += font_height(1) + 2;
+            for (s += strlen(line); *s == ' '; s++) {
+            }
+        }
     }
 }
 
@@ -14343,21 +14408,25 @@ static void draw_stack_count(const Item *it, int x, int y, int w, int h)
 
 static void draw_inventory(const Player *p)
 {
-    int px = panel_x(p), py = PANEL_Y, x0, x1;
+    int px = panel_x(p), py = PANEL_Y, sx = stash_px(p), x0, x1;
     half_range(p, &x0, &x1);
-    draw_panel_header(p, p->cube_open ? "Cubo Horádrico" : p->stash_open ? "Cofre" : "Inventario",
+    int side = stash_side(p), covered = p->cube_open || (p->stash_open && !side); /* (el equipo, tapado) */
+    draw_panel_header(p, p->cube_open ? "Cubo Horádrico" : p->stash_open && !side ? str_get("stash") : "Inventario",
                       p->held.type ? "A o X: soltar acá   RB o Y: tirar al suelo   B: guardar"
                       : p->cube_open ? "A: levantar   X: pasar   RB: tirar al suelo   B: cerrar"
+                      : side         ? "A: levantar   X: al arcón   LB: ordenar   B: cerrar"
                       : p->stash_open ? "A: levantar   X: pasar   LB: ordenar   B: cerrar"
                                       : "A: levantar  X: usar  RB: tirar  LB: ordenar  Y: más");
     ui_grid("panel/invchar6", 4, 4, 2, px, py);
 
     if (p->cube_open)
         draw_cube(p, px, py);
+    else if (side)
+        draw_stash_side(p);
     else if (p->stash_open)
         draw_stash(p, px, py);
     /* Equipo: centrado en su lugar; en rojo si no le alcanzan los requisitos */
-    for (int s = 0; s < SLOT_COUNT && !p->cube_open && !p->stash_open; s++) {
+    for (int s = 0; s < SLOT_COUNT && !covered; s++) {
         const Item *it = &p->equip[s];
         if (!it->type)
             continue;
@@ -14440,7 +14509,7 @@ static void draw_inventory(const Player *p)
             int cx = (p->inv_sel - INV_STASH0) % STASH_W, cy = (p->inv_sel - INV_STASH0) / STASH_W;
             if (cx + t->inv_w > STASH_W) cx = STASH_W - t->inv_w;
             if (cy + t->inv_h > STASH_H) cy = STASH_H - t->inv_h;
-            gx = px + STASH_GX + cx * CELL;
+            gx = sx + STASH_GX + cx * CELL;
             gy = py + STASH_GY + cy * CELL;
             gw = t->inv_w * CELL;
             gh = t->inv_h * CELL;
@@ -14487,7 +14556,7 @@ static void draw_inventory(const Player *p)
         h = under->type->inv_h * CELL;
     } else if (under && p->inv_sel >= INV_STASH0 && p->inv_sel < INV_STAB0) {
         int k = (int)(under - p->stash[p->stash_tab]);
-        x = px + STASH_GX + p->stash_x[p->stash_tab][k] * CELL;
+        x = sx + STASH_GX + p->stash_x[p->stash_tab][k] * CELL;
         y = py + STASH_GY + p->stash_y[p->stash_tab][k] * CELL;
         w = under->type->inv_w * CELL;
         h = under->type->inv_h * CELL;
@@ -14506,12 +14575,12 @@ static void draw_inventory(const Player *p)
     } else if (p->inv_sel >= INV_CUBE0 && p->inv_sel < INV_TRANSMUTE) {
         n = tip_add(tip, 0, COL(R_GRAY, 15), "X sobre algo de la mochila lo pasa al cubo");
     } else if (p->inv_sel >= INV_STASH0 && p->inv_sel < INV_STAB0) {
-        n = tip_add(tip, 0, COL(R_GRAY, 15), "X sobre algo de la mochila lo pasa al cofre");
+        n = tip_add(tip, 0, COL(R_GRAY, 15), "X sobre algo de la mochila lo pasa al arcón");
     } else if (p->inv_sel >= INV_STAB0 && p->inv_sel < INV_GOLD_IN) {
         char buf[64];
         int k = p->inv_sel - INV_STAB0;
         if (k < stash_tabs(p)) {
-            snprintf(buf, sizeof buf, tr("Pestaña %d del cofre"), k + 1);
+            snprintf(buf, sizeof buf, tr("Pestaña %d del arcón"), k + 1);
             n = tip_add(tip, 0, COL(R_GOLD, 15), buf);
             n = tip_add(tip, n, COL(R_GRAY, 15), "Una por cada acto al que llegás");
         } else {
@@ -14524,9 +14593,9 @@ static void draw_inventory(const Player *p)
             n = tip_add(tip, n, COL(R_BLUE, 15), p->stash_confirm ? "A otra vez: comprarla" : "A: comprarla");
         }
     } else if (p->inv_sel == INV_GOLD_IN || p->inv_sel == INV_GOLD_OUT) {
-        n = tip_add(tip, 0, COL(R_GOLD, 15), p->inv_sel == INV_GOLD_IN ? "Guardar todo el oro que llevás" : "Sacar todo el oro del cofre");
+        n = tip_add(tip, 0, COL(R_GOLD, 15), p->inv_sel == INV_GOLD_IN ? "Guardar todo el oro que llevás" : "Sacar todo el oro del arcón");
         n = tip_add(tip, n, COL(R_GRAY, 15), "Al morir se pierde parte del oro que llevás,");
-        n = tip_add(tip, n, COL(R_GRAY, 15), "el del cofre no");
+        n = tip_add(tip, n, COL(R_GRAY, 15), "el del arcón no");
     } else if (p->inv_sel == INV_SORT) {
         n = tip_add(tip, 0, COL(R_GRAY, 15), "Acomoda la mochila (también con LB)");
     } else if (p->inv_sel == INV_STATS) {
@@ -16176,14 +16245,15 @@ static void draw_prompts(float cam_x, float cam_y)
             items_ground_nearest(p->x, p->y, 1.8f, 0) >= 0)
             continue;
         char text[80];
-        int target = -1, lift = 0, wp = waypoint_near(p);
+        int target = -1, lift = 0, wp = waypoint_near(p), town = p->level && p->level->town;
+        int npc = talk_npc_near(p, town);
         if (wp >= 0) {
             target = s_wp_unit[wp];
             snprintf(text, sizeof text, tr("A: Usar el %s"), str_get("Waypoint"));
             lift = 70;
-        } else if ((p->level && p->level->town && !portal_first(p, talk_npc_near(p, 1))) ||
-                   (talk_npc_near(p, 0) >= 0 && !portal_near(p))) {
-            target = talk_npc_near(p, p->level && p->level->town);
+        } else if (npc >= 0 && (town ? !portal_first(p, npc) : !portal_near(p))) {
+            /* (en el pueblo sin nadie al lado, sigue: el cofre también tiene su cartel) */
+            target = npc;
             snprintf(text, sizeof text, tr("A: Hablar con %s"), target >= 0 ? units_display_name(target) : "");
             lift = 118;
         } else {

@@ -292,8 +292,12 @@ mercenaries and the resistance penalty (-40 and -100).
   use it. There is no tome: the scrolls stack up to 20 in one slot. New
   characters start with a scroll, and Akara, Drognan and Ormus sell them
   (X in the shop fills the stack). The bots use it to go heal and shop.
-- **Stash:** the chest in each town (A next to it) opens tabs of 10x6 in
-  place of the equipment, with the backpack below. You start with one tab
+- **Stash:** the chest in each town (A next to it) opens tabs of 10x6. With
+  one player it opens in its own panel on the left, with the whole
+  inventory on the right, as in the original: A picks an item up and puts
+  it wherever you want, and X moves it between the backpack and the stash.
+  With two players each one has half the screen, so it opens in place of
+  the equipment, with the backpack below. You start with one tab
   and get one more for each act you reach; more can be bought with gold,
   each three times the price of the previous one (50,000, 150,000,
   450,000...), up to five. Gold can be stored too (it is not lost when
