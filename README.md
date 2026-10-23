@@ -20,10 +20,11 @@ game's 2D files.
 1. [Installing on Batocera](#installing-on-batocera)
 2. [What is implemented](#what-is-implemented)
 3. [What was written from scratch and what was remade](#what-was-written-from-scratch-and-what-was-remade)
-4. [Known bugs and what is missing](#known-bugs-and-what-is-missing)
-5. [Using the source code: build and play on a PC](#using-the-source-code-build-and-play-on-a-pc)
-6. [Controls](#controls)
-7. [Credits and legal notice](#credits-and-legal-notice) (MIT license)
+4. [Differences from the original game](#differences-from-the-original-game)
+5. [Known bugs and what is missing](#known-bugs-and-what-is-missing)
+6. [Using the source code: build and play on a PC](#using-the-source-code-build-and-play-on-a-pc)
+7. [Controls](#controls)
+8. [Credits and legal notice](#credits-and-legal-notice) (MIT license)
 
 ---
 
@@ -245,10 +246,11 @@ mercenaries and the resistance penalty (-40 and -100).
 
 - The monsters of each level as in `levels.txt`, with their graphics,
   animations and sounds.
-- **The original AI** (from D2MOO) for the monsters of the three acts:
+- **The original AI** (from D2MOO) for the monsters of the five acts:
   skeletons, zombies, ravens, fetishes, spiders, vampires, the High
-  Council, the river tentacles (they submerge and come out) and the act
-  bosses (Andariel, Duriel, Mephisto…).
+  Council, the river tentacles (they submerge and come out), the monsters
+  of Acts 4 and 5, the seal bosses, the Ancients, Nihlathak, Baal's waves
+  and the act bosses (Andariel, Duriel, Mephisto, Diablo and Baal).
 - **Random bosses** as in the original: `MonUMin` to `MonUMax` per level;
   one in five is a pack of **champions** (champion, ghostly, fanatic,
   possessed or berserker) and the rest are **uniques** with an escort (3 to
@@ -310,13 +312,14 @@ mercenaries and the resistance penalty (-40 and -100).
 
 ### NPCs, shops and mercenaries
 
-- The NPCs of the three towns, with their dialogs and voices in the
+- The NPCs of the five towns, with their dialogs and voices in the
   original order.
-- **Shops** (buy and sell), **gambling** (Gheed, Elzix, Alkor), Akara and
-  Fara heal, **Charsi imbues** (makes an item rare) and Cain.
-- **Mercenaries:** Kashya's rogues (Act 1), Greiz's desert warriors (Act 2)
-  and Asheara's Iron Wolves (Act 3), with their skills and auras; you can
-  give them equipment and resurrect them.
+- **Shops** (buy and sell), **gambling** (Gheed, Elzix, Alkor, Jamella,
+  Nihlathak and Anya), Akara and Fara heal, **Charsi imbues** (makes an item
+  rare), **Larzuk sockets** an item, **Anya personalizes** one, and Cain.
+- **Mercenaries:** Kashya's rogues (Act 1), Greiz's desert warriors (Act 2),
+  Asheara's Iron Wolves (Act 3) and Qual-Kehk's barbarians (Act 5), with
+  their skills and auras; you can give them equipment and resurrect them.
 
 ### The world
 
@@ -413,7 +416,7 @@ mercenaries and the resistance penalty (-40 and -100).
   plays only that act).
 - **Automated tests** (`--autotest act1` to `act5`): two bots play each
   act from start to end, every quest step, with 1 and 2 players. Today all
-  five pass (68, 63, 74, 36 and 61 steps), as does the skills test (24 of
+  five pass (68, 63, 74, 36 and 62 steps), as does the skills test (24 of
   24); the first three were also checked in English.
 
 ### Performance on the Raspberry Pi
@@ -448,43 +451,109 @@ the sounds, the music, the texts and the voices.
 Several parts were remade following **D2MOO** (the reconstruction of the
 original game's code) so that they behave the same:
 
-- Random map generation (mazes, the desert, the jungles and Kurast).
+- Random map generation (mazes, the desert, the jungles, Kurast, the Act 4
+  and Act 5 outdoors, the ice caves and the Arcane Sanctuary with its
+  teleport pads), and how each preset piece is laid down (its KillEdge and
+  FillBlanks from `lvlprest.txt`).
 - Collision, copying the 16-bit masks of each tile.
-- The AI of the monsters of the three acts.
+- The AI of the monsters of the five acts.
 - How bosses, champions and their escorts spawn.
 - The quests, with each of their steps.
 - Loot, gambling and item generation.
 - The drawing order of walls, roofs and characters.
 
-### Remade for the Pi and the gamepad (different from the original)
+What differs from the original, on purpose or because it is not done yet,
+is listed in the next section.
 
-- **Resurrected's HD graphics: discarded.** In Resurrected the world is 3D
-  (models, textures and skeletons, about 30 GB): it does not fit in a
-  Pi 3B. The port uses the original 2D graphics.
-- **A gamepad interface:** the Buttons page, A does the right thing, the
-  panels are cycled with Select and Y, the inventory is handled with the
-  d-pad, the cube guide, the chat phrases from a menu.
-- **Two players with a split screen**, which the original does not have.
-- **No loading screens** between the areas of an act.
-- **Deliberate gameplay changes**, to play comfortably with a gamepad:
-  - walking is 10% and running 20% faster;
-  - belt potions have 3 sips and drop 35% less often;
-  - potions stack up to 10 per backpack slot and keys up to 20 (the
-    original does not stack potions and keys go up to 12); the number shows
-    on the slot, and they go to the belt and the cube one at a time;
-  - when a belt potion runs out, one from the backpack takes its place;
-  - each belt slot is used with the d-pad;
-  - RB drops the item under the inventory cursor to the ground and LB
-    sorts the backpack;
-  - an "always run" option;
-  - the life and mana numbers above the orbs;
-  - the icons of the active buffs and debuffs above the bar;
-  - potions stack, Town Portal scrolls stack up to 20 and there is no
-    tome; the stash has tabs, and dying only costs part of the gold you
-    carry;
-  - the mercenary follows closer and at your pace.
-- **The Warlock** is Resurrected's new class, drawn with the classic sprites
-  Resurrected ships for him (the Necromancer's).
+---
+
+## Differences from the original game
+
+The port plays like Diablo II with the expansion (the logic follows
+D2MOO), but these things are different. Most of them were chosen on
+purpose, to play comfortably on a Raspberry Pi with a gamepad.
+
+### The platform and the presentation
+
+- **Only the classic 2D graphics**, at 800x600. Resurrected's HD world is
+  3D (models, textures and skeletons, about 30 GB) and does not fit in a
+  Pi 3B.
+- **Played with a gamepad:** A does the right thing next to something
+  (attack, talk, pick up, use a waypoint, stairs, a portal or an object), a
+  Buttons page chooses what each button does, the panels are cycled with
+  Select and Y, the inventory and the shops are handled with the d-pad, and
+  the chat phrases are chosen from a menu.
+- **Two players on the same screen**, with a split screen when they move
+  apart. There is no online, LAN or Battle.net play.
+- **No loading screens:** each act is a single map, built and released
+  area by area as you walk.
+- **The cinematics** play in low quality (MPEG-1, 640x288) so the Pi can
+  decode them.
+- **Six saved games**, and no Hardcore mode.
+- **The language** (English or Latin American Spanish) is chosen when
+  importing.
+- **The game tables are Resurrected's current ones**, not those of the old
+  1.14 version: for example, every runeword can be made outside the ladder
+  (patch 2.4), and the mercenaries have their newer skills.
+- **The Warlock**, Resurrected's new class, is playable too. He is drawn
+  with the classic sprites Resurrected ships for him (the Necromancer's),
+  and his skill icons are built from the look of each skill (Resurrected
+  only has HD icons for him).
+
+### Gameplay changes, on purpose
+
+- **Faster movement:** walking is 10% and running 20% faster than in the
+  original.
+- **Faster missiles:** arrows, spells and monster missiles fly about a
+  third faster than in the original, which moves them at 75% of their
+  `missiles.txt` speed.
+- **Potions:**
+  - each belt potion has **3 sips** (the drunk part of the liquid darkens
+    and the belt shows how many are left);
+  - **35% fewer potions** drop from monsters and chests;
+  - they **stack up to 10** per backpack slot (the original does not stack
+    them); they go to the belt and the cube one at a time;
+  - when a belt potion runs out, **one from the backpack takes its place**;
+    if the belt has none of the kind you ask for, you drink from the
+    backpack;
+  - each belt slot has its own direction on the d-pad.
+- **Keys stack up to 20** (12 in the original).
+- **No durability and no identification:** items never wear out (there is
+  no repair) and they drop already identified, so there are no Scrolls or
+  Tome of Identify and Cain does not identify. Bookshelves give Town Portal
+  scrolls instead of Identify scrolls.
+- **No Tome of Town Portal:** Town Portal scrolls stack up to 20 in one
+  slot (X on them opens the portal). Old saved games turn a tome into its
+  charges as scrolls, and the Cow Level opens with Wirt's leg and a stack of
+  Town Portal scrolls in the cube instead of the tome.
+- **The stash has tabs** of 10x6: one at the start, one more for each act
+  you reach, and up to five more bought with gold (50,000, then three times
+  the previous price). Gold can be stored in it.
+- **Dying:** there is no corpse to go back for; you keep your equipment.
+  You lose your level % (up to 20%) of the gold you carry; the gold in the
+  stash is safe.
+- **The mercenary** follows closer and at your pace.
+- **More information on screen:** the life and mana numbers above the
+  orbs, the icons of what is affecting you (buffs, auras, shrines, potions,
+  poison, cold and curses) with the seconds left, and the quest log and a
+  **cube guide** (every recipe and runeword, by category) in the pause
+  menu.
+- **Inventory shortcuts:** RB drops the item under the cursor to the
+  ground and LB sorts the backpack; there is an "always run" option.
+- **Walls:** characters move continuously here (the original stops them on
+  subtile centers), so players keep half a subtile away from the drawn
+  thickness of walls, so they never stand on top of a wall's base.
+
+### Simplified or not done yet
+
+- Usable objects: there are no room themes (rooms full of barrels or
+  weapon racks); the exploding and poison shrines only do their damage
+  (no throwing potions); the Enirhs shrine shows up as a gem shrine; the
+  monster shrine turns the nearest monster into a random boss with an
+  escort.
+- The cold Iron Wolves do not cast Chilling Armor.
+- In Act 2, the secondary border of some areas is missing.
+- See also [Known bugs and what is missing](#known-bugs-and-what-is-missing).
 
 ---
 
@@ -501,7 +570,6 @@ if you can, the `d2port.log`.
   Act 3 (Spider Forest, Great Marsh): building them takes almost 100 ms.
 - The cube guide still says Cain gives you the cube: it comes from the
   Halls of the Dead chest, as in the original.
-- The cold Iron Wolves do not cast Chilling Armor.
 - Some character lines are silent in Spanish: Resurrected does not ship
   that audio in Latin American Spanish.
 - Many engine messages and the developer notes are written in Spanish
@@ -509,10 +577,8 @@ if you can, the `d2port.log`.
 
 **What is missing:**
 
-- Some details of the usable objects: the room themes (rooms full of
-  barrels or weapon racks), the throwing potions of the exploding and poison
-  shrines (only their damage), and the Enirhs shrine.
-- In Act 2, the secondary border of some areas.
+- What is listed under
+  [Simplified or not done yet](#simplified-or-not-done-yet).
 - The **importer for the Pi** (written, not tested yet) and for **Windows**.
 - Network play: not planned (the two players share one screen).
 
@@ -558,9 +624,12 @@ bash scripts/package-release.sh      # publicar/: the package without Blizzard f
 How each part works, the tools, the tests and the debug variables are in
 the [developer notes](docs/desarrollo.md) (in Spanish, like the code
 comments). The plans of each act are in
-[docs/plan-acto2.md](docs/plan-acto2.md) and
-[docs/plan-acto3.md](docs/plan-acto3.md); the measurements on the Pi, in
-[docs/rendimiento.md](docs/rendimiento.md).
+[docs/plan-acto2.md](docs/plan-acto2.md),
+[docs/plan-acto3.md](docs/plan-acto3.md),
+[docs/plan-acto4.md](docs/plan-acto4.md) and
+[docs/plan-acto5.md](docs/plan-acto5.md), and the difficulties in
+[docs/plan-dificultades.md](docs/plan-dificultades.md); the measurements on
+the Pi, in [docs/rendimiento.md](docs/rendimiento.md).
 
 ---
 
