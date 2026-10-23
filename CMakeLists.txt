@@ -54,6 +54,7 @@ add_executable(d2port
   src/cinema.c
   src/units.c
   src/menu.c
+  src/controls.c
   src/game.c
 )
 target_link_libraries(d2port PRIVATE d2fmtlib SDL2::SDL2 m)

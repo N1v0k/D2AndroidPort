@@ -8,6 +8,7 @@
 #include "jobs.h"
 #include "missiles.h"
 #include "overlays.h"
+#include "skills.h"
 #include "strings.h"
 #include "video.h"
 
@@ -31,6 +32,13 @@
 
 /* Velocidad de monstats.txt -> subtiles por segundo (misma escala que los jugadores) */
 #define SPEED_PER_VELOCITY (5.0f / 6.0f)
+/* Como los jugadores (WALK_BONUS y RUN_BONUS de game.c), más ágiles que en el
+   original: caminando un 10% y corriendo un 20% más rápido, y la animación al
+   mismo paso (el original la ata a la velocidad: UNITS_UpdateRunWalkAnimRateAndVelocity) */
+#define MON_WALK_BONUS 1.10f
+#define MON_RUN_BONUS  1.20f
+/* Las invocaciones corren un 40% más rápido de lo que caminan */
+#define PET_RUN_PACE (1.4f * MON_RUN_BONUS / MON_WALK_BONUS)
 
 /* Un monstruo te ve apenas está en tu pantalla (el rectángulo de 800x600
    centrado en el jugador) y te sigue hasta que salís un cuarto más allá del
@@ -46,7 +54,7 @@
    monumod.txt): un bit cada uno en Unit.mods */
 enum {
     MOD_STRONG = 5, MOD_FAST = 6, MOD_CURSE = 7, MOD_RESIST = 8, MOD_FIRE = 9, MOD_LIGHTNING = 17,
-    MOD_COLD = 18, MOD_MANAHIT = 25, MOD_SPECTRAL = 27, MOD_STONESKIN = 28, MOD_MULTISHOT = 29,
+    MOD_COLD = 18, MOD_MANAHIT = 25, MOD_SPECTRAL = 27, MOD_STONESKIN = 28, MOD_MULTISHOT = 29, MOD_AURA = 30,
 };
 #define HAS_MOD(u, m) (((u)->mods >> (m)) & 1u)
 #define UNIQUE_LEVELS 3 /* los jefes tienen 3 niveles más que la zona (el original, en Normal) */
@@ -301,6 +309,11 @@ typedef struct {
     int  raise_cd;
     int  master;       /* quién lo levantó (-1 = nadie) */
     UnitGfx *gfx_on, *gfx_off; /* waypoints: encendido y apagado */
+    UnitGfx *gfx_parts;        /* las manos de los caballeros que no son las de gfx: se dibujan encima */
+    int8_t   comp_s3;          /* cuál de las opciones de S3 tiene (el proyectil de DoomKnightMissile) */
+    const SkillDef *aura_sk;   /* el aura de un jefe encantado (MOD_AURA): la del Paladín, a aura_lvl */
+    int      aura_lvl, aura_t;
+    int      ba_ticks, ba_dmg, ba_ar, ba_ias; /* lo que le da el aura de un jefe de su lado (Poder, Puntería bendita, Fanatismo) */
     int      obj_row;          /* objetos: su fila de objects.txt (para cambiarles el modo) */
     char     obj_next[4];      /* modo que sigue cuando termina el actual ("op" -> "on") */
     /* Qué cuadros del COF muestra el modo actual (FrameCnt, Start y
@@ -677,6 +690,31 @@ static void first_option(char *dst, size_t cap, const char *src)
     dst[i] = '\0';
 }
 
+/* La opción n (desde 0) de una lista "a,b,c" en dst; devuelve cuántas hay */
+static int nth_option(char *dst, size_t cap, const char *src, int n)
+{
+    int count = 0;
+    dst[0] = '\0';
+    while (*src == '"')
+        src++;
+    while (*src && *src != '"') {
+        if (count == n)
+            first_option(dst, cap, src);
+        count++;
+        const char *comma = strchr(src, ',');
+        if (!comma)
+            break;
+        src = comma + 1;
+    }
+    return count;
+}
+
+/* Las columnas de monstats2.txt con las opciones de cada pieza */
+static const char *const k_part_cols[COMP_COUNT] = {
+    "HDv", "TRv", "LGv", "Rav", "Lav", "RHv", "LHv", "SHv",
+    "S1v", "S2v", "S3v", "S4v", "S5v", "S6v", "S7v", "S8v",
+};
+
 static int gfx_state(const UnitGfx *g)
 {
     return g ? job_flag_get(&g->state) : GFX_FAILED;
@@ -712,6 +750,10 @@ static void gfx_decode(UnitGfx *g)
         if (g->modes[a]) /* los personajes mueren sin arma: no hay muerte con otra clase */
             charanim_load(&g->anim[a], &g->look, g->modes[a],
                           chars && (a == ANIM_DEATH || a == ANIM_DEAD) ? "hth" : g->wclass);
+    if (strcmp(g->look.base, "objects") != 0) { /* caminan y corren al paso de su velocidad */
+        g->anim[ANIM_WALK].speed = (int)((float)g->anim[ANIM_WALK].speed * MON_WALK_BONUS + 0.5f);
+        g->anim[ANIM_RUN].speed = (int)((float)g->anim[ANIM_RUN].speed * MON_RUN_BONUS + 0.5f);
+    }
     if (!g->anim[ANIM_IDLE].ok) {
         for (int a = 0; a < ANIM_COUNT; a++)
             charanim_free(&g->anim[a]);
@@ -852,6 +894,7 @@ static void unit_gfx_refs(Unit *u, int add)
         gfx_ref(u->gfx_off, add);
     } else {
         gfx_ref(u->gfx, add);
+        gfx_ref(u->gfx_parts, add);
     }
 }
 
@@ -1112,15 +1155,11 @@ static void monster_look(int ms, int ms2, int enemy, int merc, CharLook *out, ch
     lower_copy(look.token, sizeof look.token, txt_get(&s_monstats, ms, txt_col(&s_monstats, "Code")));
     const char *id = txt_get(&s_monstats, ms, txt_col(&s_monstats, "Id"));
 
-    static const char *const part_cols[COMP_COUNT] = {
-        "HDv", "TRv", "LGv", "Rav", "Lav", "RHv", "LHv", "SHv",
-        "S1v", "S2v", "S3v", "S4v", "S5v", "S6v", "S7v", "S8v",
-    };
     for (int c = 0; c < COMP_COUNT; c++) {
         if (txt_get_int(&s_monstats2, ms2, k_comp_names[c], 0) != 1)
             continue;
         first_option(look.part[c], sizeof look.part[c],
-                     txt_get(&s_monstats2, ms2, txt_col(&s_monstats2, part_cols[c])));
+                     txt_get(&s_monstats2, ms2, txt_col(&s_monstats2, k_part_cols[c])));
         if (!look.part[c][0])
             strcpy(look.part[c], "lit");
     }
@@ -1247,6 +1286,54 @@ static const uint8_t *unit_palshift(const Unit *u)
     return u->pshift && job_flag_get(&u->pshift->state) == PS_READY ? u->pshift->tab : NULL;
 }
 
+/* Las manos de los caballeros (S3 y S4): como el original (MONSTER_InitComponents),
+   una de sus opciones al azar (veneno, fuego, frío o sacrílego), y la calavera que tira
+   DoomKnightMissile es la de S3 (SrvDo148: undeadmissile1 + la opción). Los demás
+   monstruos llevan siempre la primera de cada pieza. Solo las piezas distintas de las
+   del dibujo compartido se cargan aparte (gfx_parts, poca memoria) y van encima. */
+static void monster_parts(Unit *u, int ms, int ms2, const CharLook *look, const char *wclass,
+                          const char *const modes[ANIM_COUNT], const char *suffix)
+{
+    int knight = 0;
+    for (int k = 1; k <= 8 && !knight; k++) {
+        char col[8];
+        snprintf(col, sizeof col, "Skill%d", k);
+        knight = strcmp(txt_get(&s_monstats, ms, txt_col(&s_monstats, col)), "DoomKnightMissile") == 0;
+    }
+    if (!knight)
+        return;
+    static const int k_comps[2] = { COMP_S3, COMP_S4 };
+    CharLook over;
+    memset(&over, 0, sizeof over);
+    strcpy(over.base, look->base);
+    strcpy(over.token, look->token);
+    uint32_t parts = 2166136261u;
+    int any = 0;
+    for (int i = 0; i < 2; i++) {
+        int c = k_comps[i];
+        if (txt_get_int(&s_monstats2, ms2, k_comp_names[c], 0) != 1)
+            continue;
+        const char *opts = txt_get(&s_monstats2, ms2, txt_col(&s_monstats2, k_part_cols[c]));
+        char tmp[8];
+        int n = nth_option(tmp, sizeof tmp, opts, 0), pick = n > 1 ? (int)(rnd(u) % (uint32_t)n) : 0;
+        if (c == COMP_S3)
+            u->comp_s3 = (int8_t)pick;
+        if (pick <= 0)
+            continue;
+        nth_option(over.part[c], sizeof over.part[c], opts, pick);
+        for (const char *p = over.part[c]; *p; p++)
+            parts = (parts ^ (uint8_t)*p) * 16777619u;
+        parts = (parts ^ (uint8_t)c) * 16777619u;
+        any = 1;
+    }
+    if (!any)
+        return;
+    char key[32];
+    snprintf(key, sizeof key, "p/%s/%s/%08x%s", look->token, wclass, (unsigned)parts, suffix);
+    u->gfx_parts = get_gfx(key, &over, modes, wclass);
+    gfx_ref(u->gfx_parts, 1);
+}
+
 static Unit *create_monster(const char *id, float x, float y, int level, int enemy)
 {
     int merc = enemy == 2;
@@ -1268,8 +1355,9 @@ static Unit *create_monster(const char *id, float x, float y, int level, int ene
     for (int c = 0; c < COMP_COUNT; c++)
         for (const char *s = look.part[c]; *s; s++)
             parts = (parts ^ (uint8_t)*s) * 16777619u;
-    snprintf(key, sizeof key, "m/%s/%s/%08x%s%s", look.token, wclass, (unsigned)parts,
-             enemy ? "/e" : merc ? "/m" : "", modes[ANIM_SKILL] ? "s" : "");
+    char suffix[8];
+    snprintf(suffix, sizeof suffix, "%s%s", enemy ? "/e" : merc ? "/m" : "", modes[ANIM_SKILL] ? "s" : "");
+    snprintf(key, sizeof key, "m/%s/%s/%08x%s", look.token, wclass, (unsigned)parts, suffix);
     UnitGfx *g = get_gfx(key, &look, modes, wclass);
     Unit *u = g ? new_unit(x, y) : NULL;
     if (!u) {
@@ -1278,6 +1366,8 @@ static Unit *create_monster(const char *id, float x, float y, int level, int ene
     }
     u->gfx = g;
     gfx_ref(g, 1);
+    if (enemy)
+        monster_parts(u, ms, ms2, &look, wclass, modes, suffix);
     snprintf(u->name, sizeof u->name, "%s", id);
     u->display = str_get(txt_get(&s_monstats, ms, txt_col(&s_monstats, "NameStr")));
     u->snd = enemy || merc ? mon_sounds(txt_get(&s_monstats, ms, txt_col(&s_monstats, "MonSound"))) : NULL;
@@ -1305,7 +1395,7 @@ static Unit *create_monster(const char *id, float x, float y, int level, int ene
         else
             u->move_mask = COLL_MASK_MONSTER_PATH;
     }
-    u->speed = txt_get_int(&s_monstats, ms, "Velocity", 2) * SPEED_PER_VELOCITY;
+    u->speed = txt_get_int(&s_monstats, ms, "Velocity", 2) * SPEED_PER_VELOCITY * MON_WALK_BONUS;
     if (enemy) {
         /* El tamaño del original (1 chico, 2 normal, 3 grande como Andariel o
            los brutos): no se apilan, rodean al jugador y se los golpea en el
@@ -1315,7 +1405,7 @@ static Unit *create_monster(const char *id, float x, float y, int level, int ene
         u->radius = 0.25f + 0.25f * (float)size;
         /* y su MeleeRng de monstats2.txt (UNITS_GetMeleeRange): los tentáculos llegan a la orilla */
         u->reach = UNIT_PLAYER_BODY + u->radius + 0.45f + (float)txt_get_int(&s_monstats2, ms2, "MeleeRng", 0);
-        u->run_speed = txt_get_int(&s_monstats, ms, "Run", 0) * SPEED_PER_VELOCITY;
+        u->run_speed = txt_get_int(&s_monstats, ms, "Run", 0) * SPEED_PER_VELOCITY * MON_RUN_BONUS;
         const char *base = txt_get(&s_monstats, ms, txt_col(&s_monstats, "BaseId"));
         if (strcmp(base, "tentacle1") == 0 || strcmp(base, "tentaclehead1") == 0)
             u->melee_bonus = 8.0f;
@@ -1334,7 +1424,7 @@ static Unit *create_monster(const char *id, float x, float y, int level, int ene
         u->zone = -1; /* va con su dueño: no es de ninguna zona */
         u->solid = 0; /* no le tapa el paso a su dueño */
         u->state = ST_IDLE;
-        u->run_speed = txt_get_int(&s_monstats, ms, "Run", 9) * SPEED_PER_VELOCITY;
+        u->run_speed = txt_get_int(&s_monstats, ms, "Run", 9) * SPEED_PER_VELOCITY * MON_RUN_BONUS;
         u->neutral_timer = 0;
         return u;
     }
@@ -1563,6 +1653,55 @@ static void apply_mods(Unit *u, uint32_t mods)
         u->spray = 3;
 }
 
+/* Los jefes con aura (para que se vea): sus números, revisados al pedirlos */
+static int s_aura_ids[8], s_num_aura;
+
+/* MONSTERUNIQUE_UMod30_AuraEnchanted: un aura del Paladín al azar entre las que da su nivel
+   (Choque sagrado desde el 20; Espinas nunca), a nivel/divisor (1 a 99). Lord De Seis
+   siempre lleva Fanatismo. */
+static void aura_enchant(Unit *u, int lord_de_seis)
+{
+    static const struct { int min_level, div; const char *skill; } k_auras[] = {
+        { 0, 6, "Might" },      { 0, 6, "Holy Fire" },  { 0, 5, "Blessed Aim" }, { 0, 7, "Holy Freeze" },
+        { 0, 8, "Conviction" }, { 0, 8, "Fanaticism" }, { 20, 8, "Holy Shock" },
+    };
+    int lvl = u->level > 1 ? u->level : 1, n = 0;
+    for (unsigned k = 0; k < sizeof k_auras / sizeof k_auras[0]; k++)
+        n += k_auras[k].min_level <= lvl;
+    int i = lord_de_seis ? 5 : (int)(spawn_rnd() % (uint32_t)(n > 0 ? n : 1));
+    int id = skills_global_find(k_auras[i].skill), cls = skills_global_class(id), idx = skills_global_local(id);
+    if (id < 0 || cls < 0 || idx < 0)
+        return;
+    u->aura_sk = skills_get(cls, idx);
+    u->aura_lvl = lvl / k_auras[i].div;
+    u->aura_lvl = u->aura_lvl < 1 ? 1 : u->aura_lvl > 99 ? 99 : u->aura_lvl;
+    if (getenv("D2_AI_DEBUG"))
+        printf("IA: %s lleva %s (nivel %d)\n", u->name, k_auras[i].skill, u->aura_lvl);
+    int self = (int)(u - s_units);
+    for (int k = 0; k < s_num_aura; k++)
+        if (s_aura_ids[k] == self)
+            return;
+    if (s_num_aura < (int)(sizeof s_aura_ids / sizeof s_aura_ids[0]))
+        s_aura_ids[s_num_aura++] = self;
+}
+
+int units_aura_bosses(int *ids, int *kinds, int max)
+{
+    int n = 0;
+    for (int k = 0; k < s_num_aura; k++) {
+        const Unit *u = &s_units[s_aura_ids[k]];
+        if (u->zone == ZONE_FREE || !u->aura_sk) { /* se fue (o el lugar es de otro) */
+            s_aura_ids[k--] = s_aura_ids[--s_num_aura];
+            continue;
+        }
+        if (n < max && u->state < ST_DYING && !u->hidden) {
+            ids[n] = s_aura_ids[k];
+            kinds[n++] = u->aura_sk->kind;
+        }
+    }
+    return n;
+}
+
 /* `n` modificadores al azar distintos (los únicos del original: uno en
    Normal, dos en Pesadilla y tres en Infierno; nDifficulty + 1) */
 static uint32_t random_mods(int n)
@@ -1761,6 +1900,8 @@ static int spawn_superunique(const char *name, float x, float y, int level)
     if (s_diff > 0) /* uno más al azar en Pesadilla y dos en Infierno */
         mods |= random_mods(s_diff);
     apply_mods(u, mods);
+    if (HAS_MOD(u, MOD_AURA))
+        aura_enchant(u, strcmp(name, "Lord De Seis") == 0);
     snprintf(u->name, sizeof u->name, "%s", name);
     u->display = str_get(txt_get(&s_superuniques, row, txt_col(&s_superuniques, "Name")));
     snprintf(u->tc, sizeof u->tc, "%s", txt_get(&s_superuniques, row, txt_col(&s_superuniques, dcol(&s_superuniques, "TC"))));
@@ -2803,7 +2944,7 @@ static int enemy_melee_hit(Unit *u, UnitTarget *t, int anim, int pct, int ar_pct
     float dx = t->x - u->x, dy = t->y - u->y;
     /* Probabilidad de pegar del original: 2 * AR / (AR + defensa) * nivel / (nivel + nivel del jugador) */
     int ar = u->curse_ticks > 0 ? u->ar * (100 + u->curse_ar_pct) / 100 : u->ar; /* Provocar */
-    ar = ar * (100 + ar_pct) / 100;
+    ar = ar * (100 + ar_pct + u->ba_ar) / 100; /* (y el aura de un jefe: Puntería bendita, Fanatismo) */
     int chance = (int)(200LL * ar / (ar + t->defense > 0 ? ar + t->defense : 1) * u->level /
                        (u->level + t->level > 0 ? u->level + t->level : 1));
     chance = chance < 5 ? 5 : chance > 95 ? 95 : chance;
@@ -2815,7 +2956,7 @@ static int enemy_melee_hit(Unit *u, UnitTarget *t, int anim, int pct, int ar_pct
     int hi = anim == ANIM_ATTACK2 && u->a2_max > 0 ? u->a2_max : anim == ANIM_SKILL && u->s1_max > 0 ? u->s1_max : u->dmg_max;
     if (hi < lo)
         hi = lo;
-    int dmg = (lo + (int)(rnd(u) % (uint32_t)(hi - lo + 1))) * pct / 100;
+    int dmg = (lo + (int)(rnd(u) % (uint32_t)(hi - lo + 1))) * pct / 100 * (100 + u->ba_dmg) / 100; /* (Poder, Fanatismo) */
     if (u->curse_ticks > 0) /* Grito de batalla */
         dmg = dmg * (100 + u->curse_dmg_pct) / 100;
     if (t->amplified) /* maldecido: el doble (Decrepitud: la mitad más) */
@@ -2967,12 +3108,85 @@ static void holy_freeze(Unit *u, UnitTarget *pl, int n)
     }
 }
 
+/* El aura de un jefe encantado, como la del Paladín (radio y valores de skills.txt a su nivel,
+   sin sinergias): las de ataque a los jugadores que alcanza (la Congelación y la Convicción
+   en cada tick; el fuego y el rayo en cada pulso, cada perdelay cuadros) y las de apoyo a los
+   monstruos de su lado (en cada pulso, hasta el siguiente). Él lleva el daño entero de
+   Fanatismo (passivestat); los demás, el del aura. */
+static void boss_aura(Unit *u, UnitTarget *pl, int n)
+{
+    const SkillDef *s = u->aura_sk;
+    SkillCtx x = { 0, NULL, u->level }; /* (sin sinergias) */
+    int lvl = u->aura_lvl, period = s->perdelay > 5 ? s->perdelay : 5;
+    int pulse = (u->aura_t = (u->aura_t + 1) % period) == 0;
+    float r = (float)skill_calc(s, SC_AURARANGE, lvl, &x);
+    switch (s->kind) {
+    case SK_HOLY_FIRE:
+    case SK_HOLY_SHOCK:
+    case SK_HOLY_FREEZE: {
+        int ri = s->kind == SK_HOLY_FIRE ? 0 : s->kind == SK_HOLY_FREEZE ? 1 : 2, lo, hi;
+        skill_elem_syn(s, lvl, &x, &lo, &hi);
+        for (int k = 0; k < n; k++) {
+            UnitTarget *t = &pl[k];
+            if (!t->alive || t->in_town || dist_to(u, t->x, t->y) > r)
+                continue;
+            if (s->kind == SK_HOLY_FREEZE && -skill_calc(s, SC_AURASTAT1, lvl, &x) > t->aura_slow)
+                t->aura_slow = -skill_calc(s, SC_AURASTAT1, lvl, &x);
+            if (pulse) {
+                int v = lo + (int)(rnd(u) % (uint32_t)(hi - lo + 1 > 0 ? hi - lo + 1 : 1));
+                t->damage += v * (100 - t->res[ri]) / 100;
+            }
+        }
+        break;
+    }
+    case SK_CONVICTION:
+        for (int k = 0; k < n; k++) {
+            UnitTarget *t = &pl[k];
+            if (!t->alive || t->in_town || dist_to(u, t->x, t->y) > r)
+                continue;
+            int def = skill_calc(s, SC_AURASTAT1, lvl, &x), res = skill_calc(s, SC_AURASTAT2, lvl, &x);
+            t->aura_conv_def = def < t->aura_conv_def ? def : t->aura_conv_def;
+            t->aura_conv_res = res < t->aura_conv_res ? res : t->aura_conv_res;
+        }
+        break;
+    case SK_MIGHT:
+    case SK_BLESSED_AIM:
+    case SK_FANATICISM:
+        if (!pulse)
+            break;
+        for (int i = 0; i < s_num_units; i++) {
+            Unit *o = &s_units[i];
+            if (!o->enemy || o->state >= ST_DYING || o->hidden || dist_to(u, o->x, o->y) > r)
+                continue;
+            o->ba_ticks = period + 1;
+            o->ba_dmg = o->ba_ar = o->ba_ias = 0;
+            for (int k = 0; k < 3; k++) {
+                const char *st = s->aurastat[k];
+                int v = skill_calc(s, SC_AURASTAT1 + k, lvl, &x);
+                if (!strcmp(st, "damagepercent"))
+                    o->ba_dmg = o == u && skill_has(s, SC_PASSIVE1) ? skill_calc(s, SC_PASSIVE1, lvl, &x) : v;
+                else if (!strcmp(st, "item_tohit_percent"))
+                    o->ba_ar = v;
+                else if (!strcmp(st, "attackrate"))
+                    o->ba_ias = v;
+            }
+        }
+        break;
+    default:
+        break;
+    }
+}
+
 static void enemy_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
 {
     const CharAnim *a = &u->gfx->anim[current_anim(u)];
     int frames = charanim_frames(a);
     if (u->ai == AI_DURIEL && u->state < ST_DYING)
         holy_freeze(u, pl, n);
+    if (u->aura_sk && u->state < ST_DYING)
+        boss_aura(u, pl, n);
+    if (u->ba_ticks > 0 && --u->ba_ticks == 0)
+        u->ba_dmg = u->ba_ar = u->ba_ias = 0;
     if (u->ai == AI_SUMMONER) { /* las demoras de su Nova y su muro */
         if (u->ai_p[0] > 0)
             u->ai_p[0]--;
@@ -3012,7 +3226,7 @@ static void enemy_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
             seq_attack(u, m, pl);
             return;
         }
-        u->anim_acc += a->speed;
+        u->anim_acc += a->speed * (100 + u->ba_ias) / 100; /* (el Fanatismo de un jefe) */
         int frame = u->anim_acc >> 8;
         int hit_frame = a->hit_frame > 0 ? a->hit_frame : frames / 2;
         if (u->inferno_end) { /* el aliento sostenido: quieto en su cuadro mientras dura */
@@ -3169,6 +3383,11 @@ static void enemy_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
                 if (u->curse_ticks > 0) { /* Grito de batalla, Provocar */
                     mi->dmin = mi->dmin * (100 + u->curse_dmg_pct) / 100;
                     mi->dmax = mi->dmax * (100 + u->curse_dmg_pct) / 100;
+                }
+                if (u->ba_ticks > 0) { /* el aura de un jefe: Poder y Fanatismo (daño), Puntería bendita */
+                    mi->dmin = mi->dmin * (100 + u->ba_dmg) / 100;
+                    mi->dmax = mi->dmax * (100 + u->ba_dmg) / 100;
+                    mi->ar = mi->ar * (100 + u->ba_ar) / 100;
                 }
                 int ndmg = (u->nc_ticks > 0 ? u->nc_dmg : 0) + (u->enrage_ticks > 0 ? u->enrage_dmg : 0);
                 if (ndmg) { /* Debilitar, Decrepitud, el Sigilo de rencor */
@@ -4195,7 +4414,7 @@ int units_pet_summon(int owner, const char *id, float x, float y, const PetSpec 
         if (u->res[e] < 100)
             u->res[e] = u->res[e] + ps->res > 95 ? 95 : u->res[e] + ps->res;
     u->speed = u->speed * (100.0f + (float)ps->speed_pct) / 100.0f;
-    u->run_speed = u->speed * 1.4f;
+    u->run_speed = u->speed * PET_RUN_PACE;
     if (ps->missile[0]) {
         snprintf(u->ms.skill_missile, sizeof u->ms.skill_missile, "%s", ps->missile);
         u->ms.elem = ps->elem;
@@ -4283,7 +4502,7 @@ int units_revive(int i, int owner, const PetSpec *ps)
         if (u->res[e] < 100)
             u->res[e] = u->res[e] + ps->res > 95 ? 95 : u->res[e] + ps->res;
     u->speed = u->speed * (100.0f + (float)ps->speed_pct) / 100.0f;
-    u->run_speed = u->speed * 1.4f;
+    u->run_speed = u->speed * PET_RUN_PACE;
     u->pet_ticks = ps->ticks;
     u->reach = MELEE_REACH + u->radius;
     u->target = -1;
@@ -4320,7 +4539,7 @@ void units_pet_mods(int i, int strong, int fast, int spectral)
     }
     if (fast && !HAS_MOD(u, MOD_FAST)) { /* muy rápido: camina y ataca más rápido */
         u->speed *= 1.5f;
-        u->run_speed = u->speed * 1.4f;
+        u->run_speed = u->speed * PET_RUN_PACE;
         u->pet_ias += 50;
         u->mods |= 1u << MOD_FAST;
     }
@@ -5104,7 +5323,7 @@ void units_draw(int i, int x, int y)
     if (u->champion == CHAMP_GHOSTLY && u->state < ST_DYING) /* el campeón fantasmal, translúcido */
         charanim_draw_ghost(a, u->sector, frame, x, y, ~0u, BLEND_50);
     else
-        charanim_draw_tint(a, u->sector, frame, x, y, tint);
+        charanim_draw_over(a, gfx_ready(u->gfx_parts) ? &u->gfx_parts->anim[anim] : NULL, u->sector, frame, x, y, tint);
 }
 
 int units_lights(float *x, float *y, int *r, int max)

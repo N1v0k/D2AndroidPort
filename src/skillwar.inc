@@ -1578,11 +1578,20 @@ static void war_icon_frame(SpriteFrame *dst, const SpriteFrame *src, const uint8
 }
 
 /* La hoja de íconos del Brujo (frames en el orden de IconCel): su
-   waskillicon.dc6 del Resurrected es una copia del del Druida, así que se
-   arman con lo que se ve de cada habilidad. */
+   waskillicon.dc6 del Resurrected es una copia del del Druida. Si hay una
+   hoja editada (data/global/ui/spells/waskillicon.d2rw, que no viene en el
+   paquete público), esa; si no, se arman con lo que se ve de cada habilidad. */
 static int war_icons_build(Sprite *out)
 {
     memset(out, 0, sizeof *out);
+    size_t hn;
+    uint8_t *hd = fs_read("data/global/ui/spells/waskillicon.d2rw", &hn);
+    if (hd) {
+        int ok = raw_load(hd, hn, out) == 0;
+        free(hd);
+        if (ok)
+            return 1;
+    }
     int cls = 7, most = 0;
     for (int i = 0; i < skills_count(cls); i++)
         if (skills_get(cls, i)->icon + 2 > most)

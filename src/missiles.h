@@ -89,6 +89,8 @@ typedef struct {
 
 int  missiles_init(void);
 int  missiles_exists(const char *name);
+/* El que está n filas después en missiles.txt (la calavera de cada Caballero: SrvDo148) */
+const char *missiles_after(const char *name, int n);
 /* Daño que trae el proyectil en missiles.txt (las púas, la bola de fuego del chamán) */
 void missiles_base_damage(const char *name, int *elem, int *emin, int *emax, int *dmin, int *dmax);
 /* El daño elemental con lo que sube por nivel de la habilidad (MinELev, MaxELev) */

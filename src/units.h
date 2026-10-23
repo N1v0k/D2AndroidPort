@@ -33,6 +33,7 @@ typedef struct {
     int   res[4];                    /* sus resistencias (fuego, frío, rayo, veneno): para los jefes encantados */
     int   chill_ticks;               /* lo enfriaron (un golpe de frío): más lento */
     int   aura_slow;                 /* % que lo frena un aura (la Congelación sagrada de Duriel) */
+    int   aura_conv_def, aura_conv_res; /* la Convicción de un jefe con aura: % de defensa y de resistencias (negativos) */
     float body;                      /* lo que su cuerpo es más ancho que el de un jugador (los gólems) */
     int   life_pct;                  /* % de vida que le queda (los fetiches se alejan si está entero) */
     /* Los del Acto 4 (monai4.inc) */
@@ -239,6 +240,8 @@ int  units_converted_list(int *out, int max); /* los que pelean para un jugador 
 int  units_allies(int *out, int max);          /* los vivos que se ven */
 int  units_ally_owner(int i);                  /* su jugador (-1 = ninguno) */
 void units_ally_aura(int i, const AllyAura *a); /* lo que le dan las auras ahora */
+/* Los jefes con aura (el modificador Aura Enchanted) vivos: su número y el SK_* de su aura */
+int  units_aura_bosses(int *ids, int *kinds, int max);
 const AllyAura *units_ally_aura_get(int i);
 int  units_ally_heal(int i, int amount);       /* Plegaria: 1 si le faltaba vida */
 /* La resistencia de la mercenaria a fuego (0), frío (1) o rayo (2), con las auras */

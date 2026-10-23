@@ -6,14 +6,36 @@ the same screen. It uses the graphics, maps, tables, sounds and voices of
 **your own copy of Diablo II: Resurrected**, which still ships the original
 game's 2D files.
 
-> **This repository does not contain any Blizzard file.** An importer copies
-> from your Diablo II: Resurrected installation only the files the port
-> uses.
+> **This repository does not contain any Blizzard game file.** An importer
+> copies from your Diablo II: Resurrected installation only the files the
+> port uses. (The screenshots below show the port running with the game's
+> art, which belongs to Blizzard.)
 
 > **This is a work in progress.** Acts 1 to 5 are fully playable, but
 > **there are still bugs to fix** (see
 > [Known bugs and what is missing](#known-bugs-and-what-is-missing)). If you
 > find one, please open an issue.
+
+### Screenshots
+
+<table>
+<tr>
+<td><a href="docs/screenshots/two-players-lut-gholein.jpg"><img src="docs/screenshots/two-players-lut-gholein.jpg" width="400" alt="Two players on the same screen in Lut Gholein"></a><br>Two players on one screen (Lut Gholein)</td>
+<td><a href="docs/screenshots/split-screen.jpg"><img src="docs/screenshots/split-screen.jpg" width="400" alt="Split screen in the Den of Evil"></a><br>The screen splits when they move apart</td>
+</tr>
+<tr>
+<td><a href="docs/screenshots/act5-fight.jpg"><img src="docs/screenshots/act5-fight.jpg" width="400" alt="A fight in Act 5"></a><br>A fight in Act 5</td>
+<td><a href="docs/screenshots/pandemonium-fortress.jpg"><img src="docs/screenshots/pandemonium-fortress.jpg" width="400" alt="The Pandemonium Fortress"></a><br>The Pandemonium Fortress</td>
+</tr>
+<tr>
+<td><a href="docs/screenshots/hellforge.jpg"><img src="docs/screenshots/hellforge.jpg" width="400" alt="Hephasto's loot at the Hellforge"></a><br>The Hellforge, after Hephasto</td>
+<td><a href="docs/screenshots/controls.jpg"><img src="docs/screenshots/controls.jpg" width="400" alt="The controls screen"></a><br>The controls screen</td>
+</tr>
+</table>
+
+<sub>Screenshots of the port with the art of Diablo II: Resurrected's 2D mode. Diablo
+II and its art are © Blizzard Entertainment; shown only to illustrate this
+non-commercial fan project.</sub>
 
 **Contents**
 
@@ -257,6 +279,10 @@ mercenaries and the resistance penalty (-40 and -100).
   6) and their modifiers.
 - The named bosses (Corpsefire, Bishibosh, Rakanishu, the Countess,
   Radament, the Summoner…) and the original's special boss deaths.
+- As in the original, each Act 4 knight carries one of four skulls in its
+  hands (poison, fire, cold or unholy) and throws that kind, and the
+  aura-enchanted bosses carry a Paladin aura: Lord De Seis always
+  Fanaticism, Hephasto and Bremm Sparkfist a random one.
 
 ### Combat
 
@@ -361,8 +387,10 @@ mercenaries and the resistance penalty (-40 and -100).
   designed for the gamepad (Select opens, Y goes to the next one).
 - A does the right thing next to something: talk, pick up, use stairs, a
   portal or a quest object.
-- A pause menu with the volume, "always run", the cube guide, the quests
-  and save and exit.
+- A pause menu with the volume, "always run", the controls, the cube guide,
+  the quests and save and exit.
+- A **controls screen** (in the main menu and the pause menu): the gamepad
+  drawn with what each button does, and the keys of both players.
 - The original chat phrases (Help!, Follow me, Thanks…) from a menu.
 
 ### Two players
@@ -507,7 +535,8 @@ purpose, to play comfortably on a Raspberry Pi with a gamepad.
 ### Gameplay changes, on purpose
 
 - **Faster movement:** walking is 10% and running 20% faster than in the
-  original.
+  original, for the players and for the monsters (whose walking animation
+  keeps pace, as in the original).
 - **Faster missiles:** arrows, spells and monster missiles fly about a
   third faster than in the original, which moves them at 75% of their
   `missiles.txt` speed.
@@ -664,7 +693,8 @@ the Pi, in [docs/rendimiento.md](docs/rendimiento.md).
 | Horadric Cube: open / move items / transmute / close | X on the cube / X / A or X on Transmute / B | Same |
 | Mercenary: give an item from the backpack / take it off | A (and A in the list) / X | A (and A in the list) / X |
 | Character: add a point to the selected attribute | A | A |
-| Pause (resume, volume, always run, cube guide, save and exit) | Start or Esc | Start |
+| Pause (resume, volume, always run, controls, cube guide, save and exit) | Start or Esc | Start |
+| See the controls (gamepad and keyboard) | CONTROLS in the main menu or the pause menu; left / right (or LB / RB) switch the tab, B goes back | Same |
 | Cube guide: category / recipe / back | Left and right (or LB and RB) / up and down / B | Same |
 | In the pause menu: change the volume or "Always run" | Left / right | Left / right |
 | Quit the game | Select + Start | |
@@ -682,7 +712,9 @@ which they were connected does not matter).
 - **Diablo, Diablo II and Diablo II: Resurrected** are trademarks of
   Blizzard Entertainment. This project is not affiliated with Blizzard. The
   port does not include any game file: the importer copies them from your
-  own installation, for your personal use. Do not share them.
+  own installation, for your personal use. Do not share them. The
+  screenshots in `docs/screenshots` show that art (© Blizzard Entertainment)
+  only to illustrate the project; they are not covered by the MIT license.
 - [**D2MOO**](https://github.com/ThePhrozenKeep/D2MOO), the reconstruction
   of the original game's code, used to keep the logic faithful (MIT; some
   tables come from it, see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)).

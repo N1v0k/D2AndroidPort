@@ -33,6 +33,8 @@ int  charanim_dirs(const CharAnim *a);
 void charanim_draw(const CharAnim *a, int sector, int frame, int x, int y);
 /* Igual, pasando las capas por una tabla de tonos (el azul del frío, el verde del veneno) */
 void charanim_draw_tint(const CharAnim *a, int sector, int frame, int x, int y, const uint8_t *lut);
+/* Lo mismo, con las piezas que tenga `over` (la misma animación con otras piezas) en lugar de las suyas */
+void charanim_draw_over(const CharAnim *a, const CharAnim *over, int sector, int frame, int x, int y, const uint8_t *lut);
 /* Solo las capas de `mask` (bits 1 << COMP_*), translúcidas (BLEND_*): las copias del arma de Hojas reflejadas */
 void charanim_draw_ghost(const CharAnim *a, int sector, int frame, int x, int y, unsigned mask, int mode);
 

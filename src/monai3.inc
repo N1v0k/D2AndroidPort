@@ -38,6 +38,8 @@ static int ai_sklvl(const Unit *u, int k)
 static int ai_cast(Unit *u, int t, int k, int shots, int ring, int flags)
 {
     const char *mis = skill_missile(u->skill[k]);
+    if (u->comp_s3 > 0 && strcmp(u->skill[k], "DoomKnightMissile") == 0) /* la de lo que lleva en la mano */
+        mis = missiles_after(mis, u->comp_s3);
     int anim = u->sk_anim[k];
     if (t < 0 || !mis[0] || !missiles_exists(mis) || anim < 0 || !u->gfx->anim[anim].ok)
         return 0;

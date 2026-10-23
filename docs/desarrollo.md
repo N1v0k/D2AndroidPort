@@ -1734,8 +1734,10 @@ en *Releases*, sin ningún archivo del juego (el script lo revisa):
 
 La skin personal del Brujo (sus `.d2rw`) y las herramientas con que se hizo
 no se publican (desde el 2026-10-23, a pedido del usuario): no están en el
-repositorio ni en el paquete principal (`package-batocera.sh` deja afuera
-todo `.d2rw`); quedan solo en la copia local, ignoradas por git.
+repositorio (ignoradas por git) ni en el release (`package-release.sh` arma
+sin datos y falla si se cuela un `.d2rw` o algo de `data/`). Sí van en el
+paquete local de `package-batocera.sh`, el de la Pi del usuario; el
+importador (`archivos.txt`) no los pide, porque no son del juego.
 
 ### El importador
 
@@ -1887,7 +1889,7 @@ Variables de depuración:
 | `D2_NO_STAMP_RULES=1` | Estampa las piezas enteras, sin KillEdge ni FillBlanks (para ver qué cambia por eso) |
 | `D2_A5GRID=1` | Al armar una barricada del Acto 5, imprime su grilla de celdas de 8x8 (la pieza en su celda, `+` lo que tapa, `.` vacía) |
 | `D2_MAZEDUMP=1` | Al armar un calabozo de `world3.inc` (Actos 3 y 5), imprime cada sala: su lugar en la grilla, la pieza de `lvlprest.txt` y sus salidas |
-| `D2_SPAWN="scarab1,4"` | Esos monstruos alrededor del jugador 1 al empezar |
+| `D2_SPAWN="scarab1,4"` | Esos monstruos alrededor del jugador 1 al empezar (también un jefe con nombre: `D2_SPAWN="Lord De Seis"`, con su escolta) |
 | `D2_AI_DEBUG=1` | Muestra los monstruos con IA del original que aparecen, sus habilidades y cada ataque o habilidad que usan |
 | `D2_WAYPOINTS=0x3` | Waypoints activados al empezar (un bit por waypoint) |
 | `D2_ASYNC=1` | Con `--headless`, carga los gráficos en otro hilo como en el juego |
@@ -1916,6 +1918,7 @@ Variables de depuración:
 | `D2_INVSHOW=0..8` | El J1 con anillos, amuleto, conjunto, palabra rúnica, talismanes y el cubo (0 cartel del conjunto, 1 cubo abierto, 2 talismán, 3 palabra rúnica, 4 atributos, 5 a 7 el árbol de habilidades en esa solapa, 8 el registro de misiones) |
 | `D2_QLOG=N` | Con `D2_INVSHOW=8`, el registro abierto en la misión N del Acto 2 (0 a 5) |
 | `D2_GUIDE=cat,receta` | Arranca con la Guía del cubo abierta en esa categoría y receta (3 = las palabras rúnicas) |
+| `D2_CONTROLS=0` | Arranca con la pantalla de controles abierta (0 el joystick, 1 el teclado; `src/controls.c`, que repite lo de `input.c`: si cambia un control, cambiarlo ahí también) |
 | `D2_CUBE_DEBUG=1` | Muestra qué receta se usó al transmutar |
 | `D2_LEVEL=N` | Sube a los personajes a ese nivel |
 | `D2_SKILLS="Bash:3,Howl"` | Les da esas habilidades y las pone en los botones |

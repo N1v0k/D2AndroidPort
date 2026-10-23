@@ -10,10 +10,8 @@
    come el Corpulento (SrvDo108), el toque frío (SrvDo100), el muro (SrvDo102),
    la carga (SrvDo103) y la prisión de Diablo (SrvDo104).
 
-   shortcut: el proyectil del Caballero del Abismo es siempre el primero
-   (undeadmissile1; el original lo cambia con el arma que lleva); Diablo no
-   le encierra el portal al pueblo al jugador ni tiene AI_CheckSpecialSkills
-   (cuenta como si nadie se teletransportara). */
+   shortcut: Diablo no le encierra el portal al pueblo al jugador ni tiene
+   AI_CheckSpecialSkills (cuenta como si nadie se teletransportara). */
 
 /* Lo que hace en el cuadro de golpe de su animación (Unit.a4_hit; las del Acto 5 siguen en monai5.inc) */
 enum { A4H_NONE, A4H_NEST, A4H_EAT, A4H_ARMOR, A4H_INFERNO, A4H_COLD, A4H_PRISON, A4H_CURSE };
@@ -45,6 +43,24 @@ static int a4_children(const Unit *u)
             n++;
     }
     return n;
+}
+
+/* AITHINK_TargetCallback_OblivionKnight: el Caballero de la Perdición vivo más cercano a menos de 50 */
+static int a4_doomknight(const Unit *u)
+{
+    int best = -1;
+    float bd = 50.0f;
+    for (int i = 0; i < s_num_units; i++) {
+        const Unit *o = &s_units[i];
+        if (o == u || !o->enemy || o->state >= ST_DYING || o->hidden || strcmp(o->base, "doomknight1") != 0)
+            continue;
+        float d = dist_to(u, o->x, o->y);
+        if (d < bd) {
+            bd = d;
+            best = i;
+        }
+    }
+    return best;
 }
 
 /* AITHINK_TargetCallback_Regurgitator: el cadáver blando de un monstruo
@@ -621,6 +637,20 @@ static int ai_think4(Unit *u, const Map *m, UnitTarget *pl, int t, float d, int 
                 u->ai_p[0] = now + u->aip[2];
                 return 1;
             }
+            /* detrás del Caballero de la Perdición más cercano (a menos de 50), si está más lejos del jugador */
+            int dk = a4_doomknight(u);
+            if (dk >= 0 && dist_to(&s_units[dk], tp->x, tp->y) > d) {
+                ai_go(u, s_units[dk].x, s_units[dk].y, 10, 100, 0);
+                return 1;
+            }
+            /* si no tiene adónde escapar (acorralado), el Espíritu de hueso */
+            float dx = u->x - tp->x, dy = u->y - tp->y, l = sqrtf(dx * dx + dy * dy);
+            l = l > 0.01f ? l : 1.0f;
+            float ex = u->x + dx / l * 10.0f, ey = u->y + dy / l * 10.0f;
+            if (m && (wall_foot(m, ex, ey, 1, COLL_MASK_MONSTER_PATH) ||
+                      map_ray(m, (int)u->x, (int)u->y, (int)ex, (int)ey, COLL_MASK_MONSTER_PATH, NULL, NULL)) &&
+                ai_cast(u, t, 2, 1, 0, MF_HOMING))
+                return 1;
             ai_escape(u, tp, 10.0f);
             u->ai_spd = 150;
             return 1;

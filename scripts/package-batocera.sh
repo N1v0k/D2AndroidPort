@@ -308,13 +308,13 @@ done
 assets+=(data/local/lng/strings/metadata/metadata-audio-vo.json) # qué grabación va con cada texto
 # Los archivos, sin repetidos: una carpeta que aparecía dos veces (un monstruo
 # de dos actos) se copiaba adentro de sí misma
-# (sin los .d2rw: los dibujos editados, como la skin personal del Brujo, no van
-# en el paquete; sin ellos el motor usa los del juego)
 ( cd "$root" && for a in "${assets[@]}"; do
       if [ -d "$a" ]; then find "$a" -type f; elif [ -f "$a" ]; then echo "$a"; fi
-  done ) | grep -v '\.d2rw$' | sort -u > "$game/archivos-todos.txt"
-# La lista del importador: los del juego
-cp "$game/archivos-todos.txt" "$game/archivos.txt"
+  done ) | sort -u > "$game/archivos-todos.txt"
+# La lista del importador: solo los del juego. Los .d2rw son dibujos editados
+# por el usuario (la skin del Brujo y sus íconos): van en este paquete, el de
+# su Pi, pero nunca en lo público (package-release.sh arma sin datos y lo revisa)
+grep -v '\.d2rw$' "$game/archivos-todos.txt" > "$game/archivos.txt"
 # y la misma lista en el código, para importar ahí (tools/archivos-del-juego.txt)
 cmp -s "$game/archivos.txt" "$root/tools/archivos-del-juego.txt" || cp "$game/archivos.txt" "$root/tools/archivos-del-juego.txt"
 # Las cinemáticas ya convertidas (no van en la lista: el importador las

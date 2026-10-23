@@ -13,6 +13,7 @@
 #include "missiles.h"
 #include "overlays.h"
 #include "skills.h"
+#include "controls.h"
 #include "sequences.h"
 #include "ui.h"
 #include "strings.h"
@@ -224,6 +225,7 @@ typedef struct {
     int     poison_ticks;   /* envenenado (púas de las ratas en Pesadilla, etc.) */
     int     chill_ticks;    /* enfriado (un golpe de frío): la mitad de rápido */
     int     aura_slow;      /* lo que lo frena un aura de un monstruo (la Congelación sagrada de Duriel), este tick */
+    int     conv_def, conv_res; /* la Convicción de un jefe con aura, este tick: % de defensa y de resistencias (negativos) */
     int     antidote_ticks; /* poción de antídoto: el veneno hace la mitad */
     int     amp_ticks;      /* maldecido por un jefe: recibe el doble de daño físico */
     int     curse, curse_ticks, curse_lvl; /* A4C_*: la maldición de un Caballero del Olvido (Amplificar va en amp_ticks) */
@@ -647,13 +649,14 @@ static const char *const k_wp_objects[] = { "WaypointOutsideAct1", "WaypointInsi
 #define TALK_LINE_TICKS (TICK_RATE * 5 / 2)
 
 /* Pausa: el menú de Start (volver al juego, volumen, guardar y salir) */
-enum { PAUSE_RESUME, PAUSE_SFX, PAUSE_MUSIC, PAUSE_RUN, PAUSE_POS, PAUSE_PERF, PAUSE_COLOR16, PAUSE_GUIDE, PAUSE_QUIT,
-       PAUSE_COUNT };
+enum { PAUSE_RESUME, PAUSE_SFX, PAUSE_MUSIC, PAUSE_RUN, PAUSE_POS, PAUSE_PERF, PAUSE_COLOR16, PAUSE_CONTROLS, PAUSE_GUIDE,
+       PAUSE_QUIT, PAUSE_COUNT };
 static int s_paused, s_pause_sel;
 /* El registro de misiones de la pausa: de qué jugador, qué acto y qué misión */
 static int      s_pause_qp, s_pause_qact, s_pause_qsel;
 static uint32_t s_pause_qanim;
 static int s_guide_open, s_guide_cat, s_guide_sel, s_guide_top; /* la Guía del cubo (en la pausa) */
+static int s_controls_open; /* la pantalla de controles (en la pausa) */
 static int s_always_run; /* opción: corre siempre (el gatillo hace caminar) */
 static int s_show_pos;   /* opción: la zona y la posición en las esquinas (para avisar errores) */
 static int s_show_perf;  /* opción: cuadros por segundo y lo que tarda cada parte */
@@ -2057,6 +2060,10 @@ void game_start_slots(int num_players, const int *slots, const int *classes)
     int map_open = getenv("D2_MAP_OPEN") != NULL; /* depuración: con el automapa abierto */
     pal_load_d2("act1"); /* los menús usan otra paleta */
     s_paused = getenv("D2_PAUSE") != NULL; /* depuración: arrancar con la pausa abierta */
+    if (getenv("D2_CONTROLS")) { /* depuración: los controles (0 el joystick, 1 el teclado) */
+        s_paused = s_controls_open = 1;
+        controls_open_at(atoi(getenv("D2_CONTROLS")));
+    }
     if (getenv("D2_GUIDE")) { /* depuración: la Guía del cubo en "categoría,receta" */
         s_paused = s_guide_open = 1;
         sscanf(getenv("D2_GUIDE"), "%d,%d", &s_guide_cat, &s_guide_sel);
@@ -2247,7 +2254,9 @@ void game_start_slots(int num_players, const int *slots, const int *classes)
         units_zone_begin(z);
         for (int k = 0; k < spawn_n; k++) {
             float a = (float)k * 2.0f * PI_F / (float)(spawn_n > 0 ? spawn_n : 1);
-            units_spawn_monster(spawn_id, s_pl[0].x + cosf(a) * 7.0f, s_pl[0].y + sinf(a) * 7.0f, 15);
+            float sx = s_pl[0].x + cosf(a) * 7.0f, sy = s_pl[0].y + sinf(a) * 7.0f;
+            if (units_spawn_monster(spawn_id, sx, sy, 15) < 0) /* (o un jefe con nombre: "Lord De Seis") */
+                units_spawn_superunique(spawn_id, sx, sy, 15);
         }
         units_zone_end();
     }
@@ -3600,7 +3609,7 @@ static int player_defense(const Player *p)
     int pct = 100 + p->sk_def_pct + p->shout_pct + (p->armor_ticks > 0 ? p->armor_pct : 0) + p->au_def_pct +
               (p->hs_ticks > 0 ? p->hs_def : 0) + p->dru_def_pct + p->lvl_ac_pct +
               (p->shrine_ticks > 0 && p->shrine_kind == 6 ? p->shrine_arg0 : 0) -
-              (p->curse == A4C_DEFENSE ? 50 + 5 * (p->curse_lvl - 1) : 0);
+              (p->curse == A4C_DEFENSE ? 50 + 5 * (p->curse_lvl - 1) : 0) + p->conv_def;
     return def * (pct > 0 ? pct : 0) / 100;
 }
 
@@ -3623,6 +3632,8 @@ static int player_resist(const Player *p, int ri)
             s_dl_resist;
     if (p->curse == A4C_LOWERRES) /* Bajar resistencias (dm56: de 25 a 70 %) */
         r -= 25 + (70 - 25) * (110 * p->curse_lvl / (p->curse_lvl + 6)) / 100;
+    if (ri < 3) /* la Convicción de un jefe con aura */
+        r += p->conv_res;
     int most = 75 + p->bonus[k_res[ri] + 1] + (ri < 3 ? p->res_max[ri] + p->au_res_max[ri] : 0);
     most = most > 95 ? 95 : most;
     return r > most ? most : r < s_dl_res_floor ? s_dl_res_floor : r;
@@ -12372,6 +12383,10 @@ int game_tick(const InputState *in)
         guide_tick(in);
         return GAME_CONTINUE;
     }
+    if (s_paused && s_controls_open) {
+        s_controls_open = controls_tick(in);
+        return GAME_CONTINUE;
+    }
     int back = in->player[0].back || in->player[1].back;
     if (in->escape || in->start || (s_paused && back)) {
         s_paused = !s_paused;
@@ -12446,6 +12461,9 @@ int game_tick(const InputState *in)
             audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
             if (s_pause_sel == PAUSE_RESUME) {
                 s_paused = 0;
+            } else if (s_pause_sel == PAUSE_CONTROLS) {
+                s_controls_open = 1;
+                controls_open();
             } else if (s_pause_sel == PAUSE_GUIDE) {
                 s_guide_open = 1;
                 s_guide_sel = s_guide_top = 0;
@@ -12609,6 +12627,18 @@ int game_tick(const InputState *in)
                 units_position(ids[k], 1.0f, &dx, &dy);
                 overlays_add("holyfreeze", OV_AT_UNIT, ids[k], dx, dy, TICK_RATE);
             }
+        /* y la de los jefes con aura (Lord De Seis, Hefasto...), con el dibujo de la del Paladín */
+        int kinds[8];
+        nd = s_ticks % AURA_SHOW == 0 ? units_aura_bosses(ids, kinds, 4) : 0;
+        for (int k = 0; k < nd; k++) {
+            const AuraLook *l = aura_look(kinds[k]);
+            float dx, dy;
+            units_position(ids[k], 1.0f, &dx, &dy);
+            if (l && l->back)
+                overlays_add(l->back, OV_AT_UNIT, ids[k], dx, dy, AURA_SHOW);
+            if (l && l->front)
+                overlays_add(l->front, OV_AT_UNIT, ids[k], dx, dy, AURA_SHOW);
+        }
     }
     units_tick(&s_map, targets, num_targets);
     for (int k = s_num_players; k < num_targets; k++) {
@@ -12706,6 +12736,8 @@ int game_tick(const InputState *in)
                 p->chill_ticks = len;
         }
         p->aura_slow = p->state < PS_DYING ? t->aura_slow : 0;
+        p->conv_def = p->state < PS_DYING ? t->aura_conv_def : 0;
+        p->conv_res = p->state < PS_DYING ? t->aura_conv_res : 0;
         if (t->poison_total > 0 && p->state < PS_DYING)
             player_poison(p, (float)t->poison_total / (float)t->poison_ticks, t->poison_ticks);
     }
@@ -15589,6 +15621,7 @@ static int player_effects(const Player *p, Effect *e)
     n = effect_skill(e, n, SOR, "Frost Nova", p->chill_ticks, 1);
     n = effect_skill(e, n, NEC, "Amplify Damage", p->amp_ticks, 1);
     n = effect_skill(e, n, PAL, "Holy Freeze", p->aura_slow > 0 ? -1 : 0, 1);
+    n = effect_skill(e, n, PAL, "Conviction", p->conv_res < 0 || p->conv_def < 0 ? -1 : 0, 1);
     /* los del Acto 4: las maldiciones de los Caballeros del Olvido, el toque frío de Diablo y el abrazo de los Gropers */
     /* (y las de las súcubos: Defense Curse con el ícono de Convicción, Blood Mana con el del Gólem de sangre) */
     static const struct { int cls; const char *skill; } k_curses[A4C_COUNT] = {
@@ -16623,12 +16656,17 @@ static void draw_pause(void)
         draw_guide();
         return;
     }
+    if (s_controls_open) {
+        controls_draw();
+        return;
+    }
     int sfx, music;
     audio_get_volume(&sfx, &music);
     static const char *const k_labels[PAUSE_COUNT] = {
         [PAUSE_RESUME] = "VOLVER AL JUEGO", [PAUSE_SFX] = "EFECTOS",         [PAUSE_MUSIC] = "MÚSICA",
         [PAUSE_RUN] = "CORRER SIEMPRE",     [PAUSE_POS] = "VER POSICIÓN",    [PAUSE_PERF] = "RENDIMIENTO",
-        [PAUSE_COLOR16] = "COLOR 16 BITS",  [PAUSE_GUIDE] = "GUÍA DEL CUBO", [PAUSE_QUIT] = "GUARDAR Y SALIR",
+        [PAUSE_COLOR16] = "COLOR 16 BITS",  [PAUSE_CONTROLS] = "CONTROLES",  [PAUSE_GUIDE] = "GUÍA DEL CUBO",
+        [PAUSE_QUIT] = "GUARDAR Y SALIR",
     };
     char values[PAUSE_COUNT][16] = { { 0 } };
     snprintf(values[PAUSE_SFX], sizeof values[0], "< %d >", sfx);
@@ -16658,7 +16696,7 @@ static void draw_pause(void)
     snprintf(diff, sizeof diff, tr("Dificultad: %s"), tr(k_diff_names[s_diff]));
     font_draw_centered(ox + ow / 2, oy + 52, diff, 2, s_diff ? COL(R_RED, 14) : COL(R_GRAY, 13));
     for (int i = 0; i < PAUSE_COUNT; i++) {
-        int y = oy + 76 + i * 36, chosen = i == s_pause_sel;
+        int y = oy + 76 + i * 33, chosen = i == s_pause_sel;
         uint8_t c = chosen ? COL(R_GOLD, 15) : COL(R_GRAY, 13);
         font_draw(ox + 52, y, k_labels[i], 3, c);
         if (values[i][0])

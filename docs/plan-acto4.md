@@ -74,7 +74,6 @@ Lo que no es como el original (`shortcut:` en el código):
 - sin el borde secundario de `lvlsub.txt` en las mesetas (como en el desierto);
 - las variantes de las piezas que no entran gastan su turno de la ronda igual;
 - el Acto 4 no tiene oscuridad (el original solo le baja la luz: `Intensity`);
-- el proyectil del Caballero del Abismo es siempre el primero (el original lo cambia con su arma);
 - Diablo no le encierra el portal al pueblo al jugador, y sale y muere sin los rayos de luz del original;
 - después de Diablo no se vuelve solo al pueblo a los 90 segundos: el final es el portal que abre Tyrael (el de la expansión);
 - las almas atrapadas del `TrappedSoulPlaceholder` salen de nuevo al volver a armar la zona (como los otros monstruos del port; el original deja el objeto abierto para no repetirlas).

@@ -217,6 +217,11 @@ void charanim_draw_ghost(const CharAnim *a, int sector, int frame, int x, int y,
 
 void charanim_draw_tint(const CharAnim *a, int sector, int frame, int x, int y, const uint8_t *lut)
 {
+    charanim_draw_over(a, NULL, sector, frame, x, y, lut);
+}
+
+void charanim_draw_over(const CharAnim *a, const CharAnim *over, int sector, int frame, int x, int y, const uint8_t *lut)
+{
     if (!a->ok)
         return;
     const Cof *c = &a->cof;
@@ -227,9 +232,11 @@ void charanim_draw_tint(const CharAnim *a, int sector, int frame, int x, int y, 
     const uint8_t *order = &c->priority[(cof_dir * c->frames_per_dir + frame) * c->num_layers];
     for (int i = 0; i < c->num_layers; i++) {
         int comp = order[i];
-        if (comp >= COMP_COUNT || !a->layer[comp].frames)
+        if (comp >= COMP_COUNT)
             continue;
-        const Sprite *s = &a->layer[comp];
+        const Sprite *s = over && over->ok && over->layer[comp].frames ? &over->layer[comp] : &a->layer[comp];
+        if (!s->frames)
+            continue;
         int d = dcc_dir(sector, s->directions);
         int f = frame < s->frames_per_dir ? frame : 0;
         const SpriteFrame *fr = sprite_frame(s, d, f);

@@ -197,6 +197,15 @@ int missiles_exists(const char *name)
     return find_def(name) != NULL;
 }
 
+const char *missiles_after(const char *name, int n)
+{
+    const MissileDef *m = find_def(name);
+    if (!m)
+        return name;
+    int i = (int)(m - s_defs) + n;
+    return i >= 0 && i < s_num_defs ? s_defs[i].name : m->name;
+}
+
 void missiles_base_damage(const char *name, int *elem, int *emin, int *emax, int *dmin, int *dmax)
 {
     const MissileDef *m = find_def(name);

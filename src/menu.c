@@ -2,6 +2,7 @@
 
 #include "audio.h"
 #include "cinema.h"
+#include "controls.h"
 #include "font.h"
 #include "game.h"
 #include "ui.h"
@@ -20,11 +21,11 @@
    - Elegir personaje: la pantalla de selección con las seis partidas.
    - Clase del personaje nuevo, y confirmar el borrado. */
 
-enum { MS_MAIN, MS_SLOTS, MS_CLASS, MS_DELETE, MS_CINEMA, MS_DIFF };
+enum { MS_MAIN, MS_SLOTS, MS_CLASS, MS_DELETE, MS_CINEMA, MS_DIFF, MS_CONTROLS };
 
-/* Como el original: las cinemáticas entre jugar y salir */
-enum { ITEM_ONE, ITEM_TWO, ITEM_CINEMA, ITEM_QUIT };
-static const char *const k_items[] = { "UN JUGADOR", "DOS JUGADORES", "CINEMÁTICAS", "SALIR" };
+/* Como el original: las cinemáticas entre jugar y salir (y los controles) */
+enum { ITEM_ONE, ITEM_TWO, ITEM_CINEMA, ITEM_CONTROLS, ITEM_QUIT };
+static const char *const k_items[] = { "UN JUGADOR", "DOS JUGADORES", "CINEMÁTICAS", "CONTROLES", "SALIR" };
 #define NUM_ITEMS ((int)(sizeof k_items / sizeof k_items[0]))
 
 static int      s_state;
@@ -181,6 +182,11 @@ MenuResult menu_tick(const InputState *in)
                 s_state = MS_CINEMA;
                 return MENU_NONE;
             }
+            if (s_sel == ITEM_CONTROLS) {
+                controls_open();
+                s_state = MS_CONTROLS;
+                return MENU_NONE;
+            }
             s_players = s_sel + 1;
             s_picking = 0;
             s_state = MS_SLOTS;
@@ -270,6 +276,11 @@ MenuResult menu_tick(const InputState *in)
         }
         return MENU_NONE;
     }
+
+    case MS_CONTROLS:
+        if (!controls_tick(in))
+            s_state = MS_MAIN;
+        return MENU_NONE;
 
     case MS_DIFF:
         if (in->menu_up)
@@ -537,5 +548,9 @@ void menu_render(void)
     case MS_DELETE: draw_delete(); break;
     case MS_CINEMA: draw_cinema(); break;
     case MS_DIFF:   draw_difficulty(); break;
+    case MS_CONTROLS:
+        ui_grid("frontend/gameselectscreenexp", 0, 12, 4, 0, 0);
+        controls_draw();
+        break;
     }
 }
