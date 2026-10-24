@@ -49,6 +49,12 @@ original game's 2D files.
 (3 minutes at 3x speed: an Amazon and a Paladin who learn their skills as
 they level up, until wave 8).
 
+
+
+https://github.com/user-attachments/assets/e2625716-a6cd-49b9-b7de-ffe343d0115b
+
+
+
 <sub>Screenshots of the port with the art of Diablo II: Resurrected's 2D mode. Diablo
 II and its art are © Blizzard Entertainment; shown only to illustrate this
 non-commercial fan project.</sub>
