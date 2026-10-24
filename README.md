@@ -45,11 +45,9 @@ original game's 2D files.
 </tr>
 </table>
 
-**Video:** [two bots from level 1 in the Echo of Hatred](docs/videos/echo-from-level-1.mp4)
+**Video:** **two bots from level 1 in the Echo of Hatred**
 (3 minutes at 3x speed: an Amazon and a Paladin who learn their skills as
 they level up, until wave 8).
-
-
 
 https://github.com/user-attachments/assets/e2625716-a6cd-49b9-b7de-ffe343d0115b
 
