@@ -98,7 +98,8 @@ it together with the rest (in the file manager, Ctrl+H shows hidden files).
    ./d2port-importar
    ```
 
-3. Choose the language (1 = Spanish, 2 = English). It looks for the game in
+3. Choose the language (a number from the list of 13; see
+   [Language](#language)). It looks for the game in
    the usual places (`~/.wine`, Lutris' `~/Games/*`, Bottles and Steam
    prefixes): if it cannot find it, it asks for the folder (you can drag it
    to the terminal). It copies the files to the same package's
@@ -133,7 +134,8 @@ end) and `--sin-cinematicas` (skip the cinematics).
 The next release will also bring the importer for the Pi: you copy the
 whole Diablo II Resurrected folder to a USB drive, plug it into the Pi and,
 in the **Ports** menu, choose **Import Diablo II (English)** or **Importar
-Diablo II (Español)**. It is already written but not tested on a Pi yet.
+Diablo II (Español)** (the other languages, from the main menu after
+importing). It is already written but not tested on a Pi yet.
 
 ### 3. Play
 
@@ -466,8 +468,9 @@ mercenaries and the resistance penalty (-40 and -100).
 
 - The original cinematics, in low quality so the Pi plays them smoothly
   (MPEG-1 640x288 decoded with [pl_mpeg](https://github.com/phoboslab/pl_mpeg),
-  colors converted by the GPU), with the audio in **English** or **Latin
-  American Spanish**. A, B, Start or Esc skips one.
+  colors converted by the GPU), with the audio of the imported language
+  (English if your copy of the game does not have it). A, B, Start or Esc
+  skips one.
 - They play where the original plays them (the server's packet 0x61 in
   D2MOO's `QUESTS_ActChange` and `QUESTS_HellPortalActChange`):
   - the Blizzard logos and the **introduction** when the game starts;
@@ -484,8 +487,8 @@ mercenaries and the resistance penalty (-40 and -100).
 
 - The original sounds (`sounds.txt`, `monsounds.txt`), the music of each
   area and the ambient effects.
-- The NPC voices and the class lines, in **English** or **Latin American
-  Spanish**.
+- The NPC voices and the class lines, in the imported language (English if
+  your copy of the game does not have that language's voices).
 
 ### Languages
 
@@ -682,7 +685,10 @@ if you can, the `d2port.log`.
 - Some character lines are silent in Spanish: Resurrected does not ship
   that audio in Latin American Spanish.
 - Many engine messages and the developer notes are written in Spanish
-  first; the English translation of the engine texts may still miss some.
+  first. The translations of the engine's own texts into the other 12
+  languages were made for this port (Blizzard's texts come from the game):
+  some may be missing or read oddly. Corrections are welcome
+  (`tools/lang/<language>.txt`).
 
 **What is missing:**
 
