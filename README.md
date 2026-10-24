@@ -3,10 +3,12 @@
 [![d2port: split screen on a Raspberry Pi](https://img.youtube.com/vi/zcsaPHeL3lw/hqdefault.jpg)](https://youtube.com/shorts/zcsaPHeL3lw)
 
 A Diablo II–style engine **written from scratch** in C99 + SDL2, to play on
-**Batocera on a Raspberry Pi 3B** with a gamepad, alone or two players on
-the same screen. It uses the graphics, maps, tables, sounds and voices of
-**your own copy of Diablo II: Resurrected**, which still ships the original
-game's 2D files.
+**Batocera on a Raspberry Pi 3B** with a gamepad: alone, two players on the
+same screen, or **up to 8 players over the local network** (for example
+four Pis with two players each). Besides the story it has its own wave
+mode, the **Echo of Hatred**. It uses the graphics, maps, tables, sounds and
+voices of **your own copy of Diablo II: Resurrected**, which still ships the
+original game's 2D files.
 
 > **This repository does not contain any Blizzard game file.** An importer
 > copies from your Diablo II: Resurrected installation only the files the
@@ -21,6 +23,14 @@ game's 2D files.
 ### Screenshots
 
 <table>
+<tr>
+<td><a href="docs/screenshots/lan-8-players.jpg"><img src="docs/screenshots/lan-8-players.jpg" width="400" alt="Eight players in the party at the Rogue Encampment"></a><br>Eight players over the local network: four machines with two each (the party list, top left)</td>
+<td><a href="docs/screenshots/lan-lobby.jpg"><img src="docs/screenshots/lan-lobby.jpg" width="400" alt="The local network lobby with eight players"></a><br>The network lobby: the other machines find the game by themselves</td>
+</tr>
+<tr>
+<td><a href="docs/screenshots/echo-of-hatred.jpg"><img src="docs/screenshots/echo-of-hatred.jpg" width="400" alt="Echo of Hatred: a wave on the Arreat Summit"></a><br>Echo of Hatred: a wave on the Arreat Summit</td>
+<td><a href="docs/screenshots/shop-sell.jpg"><img src="docs/screenshots/shop-sell.jpg" width="400" alt="Selling to Charsi from the inventory"></a><br>Shops like the original: selling from the inventory</td>
+</tr>
 <tr>
 <td><a href="docs/screenshots/two-players-lut-gholein.jpg"><img src="docs/screenshots/two-players-lut-gholein.jpg" width="400" alt="Two players on the same screen in Lut Gholein"></a><br>Two players on one screen (Lut Gholein)</td>
 <td><a href="docs/screenshots/split-screen.jpg"><img src="docs/screenshots/split-screen.jpg" width="400" alt="Split screen in the Den of Evil"></a><br>The screen splits when they move apart</td>
@@ -141,7 +151,9 @@ importing). It is already written but not tested on a Pi yet.
 
 In Batocera's **Ports** menu, **Diablo II** (update the game lists if it
 does not show up). It is played with a gamepad, alone or two players: the
-first gamepad used is player 1's. See [Controls](#controls).
+first gamepad used is player 1's. See [Controls](#controls). To play with
+other Pis on the same network, **LOCAL NETWORK** in the main menu (see
+[Local network](#local-network-up-to-8-players)).
 
 ### Language
 
@@ -582,6 +594,12 @@ can also be played over the local network:
   boss, ending the run, the chest and the portal back. Today all
   five pass (68, 63, 74, 36 and 62 steps), as does the skills test (24 of
   24); the first three were also checked in English.
+- **Network tests:** the same tests with several copies of the port joined
+  over the network (`D2_NET_HOST` / `D2_NET_JOIN`), each machine with its
+  own bots: they compare the state of the game every second. Act 1
+  with 4 players on 2 machines passes (68 steps) without ever differing,
+  as does the Echo of Hatred with 2 machines; 8 players on 4 machines,
+  and a real Pi with three emulated ones, also stay identical.
 
 ### Performance on the Raspberry Pi
 

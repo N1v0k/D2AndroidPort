@@ -1709,8 +1709,10 @@ int game_autotest_start(const char *name, int players)
     if (eco) {
         s_at.steps = k_eco_steps;
         s_at.nsteps = (int)(sizeof k_eco_steps / sizeof k_eco_steps[0]);
-        /* D2_ECO_REAL=1: se pelea de verdad (si no, sin daño y de un golpe, para ver la mecánica) */
-        s_one_hit = s_god = getenv("D2_ECO_REAL") ? 0 : 1;
+        /* D2_ECO_REAL=1: se pelea de verdad (si no, sin daño y de un golpe, para ver la mecánica);
+           2: los golpes de verdad pero sin recibir daño (para las capturas: la arena se llena) */
+        s_one_hit = getenv("D2_ECO_REAL") ? 0 : 1;
+        s_god = !getenv("D2_ECO_REAL") || atoi(getenv("D2_ECO_REAL")) == 2;
         s_at.trace = getenv("D2_AT_TRACE") ? atoi(getenv("D2_AT_TRACE")) : 0;
         if (getenv("D2_AUTOTEST_SHOTS")) /* una captura por paso */
             snprintf(s_at.shots, sizeof s_at.shots, "%s", getenv("D2_AUTOTEST_SHOTS"));
