@@ -51,8 +51,6 @@ they level up, until wave 8).
 
 https://github.com/user-attachments/assets/e2625716-a6cd-49b9-b7de-ffe343d0115b
 
-
-
 <sub>Screenshots of the port with the art of Diablo II: Resurrected's 2D mode. Diablo
 II and its art are © Blizzard Entertainment; shown only to illustrate this
 non-commercial fan project.</sub>
@@ -378,9 +376,7 @@ can also be played over the local network:
 - At the end, the **Echo chest** (more and better items the further you
   got) and a portal back to the menu. Each character keeps its best wave.
 
-
-
-<img src="docs/screenshots/echo-video.jpg" width="400" alt="Video: two bots from level 1 in the Echo of Hatred"></a><br>
+<a href="https://github.com/user-attachments/assets/e2625716-a6cd-49b9-b7de-ffe343d0115b"><img src="docs/screenshots/echo-video.jpg" width="400" alt="Video: two bots from level 1 in the Echo of Hatred"></a><br>
 <sub>Video: two bots that start at level 1 (an Amazon and a Paladin, playing
 by themselves with their skills and potions), 3x speed, until they fall on
 wave 8.</sub>
