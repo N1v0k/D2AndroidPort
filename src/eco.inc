@@ -871,8 +871,9 @@ static void eco_tick(void)
     if (s_ticks % (5 * TICK_RATE) == 0)
         eco_ground_sweep();
     switch (s_er.phase) {
-    case EP_START:
-        if (s_er.ticks >= 4 * TICK_RATE && units_loading() == 0)
+    case EP_START: /* (cuando se terminaron de cargar los dibujos; en red, a los 6 segundos en todas las máquinas:
+                      lo que tarda la carga no puede cambiar la partida) */
+        if (s_lockstep ? s_er.ticks >= 6 * TICK_RATE : s_er.ticks >= 4 * TICK_RATE && units_loading() == 0)
             eco_wave_begin();
         break;
     case EP_WAVE: {

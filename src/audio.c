@@ -498,13 +498,16 @@ int audio_loops(int sound)
 int audio_init(int mode)
 {
     s_mode = AUDIO_OFF;
-    if (mode == AUDIO_OFF)
-        return 0;
     s_log = getenv("D2_AUDIO_LOG") != NULL;
-    if (load_sounds() != 0) {
+    /* La tabla se lee siempre, también sin sonido: los números de audio_find no pueden depender
+       de eso (los monstruos con frases sortean cuándo decirlas; en red todas las máquinas tienen
+       que calcular lo mismo) */
+    if (!s_hash && load_sounds() != 0) {
         fprintf(stderr, "sin sonido: no pude cargar sounds.txt\n");
         return -1;
     }
+    if (mode == AUDIO_OFF)
+        return 0;
     if (mode == AUDIO_DEVICE) {
         if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
             fprintf(stderr, "sin sonido: %s\n", SDL_GetError());

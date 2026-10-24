@@ -108,7 +108,7 @@ static void join(int i)
     Pad *pd = &s_pads[i];
     if (pd->player >= 0)
         return;
-    for (int p = 0; p < MAX_PLAYERS; p++) {
+    for (int p = 0; p < MAX_LOCAL; p++) {
         int taken = 0;
         for (int k = 0; k < MAX_PADS; k++)
             taken |= s_pads[k].pad && s_pads[k].player == p;
@@ -220,7 +220,7 @@ void input_clear_events(InputState *in)
         PlayerInput *p = &in->player[i];
         p->action = p->potion_life = p->potion_mana = p->potion_stamina = p->inventory = 0;
         p->nav_up = p->nav_down = p->nav_left = p->nav_right = p->drop = p->back = 0;
-        p->button[0] = p->button[1] = p->button[2] = p->button[3] = p->skill_tree = 0;
+        p->button[0] = p->button[1] = p->button[2] = p->button[3] = p->skill_tree = p->stats_page = 0;
         p->belt = p->automap = p->chat = 0;
     }
     in->menu_up = in->menu_down = in->menu_left = in->menu_right = in->menu_back = in->menu_delete = 0;
@@ -258,10 +258,12 @@ static void on_key(InputState *in, const SDL_KeyboardEvent *k)
     case SDLK_r:        in->player[0].button[2] = 1; break;
     case SDLK_f:        in->player[0].button[3] = 1; break;
     case SDLK_t:        in->player[0].skill_tree = 1; break;
+    case SDLK_g:        in->player[0].stats_page = 1; break;
     case SDLK_j:        in->player[1].button[1] = 1; break;
     case SDLK_l:        in->player[1].button[2] = 1; break;
     case SDLK_o:        in->player[1].button[3] = 1; break;
     case SDLK_u:        in->player[1].skill_tree = 1; break;
+    case SDLK_h:        in->player[1].stats_page = 1; break;
     case SDLK_1:        in->player[0].belt = 1; break;
     case SDLK_2:        in->player[0].belt = 2; break;
     case SDLK_3:        in->player[0].belt = 3; break;
@@ -308,6 +310,8 @@ static void on_button(InputState *in, const SDL_ControllerButtonEvent *b, int do
     input_log("joystick %d: botón %s", i + 1, button_name(b->button));
     join(i);
     PlayerInput *p = pd->player >= 0 ? &in->player[pd->player] : NULL;
+    /* Con Select apretado, Y y X van directo al árbol de habilidades y a los atributos */
+    int with_select = SDL_GameControllerGetButton(pd->pad, SDL_CONTROLLER_BUTTON_BACK) && !pd->held[SDL_CONTROLLER_BUTTON_BACK];
 
     switch (b->button) {
     case SDL_CONTROLLER_BUTTON_A:
@@ -318,7 +322,10 @@ static void on_button(InputState *in, const SDL_ControllerButtonEvent *b, int do
         if (p) p->potion_life = 1;
         break;
     case SDL_CONTROLLER_BUTTON_Y:
-        if (p) p->button[3] = 1;
+        if (p && with_select)
+            p->skill_tree = 1;
+        else if (p)
+            p->button[3] = 1;
         break;
     case SDL_CONTROLLER_BUTTON_LEFTSTICK:
         if (p) p->potion_stamina = 1;
@@ -342,7 +349,10 @@ static void on_button(InputState *in, const SDL_ControllerButtonEvent *b, int do
         break;
     case SDL_CONTROLLER_BUTTON_X:
         in->menu_delete = 1;
-        if (p) p->drop = p->button[2] = 1;
+        if (p && with_select)
+            p->stats_page = 1;
+        else if (p)
+            p->drop = p->button[2] = 1;
         break;
     case SDL_CONTROLLER_BUTTON_B:
         in->menu_back = 1;
@@ -424,7 +434,7 @@ int input_any(const InputState *in)
         return 1;
     for (int i = 0; i < MAX_PLAYERS; i++) {
         const PlayerInput *p = &in->player[i];
-        if (p->move_x != 0.0f || p->move_y != 0.0f || p->sprint || p->action || p->inventory || p->skill_tree ||
+        if (p->move_x != 0.0f || p->move_y != 0.0f || p->sprint || p->action || p->inventory || p->skill_tree || p->stats_page ||
             p->potion_life || p->potion_mana || p->potion_stamina || p->belt || p->automap || p->chat || p->drop || p->back ||
             p->button[0] || p->button[1] || p->button[2] || p->button[3])
             return 1;

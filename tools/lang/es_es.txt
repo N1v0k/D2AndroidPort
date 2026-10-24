@@ -64,3 +64,5 @@
 775	Habla con Larzuk.
 776	Mata a Shenk, el que todo lo ve, en las Estribaciones Sangrientas.
 811	Abre el cofre; el portal vuelve al menú
+849	Creas la partida: las otras máquinas de la red la encuentran solas.
+850	Buscas una partida que se creó en otra máquina de esta red.

@@ -810,3 +810,46 @@
 809	Uccisi: %d / %d
 810	Sopraffatto! %d
 811	Apri lo scrigno; il portale torna al menu
+812	RETE LOCALE
+813	Fino a 8 giocatori su più macchine della stessa rete (1 o 2 per macchina).
+814	Tutte devono avere la stessa versione del gioco.
+815	CREA PARTITA
+816	UNISCITI A UNA PARTITA
+817	Sinistra / destra: %d giocatore/i su questa macchina
+818	Ricerca di partite in rete...
+819	%s (%d giocatori)
+820	A: unisciti     B: indietro
+821	LA TUA PARTITA IN RETE
+822	SALA D'ATTESA
+823	Le altre macchine la trovano da sole (questa è %s)
+824	G%d  %s  livello %d  (macchina %d)
+825	A: inizia     Sinistra / destra: difficoltà     B: chiudi
+826	In attesa che l'host inizi...
+827	B: esci
+828	Serve un'altra macchina collegata
+829	Impossibile creare la partita (la porta 6112 è occupata?)
+830	Impossibile collegarsi a quella partita
+831	La connessione con l'host si è interrotta
+832	La macchina %d se n'è andata
+833	L'host non risponde
+834	La macchina %d non risponde
+835	Le macchine non sono più sincronizzate (macchina %d, tick %u)
+836	È arrivato qualcosa di incomprensibile
+837	L'host ha inviato un avvio incomprensibile
+838	A: compra   LB/RB: schede   B: indietro
+839	LB/RB: schede   B: indietro
+840	A: vendi   Select: compra   B: indietro
+841	Select: vendi dallo zaino
+842	Questo non si può vendere
+843	Attributi
+844	Select + X: attributi   Select + Y: abilità
+845	STORIA
+846	INDIETRO
+847	I cinque atti della storia, da Normale a Inferno.
+848	Quanti giocano su questa macchina?
+849	Crei la partita: le altre macchine della rete la trovano da sole.
+850	Cerchi una partita creata su un'altra macchina di questa rete.
+851	Eco dell'odio (giocatori: %d)
+852	Storia (giocatori: %d)
+853	Il livello dei personaggi decide la difficoltà
+854	A: inizia     B: chiudi

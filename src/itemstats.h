@@ -24,6 +24,7 @@ typedef struct {
 struct ItemType;
 
 int  itemstats_init(void);
+void itemstats_reset_rng(uint32_t seed); /* en red: el mismo azar en todas las máquinas */
 int  itemstats_find(const char *name);     /* *ID por el nombre ("fireresist"); -1 si no está */
 int  itemstats_has_property(const char *code); /* el código existe en Properties.txt */
 

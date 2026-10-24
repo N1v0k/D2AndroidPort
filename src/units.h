@@ -271,6 +271,14 @@ int  units_spawn_herald(const char *id, float x, float y, int level, const Units
    (x0, y0): 0 donde hay un jugador, 0xffff donde no se llega), tienen el nivel que se les da (también
    los jefes de misión) y hp_pct / dmg_pct de vida y daño de más. units_hunt_deaths: cuántos murieron. */
 void units_set_hunt(int zone, int hp_pct, int dmg_pct);
+/* En red (y D2_LOCKSTEP): las unidades se mueven aunque sus dibujos no terminaron de cargarse (sin
+   red esperan quietas: en la Pi la carga puede tardar medio segundo) */
+void units_set_lockstep(int on);
+void units_reset_game(uint32_t seed); /* en red: sin unidades de antes y con el mismo azar en todas las máquinas */
+/* Los jugadores de la partida: con más, los monstruos que salen tienen más vida y dan más experiencia
+   (el original); units_player_count_of: los que había cuando salió ese (para su botín) */
+void units_set_player_count(int n);
+int  units_player_count_of(int i);
 void units_set_flow(const uint16_t *steps, int x0, int y0, int w, int h);
 int  units_hunt_deaths(void);
 int  units_is_hunter(int i);

@@ -403,6 +403,7 @@ typedef struct {
     float    anchor_x, anchor_y; /* dónde estaba hace un segundo */
     int      nav_r, nav_dest; /* lo último de la navegación (para el informe si se traba) */
     float    nav_x, nav_y, nav_dx, nav_dy;
+    uint32_t ui_tick; /* el último tick en que apretó A, B o una flecha (at_ui_ready) */
 } AtBot;
 
 static struct {
@@ -511,6 +512,15 @@ static void at_move(PlayerInput *in, float wx, float wy)
     in->sprint = 1;
 }
 
+/* En red lo que aprieta el bot se juega NET_DELAY ticks después (main.c net_step): en un
+   diálogo, una lista o un portal, el botón que sigue espera a que se vea lo que hizo el
+   anterior (si no, el segundo "abajo" pasaba de Contratar a Salir y Kashya no contrataba).
+   Sin red no espera: se ve en el tick siguiente. */
+static int at_ui_ready(const AtBot *b)
+{
+    return net_role() == NET_OFF || s_ticks - b->ui_tick > NET_DELAY;
+}
+
 /* Ir a (x, y) de la zona `dest` (-1 = la de ese punto), pasando por las
    zonas que hagan falta: 1 = llegó (a menos de `reach`), 0 = sigue, -1 = no
    hay camino (después de un rato intentando) */
@@ -548,7 +558,7 @@ static int at_goto(AtBot *b, Player *p, PlayerInput *in, int dest, float x, floa
         return 0;
     }
     case BOT_USE: /* la escalera, el portal o la almohadilla */
-        if (b->pulse++ % 3 == 0)
+        if (b->pulse++ % 3 == 0 && at_ui_ready(b)) /* (en red, la A que llegaba ya del otro lado lo devolvía) */
             in->action = in->button[0] = 1;
         return 0;
     default: /* (la demostración, si cayó en un hueco cerrado, sale como entró) */
@@ -719,7 +729,7 @@ static int at_player_step(int i, const AtStep *st, PlayerInput *in)
     }
     case AT_ACTIVATE_WP: {
         if ((p->waypoints >> st->num) & 1) {
-            if (p->wp_open && b->pulse++ % 2 == 0)
+            if (p->wp_open && b->pulse++ % 2 == 0 && at_ui_ready(b))
                 in->back = in->button[1] = 1; /* cerrar el panel que se abrió solo */
             return p->wp_open ? 0 : 1;
         }
@@ -742,6 +752,8 @@ static int at_player_step(int i, const AtStep *st, PlayerInput *in)
         if (!p->wp_open && st->num == wp_first(s_act) && p->level && !p->level->town && tp_find(p) >= 0 &&
             p->dialog_npc < 0 && !(p->level->id == 120 && p->ancients_q == 2)) {
             int i = (int)(p - s_pl);
+            if (!at_ui_ready(b)) /* (en red, la A de un golpe que llegaba ya en el pueblo, al lado del portal, lo devolvía) */
+                return 0;
             if (tp_cast(p, tp_find(p)) && tp_warp(PORTAL_TP_FIELD(i))) {
                 use_warp(p, tp_warp(PORTAL_TP_FIELD(i)));
                 printf("  J%d vuelve al pueblo por su portal\n", i + 1);
@@ -749,7 +761,7 @@ static int at_player_step(int i, const AtStep *st, PlayerInput *in)
             return 0;
         }
         if (p->wp_open) { /* elegir el destino en el panel y viajar */
-            if (b->pulse++ % 2)
+            if (b->pulse++ % 2 || !at_ui_ready(b))
                 return 0;
             if (p->wp_sel != st->num)
                 in->nav_down = 1;
@@ -782,7 +794,7 @@ static int at_player_step(int i, const AtStep *st, PlayerInput *in)
         }
         units_position(u, 1.0f, &x, &y);
         if (waypoint_near(p) == best) {
-            if (b->pulse++ % 2 == 0)
+            if (b->pulse++ % 2 == 0 && at_ui_ready(b))
                 in->action = in->button[0] = 1;
             return 0;
         }
@@ -939,12 +951,25 @@ static int at_check(const char *check, char *why, size_t cap)
             for (int k = 0; k < p->bag_count; k++)
                 ok |= p->bag[k].quality == QUALITY_RARE;
         } else if (strcmp(name, "saved") == 0) {
-            char path[512], line[256];
+            char path[512], line[256], *mem = NULL;
+            size_t mem_len = 0;
             ok = s_demo; /* la demostración no guarda */
-            if (save_path(p->slot, path, sizeof path)) {
-                FILE *f = fopen(path, "r");
+            FILE *f = NULL;
+            if (net_role() != NET_OFF) {
+                /* En red cada máquina guarda solo los suyos (y la prueba, sin D2_NET_SLOTS, a
+                   ninguno): se revisa lo que se guarda, igual en todas las máquinas */
+                FILE *w = open_memstream(&mem, &mem_len);
+                if (w) {
+                    save_character_to(w, p);
+                    fclose(w);
+                }
+                f = mem && mem_len > 0 ? fmemopen(mem, mem_len, "r") : NULL;
+            } else if (save_path(p->slot, path, sizeof path)) {
+                f = fopen(path, "r");
+            }
+            if (f) {
                 int q[7];
-                while (f && fgets(line, sizeof line, f))
+                while (fgets(line, sizeof line, f))
                     if (s_at.act == 5) /* las seis misiones (con las recompensas del que habla y el final) */
                         ok |= sscanf(line, "act5 %d %d %d %d %d %d %d", &q[0], &q[1], &q[2], &q[3], &q[4], &q[5], &q[6]) == 7 &&
                               (i > 0 || (q[0] >= 4 && q[1] >= 3 && q[2] >= 5 && q[3] >= 4 && q[4] >= 3 && q[5] >= 6));
@@ -959,9 +984,9 @@ static int at_check(const char *check, char *why, size_t cap)
                               (i > 0 || (q[0] >= 3 && q[6] >= 6));
                     else
                         ok |= strncmp(line, "act1 6 4 3 3", 12) == 0 || (i > 0 && strncmp(line, "act1 ", 5) == 0);
-                if (f)
-                    fclose(f);
+                fclose(f);
             }
+            free(mem);
         }
         if (!ok) {
             snprintf(why, cap, "J%d: %s no se cumple (tiene %d)", i + 1, check, have);
@@ -1240,7 +1265,7 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
             if (s_at.trace && s_ticks % 50 == 0)
                 printf("  J1 va a %s en (%.1f, %.1f); al lado: %s\n", st->arg, x, y, npc >= 0 ? units_id(npc) : "nadie");
             if (npc >= 0 && strcmp(units_id(npc), st->arg) == 0) {
-                if (b->pulse++ % 3 == 0)
+                if (b->pulse++ % 3 == 0 && at_ui_ready(b))
                     in->action = in->button[0] = 1;
                 return 0;
             }
@@ -1260,7 +1285,7 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
             return 1;
         }
         if (s_at.phase == 1) { /* elegir la opción */
-            if (b->pulse++ % 2)
+            if (b->pulse++ % 2 || !at_ui_ready(b))
                 return 0;
             int opts[8], n = npc_options(p, units_id(p->dialog_npc), opts), want = -1;
             for (int k = 0; k < n; k++)
@@ -1280,6 +1305,8 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
             return 0;
         }
         int waited = s_at.step_ticks - s_at.step_start;
+        if (!at_ui_ready(b))
+            return 0;
         /* Lo que abre la opción: contratar la primera, imbuir o comprar el primero */
         if ((p->hire_open || p->imbue_open || p->gambling) && s_at.phase == 2 && waited > 5) {
             in->action = in->button[0] = 1;
@@ -1837,6 +1864,11 @@ int game_autotest_input(InputState *in, double last_tick_ms)
         if (p->bind_ch_skill >= 0 && p->bind_ch_button >= 0 && p->bind_ch_button < 4 && p->bind_ch_frames < 8 * TICK_RATE &&
             mx > 0 && hp * 100 < mx * 99)
             in->player[i].held[p->bind_ch_button] = 1;
+    }
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        const PlayerInput *pi = &in->player[i];
+        if (pi->action || pi->back || pi->nav_up || pi->nav_down || pi->nav_left || pi->nav_right)
+            s_at.bot[i].ui_tick = s_ticks;
     }
     return r;
 }

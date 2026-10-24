@@ -189,6 +189,7 @@ Chinese.
 
 - [The acts](#the-acts)
 - [The endgame](#the-endgame)
+- [Echo of Hatred](#echo-of-hatred-a-new-game-mode)
 - [Classes and skills](#classes-and-skills)
 - [Monsters](#monsters)
 - [Combat](#combat)
@@ -198,6 +199,8 @@ Chinese.
 - [The world](#the-world)
 - [The interface](#the-interface)
 - [Two players](#two-players)
+- [Local network (up to 8 players)](#local-network-up-to-8-players)
+- [Cinematics](#cinematics)
 - [Sound, music and voices](#sound-music-and-voices)
 - [Languages](#languages)
 - [Saved games](#saved-games)
@@ -311,8 +314,9 @@ mercenaries and the resistance penalty (-40 and -100).
 ### Echo of Hatred (a new game mode)
 
 A mode of its own, apart from the story, with the idea of Diablo IV's
-"Echoing Hatred": endless waves in an arena. **ECHO OF HATRED** in the main
-menu, for one or two players:
+"Echoing Hatred": endless waves in an arena. In the main menu, **ONE
+PLAYER** or **TWO PLAYERS** and then **ECHO OF HATRED** (or **STORY**); it
+can also be played over the local network:
 
 - You play with a character you already have, with its equipment. The
   experience, gold and items you get go back to its saved game; its story
@@ -437,7 +441,11 @@ menu, for one or two players:
 
 - The NPCs of the five towns, with their dialogs and voices in the
   original order.
-- **Shops** (buy and sell), **gambling** (Gheed, Elzix, Alkor, Jamella,
+- **Shops** as in the original: the vendor's window on the left and your
+  inventory on the right (with two players, one at a time). LB / RB switch
+  the tabs; the last one, Sell (or Select), takes the cursor to your
+  backpack, where A sells.
+- **Gambling** (Gheed, Elzix, Alkor, Jamella,
   Nihlathak and Anya), Akara and Fara heal, **Charsi imbues** (makes an item
   rare), **Larzuk sockets** an item, **Anya personalizes** one, and Cain.
 - **Mercenaries:** Kashya's rogues (Act 1), Greiz's desert warriors (Act 2),
@@ -477,7 +485,8 @@ menu, for one or two players:
 - Icons of what is affecting you (buffs, auras, shrines, potions, poison,
   cold and curses), with the seconds left, above the middle of the bar.
 - Inventory, skills, buttons, character, mercenary and quest panels,
-  designed for the gamepad (Select opens, Y goes to the next one).
+  designed for the gamepad (Select opens, Y goes to the next one; Select + Y
+  goes straight to the skills and Select + X to the attributes).
 - A does the right thing next to something: talk, pick up, use stairs, a
   portal or a quest object.
 - A pause menu with the volume, "always run", the controls, the cube guide,
@@ -493,6 +502,29 @@ menu, for one or two players:
   splits along a line perpendicular to the one joining them, and joins
   again when they get together.
 - Quests, bosses and experience count for both.
+- As in the original, each extra player gives the monsters 50% more life
+  and experience, and they drop more often.
+
+### Local network (up to 8 players)
+
+- **LOCAL NETWORK** in the main menu: choose how many play on this machine
+  (one or two), then **CREATE GAME** (the story or the Echo of Hatred) or
+  **JOIN A GAME**: the others find it by themselves on the same network
+  (Wi-Fi or cable), with its mode. Each machine has 1 or 2 players (with 2,
+  its own split screen): up to 8 players, the original's maximum, for
+  example four Pis with two players each.
+- Everybody plays with a character from their own machine, and each
+  machine saves its own characters.
+- Only the controls travel over the network: every machine plays the whole
+  game and they all compute exactly the same, tick by tick. Every second
+  they compare a summary of the game; if one ever differs, the game stops
+  and everybody's characters are saved.
+- As in the original, with more players the monsters have 50% more life and
+  give 50% more experience per extra player, and drop more often.
+- Limits: all machines must have the same version of the port, and all
+  must be Pis (or all PCs: a PC and a Pi do not round the numbers the same
+  way). Everybody is in the same act, nobody can join a game that already
+  started, and in a network game the pause menu does not stop the game.
 
 ### Cinematics
 
@@ -559,6 +591,10 @@ menu, for one or two players:
   per frame. Areas are prepared on a worker thread so walking does not
   stall.
 - A whole act fits in the Pi's 1 GB of memory.
+- Over the local network with 8 players, a Pi 3B takes about 3 ms of logic
+  per tick while they play together, and 7.5 to 12 ms in the worst case
+  (each one in a different area), with up to 418 MB of memory. Each
+  machine sends about 23 KB/s.
 
 ---
 
@@ -689,6 +725,10 @@ purpose, to play comfortably on a Raspberry Pi with a gamepad.
   guides, because that code is not public.
 - **Sunder charms** break the immunity for everyone's damage in the game
   (both players, their pets and the mercenaries).
+- **Local network:** the original's games are one server and its clients.
+  Here every machine plays the whole game and only the controls travel (all
+  of them compute the same), which is lighter for a Pi. Up to 8 players, as
+  in the original, but all in the same act.
 - **Echo of Hatred** is not in Diablo II: it is this port's own mode, with
   the idea of a Diablo IV mode (its exact rules are that game's). The waves,
   bosses and rewards follow the port's own rules, made with Diablo II's
@@ -731,7 +771,8 @@ if you can, the `d2port.log`.
 - What is listed under
   [Simplified or not done yet](#simplified-or-not-done-yet).
 - The **importer for the Pi** (written, not tested yet) and for **Windows**.
-- Network play: not planned (the two players share one screen).
+- Local network play was tested with one real Pi, Pis emulated on a PC and
+  PCs, not yet between two real Pis with people playing.
 
 ---
 
@@ -798,8 +839,9 @@ the Pi, in [docs/rendimiento.md](docs/rendimiento.md).
 | Automap | RB / R1, or Tab | RB / R1 |
 | Phrases (Help!, Follow me, Thanks…): open the list / choose / say / close | Press the right stick (R3) or C / d-pad ▲ ▼ / A / B (you can keep walking) | R3 or N / same |
 | Inventory | Select or I | Select or P |
-| Character (spend attribute points) | The red cross at the bottom left of the inventory, or Y twice in the inventory | Same |
-| Panels: inventory, skills, buttons, character, mercenary, quests | Select opens; Y goes to the next one (or T to the skill tree) | Select opens; Y goes to the next one (or U) |
+| Character (spend attribute points) | Select + X, or G (also the red cross at the bottom left of the inventory) | Select + X, or H |
+| Skill tree (spend skill points) | Select + Y, or T | Select + Y, or U |
+| Panels: inventory, skills, buttons, character, mercenary, quests | Select opens; Y goes to the next one | Select opens; Y goes to the next one |
 | In the skill tree: learn / put on a button | A / X opens "Put on:" (the d-pad chooses the button, A assigns, B cancels) | Same |
 | Buttons page: change what a button does | The d-pad chooses the button, A shows what it can have, A assigns it | Same |
 | Talk to an NPC | A next to them, if no monster is right next to you (B closes) | Same |
@@ -810,6 +852,7 @@ the Pi, in [docs/rendimiento.md](docs/rendimiento.md).
 | Socket a gem, rune or jewel | Pick it up with A and drop it with A on the item | Same |
 | Horadric Cube: open / move items / transmute / close | X on the cube / X / A or X on Transmute / B | Same |
 | Mercenary: give an item from the backpack / take it off | A (and A in the list) / X | A (and A in the list) / X |
+| Shop: tabs / buy / sell (Sell tab or Select, then A on your item) | LB and RB (or the d-pad past the edge) / A / Select and A | Same |
 | Character: add a point to the selected attribute | A | A |
 | Pause (resume, volume, always run, controls, cube guide, save and exit) | Start or Esc | Start |
 | See the controls (gamepad and keyboard) | CONTROLS in the main menu or the pause menu; left / right (or LB / RB) switch the tab, B goes back | Same |

@@ -204,6 +204,9 @@ static void draw_pad(void)
             text_fit(12, l->y, bx - half - 10 - 12, l->what, 2, COL(R_GRAY, 15), 1);
     }
 
+    /* Select con Y o X: directo a las habilidades o a los atributos */
+    font_draw_centered(SCREEN_W / 2, 388, "Select + X: atributos   Select + Y: habilidades", 1, COL(R_GOLD, 15)); /* (la letra grande no tiene "+") */
+
     /* En los paneles cambia lo que hacen */
     ui_box(40, 404, SCREEN_W - 80, 150);
     font_draw_centered(SCREEN_W / 2, 414, "EN EL INVENTARIO, LAS TIENDAS Y EL COFRE", 2, COL(R_GOLD, 15));
@@ -305,6 +308,7 @@ static const struct { const char *what, *p1, *p2; } k_keys[] = {
     { "Pociones del cinturón", "1|2|3|4", "7|8|9|0" },
     { "Inventario", "I", "P" },
     { "Árbol de habilidades", "T", "U" },
+    { "Atributos", "G", "H" },
     { "Automapa", "Tab", "-" },
     { "Tirar el objeto", "Q", "M" },
     { "Volver / cerrar", "Retroceso", "Supr" },

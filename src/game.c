@@ -7,6 +7,7 @@
 #include "font.h"
 #include "iso.h"
 #include "cube.h"
+#include "itemstats.h"
 #include "items.h"
 #include "jobs.h"
 #include "map.h"
@@ -21,6 +22,7 @@
 #include "video.h"
 #include "world.h"
 #include "lang.h"
+#include "net.h"
 
 #include <SDL.h>
 
@@ -271,7 +273,8 @@ typedef struct {
     int     inv_sel;                /* objeto elegido en el inventario */
     int     dialog_npc;             /* NPC con el que habla (-1 = ninguno) */
     int     dialog_sel;
-    int     shop_open, shop_tab, shop_sel; /* tienda: solapa 0 = comprar, 1 = vender */
+    int     shop_open, shop_tab, shop_sel; /* tienda: la solapa de la mercadería (armaduras, armas, varios) y lo elegido */
+    int     shop_selling;                  /* vendiendo: el cursor está en la mochila del inventario (inv_sel) */
     int     gambling;                       /* la tienda es la apuesta (Gheed, Elzix) */
     Item    gamble[GAMBLE_ITEMS];           /* lo que hay para apostar (ya tirado: se ve como el objeto base) */
     int     gamble_count;
@@ -462,9 +465,11 @@ typedef struct {
     int     war_req_pct;                     /* Dominio de la levitación: % menos de requisitos de las armas */
     int     held_mask, last_button;          /* los botones mantenidos ahora y el último que usó (para canalizar) */
     int     war_cd[MAX_CLASS_SKILLS];        /* lo que falta para poder usar cada una otra vez (localdelay) */
-    CharAnim anim[MODE_COUNT];      /* animaciones con el equipo que lleva puesto */
+    CharAnim anim[MODE_COUNT];      /* animaciones con el equipo que lleva puesto (para dibujarlo: se cargan en otro hilo) */
     char    look_key[64];           /* para no recargarlas si el aspecto no cambió */
     char    look_want[64];          /* el aspecto del equipo actual (se carga en otro hilo) */
+    CharAnim meta[MODE_COUNT];      /* las del equipo actual, solo lo de la lógica (COF: cuadros, velocidad, golpe): enseguida */
+    char    meta_key[64];
     int     warp_lock;              /* recién saltó de nivel: espera a que salga del salto de llegada */
     int     lock_from, lock_to;     /* ese salto (zonas) */
     char    message[80];            /* avisos cortos ("Inventario lleno", lo que dice un santuario) */
@@ -504,8 +509,8 @@ enum { PAGE_INVENTORY, PAGE_SKILLS, PAGE_BUTTONS, PAGE_STATS, PAGE_MERC, PAGE_QU
 #define STASH_GX    19  /* la grilla del cofre, debajo de sus pestañas */
 #define STASH_GY    34
 
-/* Solapas de la tienda, como el original (armaduras, armas, varios) más
-   una para vender lo de la mochila */
+/* Solapas de la tienda, como el original (armaduras, armas, varios); la
+   cuarta, Vender, pasa el cursor a la mochila del inventario */
 enum { SHOP_ARMOR, SHOP_WEAPONS, SHOP_MISC, SHOP_SELL, SHOP_TABS };
 
 /* Barra de control de abajo (panel/800ctrlpnl7) */
@@ -555,6 +560,13 @@ static CharClass s_classes[NUM_CLASSES] = {
       .voice = "warlock", .title = "Brujo", .tree = "spells/skltree_w_back" },
 };
 static Player    s_pl[MAX_PLAYERS];
+/* Los jugadores de esta máquina: los que manejan sus joysticks y se dibujan (uno, o dos con la
+   pantalla partida). Sin red son los primeros de la partida; en red, los que le tocan */
+static int  s_local[MAX_LOCAL] = { 0, 1 };
+static int  s_num_local = 1;
+static int  s_net_local; /* 1 = s_local lo puso la red */
+static int  s_net_world; /* en red: el mundo se arma de nuevo con la semilla del anfitrión (game_start_slots) */
+static int  s_zb_wait_zone = -1; /* la zona que espera a sus DT1 para empezar a armarse (zones_tick) */
 static int       s_num_players;
 static uint32_t  s_ticks;
 static int       s_debug;
@@ -667,7 +679,7 @@ static int s_pal_cur = -1;  /* la paleta cargada (0..4: act1..act5) */
    Pandemonium las de sus actos (las baldosas de la cripta, del desierto, de Tristram) */
 static void level_palette(void)
 {
-    const Level *lv = s_pl[0].level;
+    const Level *lv = s_pl[s_local[0]].level;
     int want = lv && lv->pal >= 0 && lv->pal <= 4 ? lv->pal : s_act - 1;
     if (want == s_pal_cur || s_pal_cur < 0)
         return;
@@ -760,6 +772,7 @@ static int  panel_x(const Player *p);
 static int  nav_nearest(int count, int sel, int dx, int dy, void (*rect)(const void *, int, int *, int *, int *, int *),
                         const void *ctx);
 static void inv_rect_cb(const void *ctx, int i, int *x, int *y, int *w, int *h);
+static void inv_entry_rect(const Player *p, int i, int *x, int *y, int *w, int *h);
 static void tree_rect_cb(const void *ctx, int i, int *x, int *y, int *w, int *h);
 static void stats_tick(Player *p, const PlayerInput *pi);
 static void half_range(const Player *p, int *x0, int *x1);
@@ -801,6 +814,14 @@ static int  tz_level_on(const Level *lv);
 static int  tz_waypoint_marked(const char *level_name);
 static void tz_pause_line(char *out, size_t cap, int max_w);
 static int  s_tz_menu;
+/* Todo lo que cambia la partida sale de los ticks y de los controles, nunca de cuánto tardó algo
+   (el hilo de carga, el reloj): la red (todas las máquinas calculan lo mismo) y D2_LOCKSTEP=1 en
+   las pruebas. Las zonas se arman en partes por cantidad de piezas, no por milisegundos. */
+static int  s_lockstep;
+static const PlayerInput *s_frame; /* en red: los controles de todos para este tick (game_set_frame) */
+static int  s_hash_every; /* D2_HASH=N: imprime el resumen del estado cada N ticks (game_state_hash) */
+static long long s_epoch;  /* en red, los segundos (desde 1970) al empezar la partida: las zonas de terror rotan con los ticks */
+static int  s_net_epoch;   /* 1 = s_epoch lo puso la red */
 static int  s_eco;       /* eco.inc: el modo (game_set_mode): una corrida del Eco del Odio */
 static int  s_eco_world; /* el mundo armado es el de las arenas (world_set_arena) */
 static int  s_eco_exit;  /* se usó el portal del final: al menú */
@@ -871,6 +892,7 @@ static void generate_shops(void);
 static int  load_character(Player *p);
 static void save_character(const Player *p);
 static void act_switch(int act); /* de un acto al otro (los dos jugadores) */
+static void spread_players(void);
 static void build_look(const Player *p, CharLook *look, char *wclass, size_t wcap);
 static void migrate_old_saves(void);
 static void waypoints_find(void);
@@ -1757,6 +1779,9 @@ int game_init(void)
     s_debug = getenv("D2_DEBUG") != NULL;
     s_one_hit = getenv("D2_ONEHIT") != NULL;
     s_god = getenv("D2_GOD") != NULL;
+    s_lockstep = getenv("D2_LOCKSTEP") != NULL;
+    units_set_lockstep(s_lockstep);
+    s_hash_every = getenv("D2_HASH") ? atoi(getenv("D2_HASH")) : 0;
     pal_init_placeholder();
     if (pal_load_d2("act1") != 0) {
         fprintf(stderr, "no encontré data/global/palette/act1: falta extraer los archivos del juego\n");
@@ -2066,12 +2091,19 @@ static void place_at(Player *p, int i, float x, float y)
 
 void game_start(int num_players)
 {
-    static const int slots[MAX_PLAYERS] = { 1, 2 };
-    int classes[MAX_PLAYERS] = { 0, 1 };
-    const char *env = getenv("D2_CLASSES"); /* pruebas: "2,1" = Hechicera y Amazona */
+    int slots[MAX_PLAYERS], classes[MAX_PLAYERS];
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        slots[i] = i + 1 <= SAVE_SLOTS ? i + 1 : 0; /* (del séptimo en adelante, personajes que no se guardan) */
+        classes[i] = i % NUM_CLASSES;
+    }
+    const char *env = getenv("D2_CLASSES"); /* pruebas: "2,1" = Hechicera y Amazona (hasta ocho) */
     s_eco = getenv("D2_ECO") != NULL; /* pruebas: una corrida del Eco del Odio */
     if (env)
-        sscanf(env, "%d,%d", &classes[0], &classes[1]);
+        for (int i = 0; i < MAX_PLAYERS && *env; i++) {
+            classes[i] = atoi(env);
+            env += strcspn(env, ",");
+            env += *env == ',';
+        }
     game_start_slots(num_players, slots, classes);
 }
 
@@ -2125,7 +2157,15 @@ void game_start_slots(int num_players, const int *slots, const int *classes)
         sscanf(getenv("D2_GUIDE"), "%d,%d", &s_guide_cat, &s_guide_sel);
     }
     s_num_players = num_players < 1 ? 1 : num_players > MAX_PLAYERS ? MAX_PLAYERS : num_players;
+    units_set_player_count(s_num_players);
+    if (!s_net_local) { /* (sin red, los de esta máquina son los primeros) */
+        s_num_local = s_num_players < MAX_LOCAL ? s_num_players : MAX_LOCAL;
+        for (int k = 0; k < MAX_LOCAL; k++)
+            s_local[k] = k;
+    }
     s_ticks = 0;
+    if (!s_net_epoch) /* (en red lo pone el anfitrión) */
+        s_epoch = (long long)time(NULL);
     s_shown_target = -1;
     s_den_cleared = 0;
     s_den_light = 0;
@@ -2139,7 +2179,7 @@ void game_start_slots(int num_players, const int *slots, const int *classes)
     quest_reset();
     generate_shops();
 
-    static const uint8_t label[MAX_PLAYERS] = { R_GOLD, R_BLUE };
+    static const uint8_t label[MAX_PLAYERS] = { R_GOLD, R_BLUE, R_GRASS, R_RED, R_CLOTH, R_SKIN, R_WOOD, R_GRAY };
     /* Como en el original, se arranca junto a la fogata de las pícaras */
     s_start_x = s_map.width * TILE_SUB / 2.0f;
     s_start_y = s_map.height * TILE_SUB / 2.0f;
@@ -2213,6 +2253,8 @@ void game_start_slots(int num_players, const int *slots, const int *classes)
         p->buttons[1] = p->buttons[2] = p->buttons[3] = BTN_EMPTY;
         if (c->start_items[0] && strcmp(c->start_items[0], "jav") == 0)
             p->buttons[1] = BTN_THROW; /* la Amazona arranca con jabalinas: B las lanza */
+        if (i >= s_num_players) /* (un lugar sin jugador: sin personaje ni dibujos que cargar) */
+            continue;
         int loaded = load_character(p);
         if (getenv("D2_WAYPOINTS")) /* depuración: waypoints activados (máscara de bits) */
             p->waypoints |= (uint64_t)strtoull(getenv("D2_WAYPOINTS"), NULL, 0);
@@ -2293,11 +2335,12 @@ void game_start_slots(int num_players, const int *slots, const int *classes)
         s_eco_world = 1;
         act_switch(5);
         eco_enter();
-    } else if (act != s_act || s_eco_world) {
+    } else if (act != s_act || s_eco_world || s_net_world) {
         if (s_eco_world) { /* (la partida de antes fue del Eco: el mundo sin las arenas) */
             world_set_arena(0);
             s_eco_world = 0;
         }
+        s_net_world = 0;
         act_switch(act);
         if (getenv("D2_ZONETEST")) /* las del otro acto */
             zone_test();
@@ -2353,6 +2396,8 @@ void game_start_slots(int num_players, const int *slots, const int *classes)
     waypoints_find();
     waypoints_light();
     preload_ui();
+    if (getenv("D2_SPREAD")) /* pruebas: cada jugador en otro nivel del acto (el peor caso para medir) */
+        spread_players();
     if (getenv("D2_DEPTH_AUDIT")) { /* depuración: el orden de dibujo en todo el mapa */
         zones_load_all();
         depth_audit();
@@ -2584,7 +2629,16 @@ static void share_exp(const Player *killer, int exp)
 }
 
 /* Animación del modo con el equipo puesto, o la de la clase sin equipo */
+/* La animación para la lógica: la del equipo que lleva ahora (su COF se lee al cambiarlo), así la
+   partida no depende de cuándo termina de cargarse el dibujo (en red, todas las máquinas tienen que
+   calcular lo mismo) */
 static const CharAnim *player_anim(const Player *p, int mode)
+{
+    return p->meta[mode].ok ? &p->meta[mode] : &s_classes[p->cls].anim[mode];
+}
+
+/* La que se dibuja: la que ya se cargó (hasta que llega la del equipo nuevo, la de antes) */
+static const CharAnim *player_anim_draw(const Player *p, int mode)
 {
     return p->anim[mode].ok ? &p->anim[mode] : &s_classes[p->cls].anim[mode];
 }
@@ -2644,7 +2698,20 @@ typedef struct {
 enum { LOOK_FREE, LOOK_LOADING, LOOK_READY };
 static LookJob s_look_job[MAX_PLAYERS];
 
+/* Con meta, solo lo de la lógica (los COF) */
+static int look_load(CharAnim *a, const CharLook *look, const char *mode, const char *wclass, int meta)
+{
+    return meta ? charanim_load_meta(a, look, mode, wclass) : charanim_load(a, look, mode, wclass);
+}
+
+static void load_look_anims_as(CharAnim anim[MODE_COUNT], const CharLook *look, const char *wclass, int meta);
+
 static void load_look_anims(CharAnim anim[MODE_COUNT], const CharLook *look, const char *wclass)
+{
+    load_look_anims_as(anim, look, wclass, 0);
+}
+
+static void load_look_anims_as(CharAnim anim[MODE_COUNT], const CharLook *look, const char *wclass, int meta)
 {
     if (strcmp(look->base, "monsters") == 0) { /* el lobo o el oso del Druida: sus modos (el pueblo, como afuera) */
         static const char *const k_beast[MODE_COUNT] = {
@@ -2654,7 +2721,7 @@ static void load_look_anims(CharAnim anim[MODE_COUNT], const CharLook *look, con
         };
         for (int m = 0; m < MODE_COUNT; m++)
             if (k_beast[m])
-                charanim_load(&anim[m], look, k_beast[m], wclass);
+                look_load(&anim[m], look, k_beast[m], wclass, meta);
         return;
     }
     for (int m = 0; m < MODE_COUNT; m++) {
@@ -2666,25 +2733,25 @@ static void load_look_anims(CharAnim anim[MODE_COUNT], const CharLook *look, con
         /* Bloquear: solo con escudo (o con dos garras: Bloqueo con armas) */
         if (m == MODE_BL) {
             if (look->part[COMP_SH][0] || strcmp(wc, "ht2") == 0)
-                charanim_load(&anim[m], look, k_mode_codes[m], wc);
+                look_load(&anim[m], look, k_mode_codes[m], wc, meta);
             continue;
         }
         /* Patada, trampas y el segundo golpe con dos garras: solo la Asesina */
         if (m == MODE_KK || m == MODE_S2 || m == MODE_S4) {
             if (strcmp(look->token, "ai") == 0 && (m != MODE_S4 || strcmp(wc, "ht2") == 0))
-                charanim_load(&anim[m], look, k_mode_codes[m], m == MODE_S2 ? wc : wc);
+                look_load(&anim[m], look, k_mode_codes[m], wc, meta);
             continue;
         }
         /* El segundo golpe de Doble golpe y Frenesí: solo con dos armas */
         if (m == MODE_S3) {
             if (wc[0] == '1' && (wc[1] == 's' || wc[1] == 'j'))
-                charanim_load(&anim[m], look, k_mode_codes[m], wc);
+                look_load(&anim[m], look, k_mode_codes[m], wc, meta);
             continue;
         }
         /* Lanzar tampoco: con un arma que no tiene esa animación (una lanza)
            se usa la del ataque, y la de sin arma no trae las partes del arma */
-        if (charanim_load(&anim[m], look, k_mode_codes[m], wc) != 0 && m != MODE_A2 && m != MODE_TH)
-            charanim_load(&anim[m], look, k_mode_codes[m], "hth");
+        if (look_load(&anim[m], look, k_mode_codes[m], wc, meta) != 0 && m != MODE_A2 && m != MODE_TH)
+            look_load(&anim[m], look, k_mode_codes[m], "hth", meta);
     }
 }
 
@@ -2711,9 +2778,11 @@ static void look_job_drop(int i)
 
 static void free_look(Player *p)
 {
-    for (int m = 0; m < MODE_COUNT; m++)
+    for (int m = 0; m < MODE_COUNT; m++) {
         charanim_free(&p->anim[m]);
-    p->look_key[0] = '\0';
+        charanim_free(&p->meta[m]);
+    }
+    p->look_key[0] = p->meta_key[0] = '\0';
 }
 
 /* Las fórmulas de skills.txt con los puntos puestos (para las sinergias) */
@@ -3012,11 +3081,18 @@ static void start_look(Player *p)
              look.part[COMP_TR], look.part[COMP_LG], look.part[COMP_RA], look.part[COMP_LA], look.part[COMP_S1],
              look.part[COMP_RH], look.part[COMP_SH]);
     snprintf(p->look_want, sizeof p->look_want, "%s", key);
+    if (strcmp(key, p->meta_key) != 0) { /* lo de la lógica, ya (los COF son chicos) */
+        for (int m = 0; m < MODE_COUNT; m++)
+            charanim_free(&p->meta[m]);
+        load_look_anims_as(p->meta, &look, wclass, 1);
+        snprintf(p->meta_key, sizeof p->meta_key, "%s", key);
+    }
     if (strcmp(key, p->look_key) == 0)
         return;
     LookJob *j = &s_look_job[p - s_pl];
     if (!jobs_running() || !p->look_key[0]) { /* sin hilo, o al empezar (todavía no tiene ninguno) */
-        free_look(p);
+        for (int m = 0; m < MODE_COUNT; m++) /* (solo los dibujos: lo de la lógica ya se leyó arriba) */
+            charanim_free(&p->anim[m]);
         load_look_anims(p->anim, &look, wclass);
         snprintf(p->look_key, sizeof p->look_key, "%s", key);
         return;
@@ -6049,7 +6125,7 @@ static void dialog_tick(Player *p, const PlayerInput *pi)
         break;
     case OPT_TRADE:
         p->shop_open = 1;
-        p->gambling = 0;
+        p->gambling = p->shop_selling = 0;
         p->shop_tab = SHOP_ARMOR;
         p->shop_sel = 0;
         break;
@@ -6058,7 +6134,7 @@ static void dialog_tick(Player *p, const PlayerInput *pi)
         for (int k = 0; k < GAMBLE_ITEMS; k++)
             p->gamble_count += items_gamble_roll(k, p->level_num, &p->gamble[p->gamble_count]);
         p->shop_open = p->gambling = 1;
-        p->shop_sel = 0;
+        p->shop_sel = p->shop_selling = 0;
         break;
     case OPT_HIRE:
         merc_offers(p);
@@ -6112,7 +6188,7 @@ static void dialog_tick(Player *p, const PlayerInput *pi)
     }
 }
 
-/* Lista que se ve en la solapa actual: la mercadería o la mochila */
+/* Las solapas (en la última, Vender, el cursor va a la mochila del inventario) */
 static const char *const k_shop_tabs[SHOP_TABS] = { "Armadura", "Armas", "Varios", "Vender" };
 
 static int shop_tab_has(int tab, const ItemType *t)
@@ -6121,16 +6197,12 @@ static int shop_tab_has(int tab, const ItemType *t)
                                                                           : t->kind == ITEM_MISC;
 }
 
-/* Objetos que se ven en la solapa: punteros a la mercadería o a la mochila */
+/* Objetos que se ven en la solapa: punteros a la mercadería (o a lo de la apuesta) */
 static int shop_list(Player *p, Item **out, int max)
 {
     Shop *sh = shop_of(units_id(p->dialog_npc));
     int n = 0;
-    if (p->shop_tab == SHOP_SELL) {
-        for (int i = 0; i < p->bag_count && n < max; i++)
-            if (!is_quest_item(p->bag[i].type))
-                out[n++] = &p->bag[i];
-    } else if (p->gambling) {
+    if (p->gambling) {
         for (int i = 0; i < p->gamble_count && n < max; i++)
             out[n++] = &p->gamble[i];
     } else if (sh) {
@@ -6185,6 +6257,59 @@ static void shop_rect_cb(const void *ctx, int i, int *x, int *y, int *w, int *h)
 
 #define SHOP_LIST_MAX (SHOP_MAX + BAG_MAX)
 
+/* Dónde va el panel de la tienda: con un solo jugador a la izquierda, con el
+   inventario a la derecha (como el original y el arcón); con dos, en su
+   mitad (y mientras vende se ve el inventario en su lugar) */
+static int shop_px(const Player *p)
+{
+    return s_num_local == 1 ? 0 : panel_x(p);
+}
+
+/* Vendiendo, el cursor recorre las casillas de la mochila */
+static void sell_rect_cb(const void *ctx, int i, int *x, int *y, int *w, int *h)
+{
+    inv_entry_rect((const Player *)ctx, INV_CELL0 + i, x, y, w, h);
+}
+
+/* La casilla siguiente en esa dirección, de objeto en objeto como en el
+   inventario; -1 = pasado el borde */
+static int sell_step(const Player *p, int cell, int dx, int dy)
+{
+    int item = bag_at(p, cell % BAG_W, cell / BAG_W), next = cell;
+    for (;;) {
+        int after = nav_nearest(BAG_CELLS, next, dx, dy, sell_rect_cb, p);
+        if (after == next)
+            return -1;
+        next = after;
+        if (item < 0 || bag_at(p, next % BAG_W, next / BAG_W) != item)
+            return next;
+    }
+}
+
+/* Otra solapa: las de la mercadería, o Vender (el cursor va a la mochila: al
+   primer objeto que se puede vender si no estaba ahí) */
+static void shop_set_tab(Player *p, int tab)
+{
+    tab = (tab + SHOP_TABS) % SHOP_TABS;
+    p->shop_selling = tab == SHOP_SELL;
+    if (!p->shop_selling) {
+        if (tab != p->shop_tab)
+            p->shop_sel = 0;
+        p->shop_tab = tab;
+        return;
+    }
+    if (p->inv_sel >= INV_CELL0 && p->inv_sel < INV_BELT0)
+        return;
+    p->inv_sel = INV_CELL0;
+    for (int c = 0; c < BAG_CELLS; c++) {
+        int k = bag_at(p, c % BAG_W, c / BAG_W);
+        if (k >= 0 && !is_quest_item(p->bag[k].type)) {
+            p->inv_sel = INV_CELL0 + c;
+            break;
+        }
+    }
+}
+
 /* Cuántos faltan para llenar una pila de ese tipo en la mochila (la primera
    que tenga lugar, o una nueva); 0 = no se apila */
 static int shop_fill_count(const Player *p, const ItemType *t)
@@ -6198,16 +6323,64 @@ static int shop_fill_count(const Player *p, const ItemType *t)
     return cap;
 }
 
+/* Vendiendo: la cruceta recorre la mochila (pasado el borde izquierdo vuelve
+   a la mercadería) y A vende lo elegido, que el vendedor pone a la venta */
+static void sell_tick(Player *p, Shop *sh, const PlayerInput *pi, int dx, int dy)
+{
+    int cell = p->inv_sel - INV_CELL0;
+    if (cell < 0 || cell >= BAG_CELLS)
+        cell = 0;
+    if (dx || dy) {
+        int next = sell_step(p, cell, dx, dy);
+        if (next < 0 && dx < 0) {
+            shop_set_tab(p, p->shop_tab);
+            return;
+        }
+        if (next >= 0)
+            cell = next;
+    }
+    p->inv_sel = INV_CELL0 + cell;
+    int k = bag_at(p, cell % BAG_W, cell / BAG_W);
+    if (!pi->action || k < 0)
+        return;
+    Item it = p->bag[k];
+    if (is_quest_item(it.type)) {
+        show_message(p, "Eso no se vende");
+        return;
+    }
+    p->gold += items_price(&it, 1);
+    audio_play_name("item_gold", AUDIO_NOPOS, AUDIO_NOPOS);
+    bag_remove(p, k);
+    dclone_sold(p, &it); /* (una Piedra de Jordán en Infierno: el Diablo clon) */
+    if (sh->count < SHOP_MAX && !shop_unlimited(it.type))
+        sh->stock[sh->count++] = it;
+}
+
 static void shop_tick(Player *p, const PlayerInput *pi)
 {
     units_talk(p->dialog_npc, p->x, p->y);
     Shop *sh = shop_of(units_id(p->dialog_npc));
-    if (pi->back || pi->inventory || (!sh && !p->gambling)) {
-        p->shop_open = p->gambling = 0; /* vuelve al menú del NPC */
+    if (pi->back || (pi->inventory && p->gambling) || (!sh && !p->gambling)) {
+        p->shop_open = p->gambling = p->shop_selling = 0; /* vuelve al menú del NPC */
         return;
     }
-    if (p->shop_tab < 0 || p->shop_tab >= SHOP_TABS)
+    if (p->shop_tab < 0 || p->shop_tab >= SHOP_SELL)
         p->shop_tab = 0;
+    if (!p->gambling) { /* LB / RB: la solapa de al lado; Select: de comprar a vender y al revés */
+        if (pi->potion_life || pi->automap) {
+            shop_set_tab(p, (p->shop_selling ? SHOP_SELL : p->shop_tab) + (pi->automap ? 1 : -1));
+            return;
+        }
+        if (pi->inventory) {
+            shop_set_tab(p, p->shop_selling ? p->shop_tab : SHOP_SELL);
+            return;
+        }
+    }
+    int dx = pi->nav_right - pi->nav_left, dy = pi->nav_down - pi->nav_up;
+    if (p->shop_selling) {
+        sell_tick(p, sh, pi, dx, dy);
+        return;
+    }
     Item *items[SHOP_LIST_MAX];
     int col[SHOP_LIST_MAX], row[SHOP_LIST_MAX];
     int n = shop_list(p, items, SHOP_LIST_MAX);
@@ -6215,21 +6388,18 @@ static void shop_tick(Player *p, const PlayerInput *pi)
     if (p->shop_sel >= n)
         p->shop_sel = n > 0 ? n - 1 : 0;
 
-    int dx = pi->nav_right - pi->nav_left, dy = pi->nav_down - pi->nav_up;
     if (dx || dy) {
-        ShopCtx ctx = { panel_x(p), PANEL_Y, items, col, row };
+        ShopCtx ctx = { shop_px(p), PANEL_Y, items, col, row };
         int next = n > 0 ? nav_nearest(n, p->shop_sel, dx, dy, shop_rect_cb, &ctx) : 0;
-        if ((n == 0 || next == p->shop_sel) && dx && !p->gambling) { /* pasado el borde: otra solapa */
-            p->shop_tab = (p->shop_tab + SHOP_TABS + dx) % SHOP_TABS;
-            p->shop_sel = 0;
+        if ((n == 0 || next == p->shop_sel) && dx && !p->gambling) { /* pasado el borde: otra solapa (después de Varios, Vender) */
+            shop_set_tab(p, p->shop_tab + dx);
             return;
         }
         p->shop_sel = next;
     }
     /* X sobre los Pergaminos de Portal: los que faltan para llenar una pila
        (comprarlos de a uno con el control eran veinte veces A) */
-    if (pi->drop && n > 0 && !p->gambling && p->shop_tab != SHOP_SELL &&
-        strcmp(items[p->shop_sel]->type->code, "tsc") == 0) {
+    if (pi->drop && n > 0 && !p->gambling && strcmp(items[p->shop_sel]->type->code, "tsc") == 0) {
         Item one = *items[p->shop_sel];
         int want = shop_fill_count(p, one.type), price = items_price(&one, 0), got = 0;
         while (got < want && p->gold >= price && bag_add(p, &one)) {
@@ -6267,29 +6437,20 @@ static void shop_tick(Player *p, const PlayerInput *pi)
             p->shop_sel = p->gamble_count > 0 ? p->gamble_count - 1 : 0;
         return;
     }
-    if (p->shop_tab != SHOP_SELL) {
-        int price = items_price(&it, 0);
-        if (p->gold < price) {
-            show_message(p, "No tenés suficiente oro");
-        } else if (!bag_add(p, &it)) {
-            inventory_full(p);
-        } else {
-            p->gold -= price;
-            audio_play(it.type->drop_sound, AUDIO_NOPOS, AUDIO_NOPOS);
-            /* Las pociones, las llaves y los portales no se acaban; el resto
-               sale de la mercadería */
-            if (!shop_unlimited(it.type)) {
-                int k = (int)(items[p->shop_sel] - sh->stock);
-                sh->stock[k] = sh->stock[--sh->count];
-            }
-        }
+    int price = items_price(&it, 0);
+    if (p->gold < price) {
+        show_message(p, "No tenés suficiente oro");
+    } else if (!bag_add(p, &it)) {
+        inventory_full(p);
     } else {
-        p->gold += items_price(&it, 1);
-        audio_play_name("item_gold", AUDIO_NOPOS, AUDIO_NOPOS);
-        bag_remove(p, (int)(items[p->shop_sel] - p->bag));
-        dclone_sold(p, &it); /* (una Piedra de Jordán en Infierno: el Diablo clon) */
-        if (sh->count < SHOP_MAX && !shop_unlimited(it.type))
-            sh->stock[sh->count++] = it;
+        p->gold -= price;
+        audio_play(it.type->drop_sound, AUDIO_NOPOS, AUDIO_NOPOS);
+        /* Las pociones, las llaves y los portales no se acaban; el resto
+           sale de la mercadería */
+        if (!shop_unlimited(it.type)) {
+            int k = (int)(items[p->shop_sel] - sh->stock);
+            sh->stock[k] = sh->stock[--sh->count];
+        }
     }
     if (p->shop_sel >= shop_list(p, items, SHOP_LIST_MAX))
         p->shop_sel = p->shop_sel > 0 ? p->shop_sel - 1 : 0;
@@ -6381,7 +6542,16 @@ static void drop_loot(int monster, const Player *killer)
     /* (el Rey Vaca y su escolta son "cowking" en monstats, con BaseId hellbovine) */
     const char *mid = units_id(monster);
     items_drop_from_bovine(strcmp(mid, "hellbovine") == 0 || strcmp(mid, "cowking") == 0 || strcmp(mid, "The Cow King") == 0);
+    /* Con más jugadores (el original): los vivos en el mismo nivel que el que lo mató cuentan enteros,
+       los demás la mitad; no más que los que había cuando salió */
+    int party = 0;
+    for (int i = 0; i < s_num_players; i++)
+        party += killer && s_pl[i].state < PS_DYING && s_pl[i].level == killer->level;
+    party = party > 0 ? party : 1;
+    int drop_players = (s_num_players - party) / 2 + party, cap = units_player_count_of(monster);
+    items_set_drop_players(drop_players < cap ? drop_players : cap);
     int n = items_roll_drop(units_treasure_class(monster), units_level(monster), killer ? killer->bonus[STAT_MAGIC_FIND] : 0, drops, 6);
+    items_set_drop_players(1);
     items_drop_from_bovine(0);
     float x, y;
     units_position(monster, 1.0f, &x, &y);
@@ -8017,10 +8187,22 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
         }
         if (p->stash_open && !p->inv_open) /* se cerró por otro lado */
             inventory_close(p);
-        if (pi->skill_tree && p->dialog_npc < 0) { /* teclado: directo al árbol */
-            p->inv_open = !(p->inv_open && p->inv_page == 1);
-            p->inv_page = 1;
+        /* Directo al árbol de habilidades o a los atributos (Select + Y o X; teclado: T / U, G / H); la
+           misma página otra vez la cierra */
+        int page = pi->skill_tree ? PAGE_SKILLS : pi->stats_page ? PAGE_STATS : -1;
+        if (page >= 0 && p->dialog_npc < 0 && !p->wp_open) {
+            int shut = p->inv_open && p->inv_page == page;
+            inventory_stow(p);
+            if (p->stash_open)
+                inventory_close(p);
+            if (p->cube_open) {
+                p->cube_open = 0;
+                p->inv_sel = INV_CELL0;
+            }
+            p->inv_open = !shut;
+            p->inv_page = page;
             p->assigning = 0;
+            p->btn_pick = 0;
         }
         /* Con un diálogo, una tienda o el inventario abierto, los controles
            manejan eso y el personaje se queda quieto */
@@ -8043,7 +8225,7 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
             waypoint_tick(p, pi);
             pi = &none;
             sx = sy = 0.0f;
-        } else if (p->inv_open && !pi->inventory && !pi->skill_tree) {
+        } else if (p->inv_open && !pi->inventory && !pi->skill_tree && !pi->stats_page) {
             if (p->inv_page == PAGE_SKILLS)
                 tree_tick(p, pi);
             else if (p->inv_page == PAGE_BUTTONS)
@@ -8270,7 +8452,7 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
         }
     }
 
-    player_move(p, sx, sy, s_always_run ? !sprint : sprint); /* con "correr siempre", el gatillo camina */
+    player_move(p, sx, sy, pi->always_run ? !sprint : sprint); /* con "correr siempre", el gatillo camina */
 
     /* Pisar la boca de la cueva (o su salida) lleva al otro lado; si esa
        zona no estaba armada, se arma ahora */
@@ -10930,13 +11112,13 @@ static int zone_build(int z, double budget)
         double t = wall_ms();
         int stage = last = s_zb_stage;
         if (stage == ZB_MAP) {
-            /* Sin el hilo de trabajos (las pruebas sin gráficos) el tope es de
-               piezas y no de tiempo: así salen siempre iguales */
-            int sync = budget > 0 && !jobs_running();
+            /* Sin el hilo de trabajos (las pruebas sin gráficos) o en red el
+               tope es de piezas y no de tiempo: así salen siempre iguales */
+            int sync = budget > 0 && (!jobs_running() || s_lockstep);
             static int cap = -1;
             if (cap < 0)
                 cap = getenv("D2_ZONE_PIECES") ? atoi(getenv("D2_ZONE_PIECES")) : ZONE_SYNC_PIECES;
-            s_map.dt1_defer = budget > 0 && s_ticks - s_zb_begin < ZONE_DT1_WAIT;
+            s_map.dt1_defer = budget > 0 && !s_lockstep && s_ticks - s_zb_begin < ZONE_DT1_WAIT; /* (en red no se espera al hilo) */
             s_map.piece_cap = sync ? cap : 0;
             int r = world_zone_build_step(&s_map, z, budget > 0 ? (sync ? 1e9 : budget) : parts ? 1e-6 : 0);
             s_map.dt1_defer = s_map.piece_cap = 0;
@@ -10967,7 +11149,7 @@ static int zone_build(int z, double budget)
             /* Las unidades, de a partes también (las barricadas del Acto 5
                traen unas 700: en la Pi eran 160 ms de una): lo que queda de
                ZONE_BUDGET o, sin el hilo de trabajos, un tope de cada cosa */
-            int sync = budget > 0 && !jobs_running(), begin = s_zb_part++ == 0, done;
+            int sync = budget > 0 && (!jobs_running() || s_lockstep), begin = s_zb_part++ == 0, done;
             double left = budget > 0 && !sync ? budget - (wall_ms() - t_tick) : 0;
             if (budget > 0 && !sync && left < 0.5)
                 left = 0.5;
@@ -11143,13 +11325,13 @@ static void zones_tick(void)
 #endif
     }
     if (next >= 0) {
-        static int wait_zone = -1;
         int urgent = s_zone_budget <= 0 || zone_needed_now(next);
-        if (next != wait_zone) {
-            wait_zone = next;
+        if (next != s_zb_wait_zone) {
+            s_zb_wait_zone = next;
             s_zb_wait = s_ticks;
         }
-        if (urgent || (!trimmed && (s_zb_zone >= 0 || !map_prep_busy() || s_ticks - s_zb_wait >= ZONE_PREP_WAIT)))
+        /* (en red no se mira si el hilo terminó de preparar los DT1: se empieza a los ZONE_PREP_WAIT ticks) */
+        if (urgent || (!trimmed && (s_zb_zone >= 0 || (!s_lockstep && !map_prep_busy()) || s_ticks - s_zb_wait >= ZONE_PREP_WAIT)))
             zone_build(next, urgent ? 0 : s_zone_budget);
     }
     /* Si alguna vez hubo que pasarse del límite (todas en uso), se vuelve a
@@ -11173,6 +11355,7 @@ static void zones_tick(void)
 static void zones_unload_all(void)
 {
     s_zone_pinned = s_zone_prepared = 0;
+    s_zb_wait_zone = -1;
     for (int z = 0; z < world_zone_count(); z++)
         zone_unload(z);
     memset(s_zone_seen, 0, sizeof s_zone_seen);
@@ -11291,6 +11474,30 @@ static int level_free_spot(const Level *lv, float *ox, float *oy)
             }
         }
     return -1;
+}
+
+/* D2_SPREAD: el jugador i (desde el segundo) en el nivel de afuera número i * 2 del acto, con su
+   zona armada (para medir el peor caso con muchos jugadores: cada uno con su zona y sus monstruos) */
+static void spread_players(void)
+{
+    int outdoor[64], n = 0;
+    for (int i = 0; i < world_level_count() && n < 64; i++)
+        if (!world_level(i)->town && world_level(i)->groups > 0)
+            outdoor[n++] = i;
+    for (int i = 1; i < s_num_players && n > 0; i++) {
+        const Level *lv = world_level(outdoor[(i * 2) % n]);
+        float x, y;
+        if (zone_load(lv->zone) != 0 || level_free_spot(lv, &x, &y) != 0)
+            continue;
+        place_at(&s_pl[i], 0, x, y);
+        printf("reparto: J%d en %s\n", i + 1, lv->name);
+    }
+}
+
+/* El reporte de D2_TICK_PERF: cuántas zonas armadas hay y las unidades */
+void game_perf_line(char *out, size_t cap)
+{
+    snprintf(out, cap, "%d zonas armadas, %d unidades, %d jugadores", zones_loaded_count(), units_count(), s_num_players);
 }
 
 /* Pruebas: D2_TOUR="Stony Field,Dark Wood" (o números de zona) lleva al
@@ -11926,6 +12133,115 @@ static int stash_check(int ok, const char *what, int *bad)
     return ok;
 }
 
+/* Pruebas: D2_SHOP_TEST=1 vende desde el inventario con controles de mentira (las solapas con LB / RB,
+   Select, la cruceta pasando los bordes, A vende y el vendedor lo pone a la venta); 2 deja abierta la
+   tienda de Charsi para una captura (3: vendiendo), para los de esta máquina */
+static void shop_test(void)
+{
+    static int done;
+    if (done || s_ticks < 5 || !getenv("D2_SHOP_TEST"))
+        return;
+    done = 1;
+    int mode = atoi(getenv("D2_SHOP_TEST")), u = -1;
+    units_find_all("charsi", &u, 1);
+    if (u < 0) {
+        printf("prueba de la tienda: no está Charsi (es en el Acto 1)\n");
+        return;
+    }
+    static const char *const k_bag[] = { "lsd", "cap", "rin", "hp1", "tsc", "bks" };
+    for (int i = 0; i < s_num_local; i++) {
+        Player *p = &s_pl[s_local[i]];
+        p->bag_count = 0;
+        for (unsigned k = 0; k < sizeof k_bag / sizeof k_bag[0]; k++) {
+            Item it = items_make(items_find(k_bag[k]));
+            bag_add(p, &it);
+        }
+        p->gold = 5000;
+        open_dialog(p, u);
+        p->shop_open = 1;
+        p->gambling = p->shop_selling = 0;
+        p->shop_tab = SHOP_WEAPONS;
+        p->shop_sel = 0;
+        p->inv_sel = 0;
+        if (mode == 3)
+            shop_set_tab(p, SHOP_SELL);
+    }
+    if (mode != 1)
+        return;
+    Player *p = &s_pl[s_local[0]];
+    Shop *sh = shop_of("charsi");
+    PlayerInput in;
+    int bad = 0;
+#define SHOP_PRESS(field) (memset(&in, 0, sizeof in), in.field = 1, shop_tick(p, &in))
+    printf("prueba de la tienda (Charsi, %d objetos a la venta)\n", sh->count);
+    SHOP_PRESS(automap);
+    stash_check(!p->shop_selling && p->shop_tab == SHOP_MISC, "RB: de Armas a Varios", &bad);
+    SHOP_PRESS(automap);
+    stash_check(p->shop_selling && p->inv_sel >= INV_CELL0 && p->inv_sel < INV_BELT0,
+                "RB otra vez: Vender, con el cursor en la mochila", &bad);
+    int cell = p->inv_sel - INV_CELL0, k = bag_at(p, cell % BAG_W, cell / BAG_W);
+    stash_check(k >= 0 && !is_quest_item(p->bag[k].type), "el cursor está sobre algo que se puede vender", &bad);
+    if (k < 0)
+        return;
+    Item it = p->bag[k];
+    int gold = p->gold, bag = p->bag_count, stock = sh->count, price = items_price(&it, 1);
+    SHOP_PRESS(action);
+    stash_check(price > 0 && p->gold == gold + price && p->bag_count == bag - 1, "A: lo vende y le pagan lo que decía", &bad);
+    stash_check(shop_unlimited(it.type) ? sh->count == stock
+                                        : sh->count == stock + 1 && sh->stock[sh->count - 1].type == it.type,
+                "el vendedor lo pone a la venta", &bad);
+    int from = p->inv_sel, item = -1;
+    for (int t = 0; t < BAG_CELLS && item < 0; t++) { /* derecha hasta el próximo objeto */
+        SHOP_PRESS(nav_right);
+        cell = p->inv_sel - INV_CELL0;
+        item = bag_at(p, cell % BAG_W, cell / BAG_W);
+        if (!p->shop_selling)
+            break;
+    }
+    stash_check(p->shop_selling && p->inv_sel != from && item >= 0, "la cruceta recorre la mochila", &bad);
+    int quest = -1;
+    for (int c = 0; c < BAG_CELLS && quest < 0; c++) {
+        int q = bag_at(p, c % BAG_W, c / BAG_W);
+        if (q >= 0 && is_quest_item(p->bag[q].type))
+            quest = c;
+    }
+    if (quest >= 0) {
+        p->inv_sel = INV_CELL0 + quest;
+        bag = p->bag_count;
+        gold = p->gold;
+        SHOP_PRESS(action);
+        stash_check(p->bag_count == bag && p->gold == gold, "lo de las misiones no se vende", &bad);
+    }
+    for (int t = 0; t < BAG_W + 2 && p->shop_selling; t++)
+        SHOP_PRESS(nav_left);
+    stash_check(!p->shop_selling && p->shop_tab == SHOP_MISC, "pasado el borde izquierdo: vuelve a la mercadería", &bad);
+    SHOP_PRESS(inventory);
+    stash_check(p->shop_selling && p->shop_open, "Select: a vender (sin cerrar la tienda)", &bad);
+    SHOP_PRESS(inventory);
+    stash_check(!p->shop_selling && p->shop_tab == SHOP_MISC, "Select otra vez: a la solapa de antes", &bad);
+    SHOP_PRESS(potion_life);
+    stash_check(!p->shop_selling && p->shop_tab == SHOP_WEAPONS, "LB: Armas", &bad);
+    SHOP_PRESS(potion_life);
+    SHOP_PRESS(potion_life);
+    stash_check(p->shop_selling, "LB desde Armadura: Vender (da la vuelta)", &bad);
+    SHOP_PRESS(automap);
+    stash_check(!p->shop_selling && p->shop_tab == SHOP_ARMOR, "RB desde Vender: Armadura", &bad);
+    p->gold = 1000000;
+    p->shop_sel = 0;
+    gold = p->gold;
+    bag = p->bag_count;
+    stock = sh->count;
+    Item *list[SHOP_LIST_MAX];
+    int n = shop_list(p, list, SHOP_LIST_MAX), cost = n > 0 ? items_price(list[0], 0) : 0;
+    SHOP_PRESS(action);
+    stash_check(n > 0 && p->gold == gold - cost && p->bag_count == bag + 1, "A en la mercadería: compra", &bad);
+    SHOP_PRESS(back);
+    stash_check(!p->shop_open && p->dialog_npc == u, "B: vuelve al menú de Charsi", &bad);
+#undef SHOP_PRESS
+    close_ui(p);
+    printf("prueba de la tienda: %s (%d mal)\n", bad ? "FALLA" : "BIEN", bad);
+}
+
 static void stash_test(void)
 {
     static int done;
@@ -12143,7 +12459,8 @@ void game_demo_start_pair(int cls, int cls2)
     cls2 = cls2 >= 0 && cls2 < NUM_CLASSES ? cls2 : (cls + 1) % NUM_CLASSES;
     int classes[MAX_PLAYERS] = { cls, cls2 };
     /* D2_DEMO_PLAYERS=1: uno solo (por defecto juegan los dos, cada uno con su bot) */
-    int players = getenv("D2_DEMO_PLAYERS") && atoi(getenv("D2_DEMO_PLAYERS")) == 1 ? 1 : MAX_PLAYERS;
+    int players = getenv("D2_DEMO_PLAYERS") ? atoi(getenv("D2_DEMO_PLAYERS")) : 2; /* (1, o hasta 8 para probar) */
+    players = players < 1 ? 1 : players > MAX_PLAYERS ? MAX_PLAYERS : players;
     s_demo = 1;
     s_eco = 0; /* (la demostración es la historia) */
     game_set_difficulty(0); /* (en Normal, aunque la última partida fuera en otra; D2_DIFF la cambia) */
@@ -12522,6 +12839,325 @@ static void inv_show_setup(int mode)
     refresh_look(p);
 }
 
+/* El resumen del estado (para la red: si dos máquinas no dan lo mismo, se separaron; y para probar
+   que la partida no dependa del tiempo): el azar, los jugadores y las unidades */
+uint64_t game_state_hash(void)
+{
+    uint64_t h = 1469598103934665603ull;
+#define HMIX(v) (h = (h ^ (uint64_t)(uint32_t)(v)) * 1099511628211ull)
+    HMIX(s_rng);
+    HMIX(s_ticks);
+    HMIX(s_act);
+    for (int i = 0; i < s_num_players; i++) {
+        const Player *p = &s_pl[i];
+        uint32_t bx, by;
+        memcpy(&bx, &p->x, 4);
+        memcpy(&by, &p->y, 4);
+        HMIX(bx);
+        HMIX(by);
+        HMIX(p->hp);
+        HMIX(p->mana);
+        HMIX(p->exp);
+        HMIX(p->state);
+        HMIX(p->gold);
+        HMIX(p->bag_count);
+    }
+    for (int u = 0; u < units_count(); u++) {
+        float x, y;
+        int hp, mx;
+        units_position(u, 1.0f, &x, &y);
+        units_health(u, &hp, &mx);
+        uint32_t bx, by;
+        memcpy(&bx, &x, 4);
+        memcpy(&by, &y, 4);
+        HMIX(bx);
+        HMIX(by);
+        HMIX(hp);
+    }
+    HMIX(items_ground_count());
+#undef HMIX
+    return h;
+}
+
+/* Los controles del jugador local k (0 o 1) con lo de esta máquina: con un solo jugador, cualquier
+   joystick lo maneja; el mouse mueve al primero; y la opción "correr siempre" */
+static void local_input(const InputState *in, int k, PlayerInput *out)
+{
+    PlayerInput pi = in->player[k];
+    float sx = pi.move_x, sy = pi.move_y;
+    if (s_num_local == 1) {
+        const PlayerInput *o = &in->player[1];
+        sx += o->move_x;
+        sy += o->move_y;
+        pi.sprint |= o->sprint;
+        pi.action |= o->action;
+        pi.potion_life |= o->potion_life;
+        pi.potion_mana |= o->potion_mana;
+        pi.potion_stamina |= o->potion_stamina;
+        if (!pi.belt)
+            pi.belt = o->belt;
+        pi.automap |= o->automap;
+        pi.inventory |= o->inventory;
+        pi.skill_tree |= o->skill_tree;
+        pi.stats_page |= o->stats_page;
+        pi.back |= o->back;
+        pi.drop |= o->drop;
+        pi.nav_up |= o->nav_up;
+        pi.nav_down |= o->nav_down;
+        pi.nav_left |= o->nav_left;
+        pi.nav_right |= o->nav_right;
+        pi.chat |= o->chat;
+        for (int b = 0; b < NUM_BUTTONS; b++)
+            pi.button[b] |= o->button[b];
+        for (int b = 0; b < 4; b++)
+            pi.held[b] |= o->held[b];
+    }
+    if (k == 0 && in->mouse_down) {
+        float dx = in->mouse_x - s_view_x[s_local[0]], dy = in->mouse_y - s_view_y[s_local[0]];
+        float l = sqrtf(dx * dx + dy * dy);
+        if (l > 12.0f) {
+            sx = dx / l;
+            sy = dy / l;
+        }
+    }
+    pi.move_x = sx;
+    pi.move_y = sy;
+    pi.always_run = s_always_run;
+    *out = pi;
+}
+
+/* En red: los controles de los de esta máquina para mandar (con la pausa abierta, quietos) */
+int game_local_inputs(const InputState *in, PlayerInput *out)
+{
+    for (int k = 0; k < s_num_local; k++) {
+        local_input(in, k, &out[k]);
+        if (s_paused) {
+            int run = out[k].always_run;
+            memset(&out[k], 0, sizeof out[k]);
+            out[k].always_run = run;
+        }
+    }
+    return s_num_local;
+}
+
+void game_set_frame(const PlayerInput *all)
+{
+    s_frame = all;
+}
+
+/* Una partida en red, con lo que mandó el anfitrión: los jugadores de esta máquina, los personajes
+   de todos (de su partida guardada, que viaja) y el mismo punto de partida en todas las máquinas
+   (la semilla, el azar de cada módulo, las unidades y el reloj). local_slots: la partida guardada de
+   cada jugador de esta máquina, en orden; llena slots y classes para game_start_slots. */
+void game_net_begin(const NetStart *ns, const int *local_slots, int *slots, int *classes)
+{
+    s_net_local = 1;
+    s_num_local = 0;
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        slots[i] = 0;
+        classes[i] = i < ns->num_players ? ns->cls[i] : 0;
+        free(s_carry[i]);
+        s_carry[i] = NULL;
+        s_carry_len[i] = 0;
+        if (i >= ns->num_players)
+            continue;
+        if (ns->owner[i] == ns->me && s_num_local < MAX_LOCAL) {
+            slots[i] = local_slots[s_num_local]; /* (los de acá se guardan en su lugar) */
+            s_local[s_num_local++] = i;
+        }
+        if (ns->save_len[i] > 0) {
+            s_carry[i] = malloc(ns->save_len[i] + 1);
+            if (s_carry[i]) {
+                memcpy(s_carry[i], ns->save[i], ns->save_len[i]);
+                s_carry[i][ns->save_len[i]] = '\0';
+                s_carry_len[i] = ns->save_len[i];
+            }
+        }
+    }
+    if (s_num_local == 0)
+        s_local[s_num_local++] = 0;
+    s_lockstep = 1;
+    units_set_lockstep(1);
+    s_epoch = ns->epoch;
+    s_net_epoch = 1;
+    s_world_seed = ns->seed;
+    s_rng = ns->seed * 747796405u + 2891336453u;
+    units_reset_game(ns->seed);
+    items_reset_rng(ns->seed);
+    itemstats_reset_rng(ns->seed);
+    cube_reset_rng(ns->seed);
+    s_net_world = 1;
+    s_paused = 0;
+}
+
+/* Después de game_start_slots: las partidas que viajaron ya se leyeron */
+void game_net_started(void)
+{
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        free(s_carry[i]);
+        s_carry[i] = NULL;
+        s_carry_len[i] = 0;
+    }
+}
+
+/* Se terminó la partida en red: lo de esta máquina como siempre */
+void game_net_end(void)
+{
+    s_net_local = s_net_epoch = 0;
+    s_frame = NULL;
+    s_lockstep = getenv("D2_LOCKSTEP") != NULL;
+    units_set_lockstep(s_lockstep);
+    game_net_started();
+}
+
+int game_local_player(int k)
+{
+    return k >= 0 && k < s_num_local ? s_local[k] : -1;
+}
+
+int game_num_local(void)
+{
+    return s_num_local;
+}
+
+/* El texto de una partida guardada (para mandarlo por la red); NULL si no hay */
+char *game_slot_text(int slot, size_t *len)
+{
+    char path[300];
+    *len = 0;
+    if (!save_path(slot, path, sizeof path))
+        return NULL;
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return NULL;
+    char *buf = NULL;
+    size_t cap = 0, n = 0;
+    for (;;) {
+        if (n + 4096 > cap) {
+            cap = cap ? cap * 2 : 8192;
+            char *nb = realloc(buf, cap);
+            if (!nb)
+                break;
+            buf = nb;
+        }
+        size_t k = fread(buf + n, 1, cap - n, f);
+        n += k;
+        if (k == 0)
+            break;
+    }
+    fclose(f);
+    *len = n;
+    return buf;
+}
+
+/* La pausa, la Guía del cubo y los controles: 0 = no está abierta (sigue el juego), 1 = la usó este
+   tick, 2 = guardar y salir. Sin red el juego se detiene mientras está abierta; en red no (el resto
+   sigue jugando: game_local_inputs manda los controles de los de acá quietos) */
+static int pause_tick(const InputState *in)
+{
+    if (s_paused && s_guide_open) {
+        guide_tick(in);
+        return 1;
+    }
+    if (s_paused && s_controls_open) {
+        s_controls_open = controls_tick(in);
+        return 1;
+    }
+    int back = in->player[0].back || in->player[1].back;
+    if (in->escape || in->start || (s_paused && back)) {
+        s_paused = !s_paused;
+        s_pause_sel = 0;
+        if (s_paused) { /* las misiones del jugador 1, en la que está haciendo */
+            s_pause_qp = 0;
+            s_pause_qact = 0;
+        }
+        audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
+        return 1;
+    }
+    if (s_paused) {
+        /* Las misiones: LB y RB recorren las del registro, X muestra las del otro jugador */
+        Player *qp = &s_pl[s_local[s_pause_qp < s_num_local ? s_pause_qp : 0]];
+        if (s_pause_qact <= 0) {
+            quest_log_pick(qp, &s_pause_qact, &s_pause_qsel);
+            s_pause_qanim = s_anim_ticks;
+        }
+        if (s_anim_ticks - s_pause_qanim > QUEST_FIRE)
+            quest_log_seen(qp);
+        int lb = in->player[0].potion_life || in->player[1].potion_life;
+        int rb = in->player[0].automap || in->player[1].automap;
+        if (lb != rb)
+            quest_log_step(qp, &s_pause_qact, &s_pause_qsel, rb - lb);
+        if (in->menu_delete && s_num_local > 1) {
+            s_pause_qp = !s_pause_qp;
+            s_pause_qact = 0;
+            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
+            return 1;
+        }
+        if (in->menu_up)
+            s_pause_sel = (s_pause_sel + PAUSE_COUNT - 1) % PAUSE_COUNT;
+        if (in->menu_down)
+            s_pause_sel = (s_pause_sel + 1) % PAUSE_COUNT;
+        int change = in->menu_right - in->menu_left;
+        if (change && (s_pause_sel == PAUSE_SFX || s_pause_sel == PAUSE_MUSIC)) {
+            int sfx, music;
+            audio_get_volume(&sfx, &music);
+            if (s_pause_sel == PAUSE_SFX)
+                sfx += change;
+            else
+                music += change;
+            audio_set_volume(sfx, music);
+            audio_play_name("cursor_pass", AUDIO_NOPOS, AUDIO_NOPOS); /* para oír cómo quedó */
+            save_options();
+        }
+        if (s_pause_sel == PAUSE_POS && (change || in->confirm)) {
+            s_show_pos = !s_show_pos;
+            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
+            save_options();
+            return 1;
+        }
+        if (s_pause_sel == PAUSE_PERF && (change || in->confirm)) {
+            s_show_perf = !s_show_perf;
+            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
+            save_options();
+            return 1;
+        }
+        if (s_pause_sel == PAUSE_COLOR16 && (change || in->confirm)) {
+            s_color16 = !(s_color16 < 0 ? video_is_565() : s_color16);
+            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
+            save_options();
+            return 1;
+        }
+        if (s_pause_sel == PAUSE_RUN && (change || in->confirm)) {
+            s_always_run = !s_always_run;
+            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
+            save_options();
+            return 1;
+        }
+        if (in->confirm) {
+            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
+            if (s_pause_sel == PAUSE_RESUME) {
+                s_paused = 0;
+            } else if (s_pause_sel == PAUSE_CONTROLS) {
+                s_controls_open = 1;
+                controls_open();
+            } else if (s_pause_sel == PAUSE_GUIDE) {
+                s_guide_open = 1;
+                s_guide_sel = s_guide_top = 0;
+            } else if (s_pause_sel == PAUSE_QUIT) {
+                if (eco_pause_quit()) { /* TERMINAR EL ECO: el cofre y el portal */
+                    s_paused = 0;
+                    return 1;
+                }
+                game_save();
+                s_paused = 0;
+                return 2;
+            }
+        }
+        return 1;
+    }
+    return 0;
+}
+
 int game_tick(const InputState *in)
 {
     if (s_eco_exit) { /* el portal del final del Eco: guardar y al menú */
@@ -12545,107 +13181,11 @@ int game_tick(const InputState *in)
                 s_pl[i].tombs_q = q[5];
             }
     }
-    if (s_paused && s_guide_open) {
-        guide_tick(in);
+    int ui = pause_tick(in);
+    if (ui == 2)
+        return GAME_EXIT;
+    if (ui == 1 && !s_frame)
         return GAME_CONTINUE;
-    }
-    if (s_paused && s_controls_open) {
-        s_controls_open = controls_tick(in);
-        return GAME_CONTINUE;
-    }
-    int back = in->player[0].back || in->player[1].back;
-    if (in->escape || in->start || (s_paused && back)) {
-        s_paused = !s_paused;
-        s_pause_sel = 0;
-        if (s_paused) { /* las misiones del jugador 1, en la que está haciendo */
-            s_pause_qp = 0;
-            s_pause_qact = 0;
-        }
-        audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
-        return GAME_CONTINUE;
-    }
-    if (s_paused) {
-        /* Las misiones: LB y RB recorren las del registro, X muestra las del otro jugador */
-        Player *qp = &s_pl[s_pause_qp < s_num_players ? s_pause_qp : 0];
-        if (s_pause_qact <= 0) {
-            quest_log_pick(qp, &s_pause_qact, &s_pause_qsel);
-            s_pause_qanim = s_anim_ticks;
-        }
-        if (s_anim_ticks - s_pause_qanim > QUEST_FIRE)
-            quest_log_seen(qp);
-        int lb = in->player[0].potion_life || in->player[1].potion_life;
-        int rb = in->player[0].automap || in->player[1].automap;
-        if (lb != rb)
-            quest_log_step(qp, &s_pause_qact, &s_pause_qsel, rb - lb);
-        if (in->menu_delete && s_num_players > 1) {
-            s_pause_qp = !s_pause_qp;
-            s_pause_qact = 0;
-            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
-            return GAME_CONTINUE;
-        }
-        if (in->menu_up)
-            s_pause_sel = (s_pause_sel + PAUSE_COUNT - 1) % PAUSE_COUNT;
-        if (in->menu_down)
-            s_pause_sel = (s_pause_sel + 1) % PAUSE_COUNT;
-        int change = in->menu_right - in->menu_left;
-        if (change && (s_pause_sel == PAUSE_SFX || s_pause_sel == PAUSE_MUSIC)) {
-            int sfx, music;
-            audio_get_volume(&sfx, &music);
-            if (s_pause_sel == PAUSE_SFX)
-                sfx += change;
-            else
-                music += change;
-            audio_set_volume(sfx, music);
-            audio_play_name("cursor_pass", AUDIO_NOPOS, AUDIO_NOPOS); /* para oír cómo quedó */
-            save_options();
-        }
-        if (s_pause_sel == PAUSE_POS && (change || in->confirm)) {
-            s_show_pos = !s_show_pos;
-            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
-            save_options();
-            return GAME_CONTINUE;
-        }
-        if (s_pause_sel == PAUSE_PERF && (change || in->confirm)) {
-            s_show_perf = !s_show_perf;
-            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
-            save_options();
-            return GAME_CONTINUE;
-        }
-        if (s_pause_sel == PAUSE_COLOR16 && (change || in->confirm)) {
-            s_color16 = !(s_color16 < 0 ? video_is_565() : s_color16);
-            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
-            save_options();
-            return GAME_CONTINUE;
-        }
-        if (s_pause_sel == PAUSE_RUN && (change || in->confirm)) {
-            s_always_run = !s_always_run;
-            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
-            save_options();
-            return GAME_CONTINUE;
-        }
-        if (in->confirm) {
-            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
-            if (s_pause_sel == PAUSE_RESUME) {
-                s_paused = 0;
-            } else if (s_pause_sel == PAUSE_CONTROLS) {
-                s_controls_open = 1;
-                controls_open();
-            } else if (s_pause_sel == PAUSE_GUIDE) {
-                s_guide_open = 1;
-                s_guide_sel = s_guide_top = 0;
-            } else if (s_pause_sel == PAUSE_QUIT) {
-                if (eco_pause_quit()) { /* TERMINAR EL ECO: el cofre y el portal */
-                    s_paused = 0;
-                    return GAME_CONTINUE;
-                }
-                game_save();
-                s_paused = 0;
-                return GAME_EXIT;
-            }
-        }
-        return GAME_CONTINUE;
-    }
-
     s_prof_t[0] = SDL_GetPerformanceCounter();
     if (s_ticks % 4 == 0)
         for (int i = 0; i < s_num_players; i++)
@@ -12665,47 +13205,20 @@ int game_tick(const InputState *in)
     }
     tp_test();
     stash_test();
+    shop_test();
     zones_tick();
     prof_mark(PROF_ZONES);
     for (int i = 0; i < s_num_players; i++) {
-        PlayerInput pi = in->player[i];
-        float sx = pi.move_x, sy = pi.move_y;
-
-        /* Con un solo jugador, cualquier control lo maneja */
-        if (s_num_players == 1) {
-            const PlayerInput *o = &in->player[1];
-            sx += o->move_x;
-            sy += o->move_y;
-            pi.sprint |= o->sprint;
-            pi.action |= o->action;
-            pi.potion_life |= o->potion_life;
-            pi.potion_mana |= o->potion_mana;
-            pi.potion_stamina |= o->potion_stamina;
-            if (!pi.belt)
-                pi.belt = o->belt;
-            pi.automap |= o->automap;
-            pi.inventory |= o->inventory;
-            pi.skill_tree |= o->skill_tree;
-            pi.back |= o->back;
-            pi.drop |= o->drop;
-            pi.nav_up |= o->nav_up;
-            pi.nav_down |= o->nav_down;
-            pi.nav_left |= o->nav_left;
-            pi.nav_right |= o->nav_right;
-            for (int b = 0; b < NUM_BUTTONS; b++)
-                pi.button[b] |= o->button[b];
-            for (int b = 0; b < 4; b++)
-                pi.held[b] |= o->held[b];
+        PlayerInput pi;
+        if (s_frame) /* en red: los de la partida */
+            pi = s_frame[i];
+        else if (i < s_num_local && s_local[i] == i) /* los joysticks de esta máquina */
+            local_input(in, i, &pi);
+        else { /* (las pruebas con más jugadores: los bots) */
+            pi = in->player[i];
+            pi.always_run = s_always_run;
         }
-        if (i == 0 && in->mouse_down) {
-            float dx = in->mouse_x - s_view_x[0], dy = in->mouse_y - s_view_y[0];
-            float l = sqrtf(dx * dx + dy * dy);
-            if (l > 12.0f) {
-                sx = dx / l;
-                sy = dy / l;
-            }
-        }
-        player_tick(&s_pl[i], sx, sy, pi.sprint, &pi);
+        player_tick(&s_pl[i], pi.move_x, pi.move_y, pi.sprint, &pi);
     }
 
     /* Los monstruos actúan y después se aplica el daño que hicieron */
@@ -12849,14 +13362,14 @@ int game_tick(const InputState *in)
 
     /* Se oye desde cada jugador; la música y el ambiente son los de la zona
        del primero (con la pantalla partida no se mezclan dos músicas) */
-    float lx[MAX_PLAYERS], ly[MAX_PLAYERS];
-    for (int i = 0; i < s_num_players; i++) {
-        lx[i] = s_pl[i].x;
-        ly[i] = s_pl[i].y;
+    float lx[MAX_LOCAL], ly[MAX_LOCAL];
+    for (int i = 0; i < s_num_local; i++) {
+        lx[i] = s_pl[s_local[i]].x;
+        ly[i] = s_pl[s_local[i]].y;
     }
-    audio_listeners(s_num_players, lx, ly);
-    if (s_pl[0].level)
-        audio_environment(s_pl[0].level->sound_env);
+    audio_listeners(s_num_local, lx, ly);
+    if (s_pl[s_local[0]].level)
+        audio_environment(s_pl[s_local[0]].level->sound_env);
     int shot_unit, shot_target;
     while (units_pop_shot(&shot_unit, &shot_target))
         if (!ass_trap_shot(shot_unit, shot_target)) /* las trampas de la Asesina, o la Hidra */
@@ -12993,6 +13506,25 @@ int game_tick(const InputState *in)
             }
         }
     }
+    static int dump_at = -2; /* D2_HASH_DUMP=T: en ese tick, cada unidad y cada jugador (para encontrar dónde se separan dos corridas) */
+    if (dump_at == -2)
+        dump_at = getenv("D2_HASH_DUMP") ? atoi(getenv("D2_HASH_DUMP")) : -1;
+    if (dump_at >= 0 && s_ticks == (uint32_t)dump_at) {
+        for (int i = 0; i < s_num_players; i++)
+            printf("DUMP J%d %a %a vida %d maná %d estado %d modo %d anim %d exp %u oro %d mochila %d\n", i + 1, s_pl[i].x, s_pl[i].y,
+                   s_pl[i].hp, s_pl[i].mana, s_pl[i].state, s_pl[i].mode, s_pl[i].anim_acc, (unsigned)s_pl[i].exp, s_pl[i].gold,
+                   s_pl[i].bag_count);
+        printf("DUMP suelo %d\n", items_ground_count());
+        for (int u = 0; u < units_count(); u++) {
+            float x, y;
+            int hp, mx;
+            units_position(u, 1.0f, &x, &y);
+            units_health(u, &hp, &mx);
+            printf("DUMP u%d %s %a %a vida %d/%d\n", u, units_id(u), x, y, hp, mx);
+        }
+    }
+    if (s_hash_every > 0 && s_ticks % (uint32_t)s_hash_every == 0) /* D2_HASH=N: el resumen del estado cada N ticks */
+        printf("HASH t%u %016llx (%d unidades, rng %08x)\n", s_ticks, (unsigned long long)game_state_hash(), units_count(), s_rng);
     s_ticks++;
     if (s_ticks % (AUTOSAVE_SECONDS * TICK_RATE) == 0)
         game_save();
@@ -13171,8 +13703,8 @@ static void draw_automap(float cx, float cy, int ox, int oy)
 static void draw_view_automap(float cam_x, float cam_y, int who)
 {
     int open = who >= 0 ? s_pl[who].map_open : 0;
-    for (int i = 0; who < 0 && i < s_num_players; i++)
-        open |= s_pl[i].map_open;
+    for (int i = 0; who < 0 && i < s_num_local; i++)
+        open |= s_pl[s_local[i]].map_open;
     if (!open)
         return;
     /* El centro de la vista en el mundo (al revés de iso_to_screen) */
@@ -13205,7 +13737,7 @@ static void player_world_pos(const Player *p, float alpha, float *x, float *y)
 static void draw_player(int x, int y, int index)
 {
     const Player *p = &s_pl[index];
-    const CharAnim *a = player_anim(p, p->mode);
+    const CharAnim *a = player_anim_draw(p, p->mode);
     int frame = p->anim_acc >> 8, frames = charanim_frames(a), smode;
 
     /* Ataque, golpe y muerte se juegan una vez y quedan en su último cuadro */
@@ -13215,11 +13747,11 @@ static void draw_player(int x, int y, int index)
         frame = frames - 1;
     /* Las secuencias: el cuadro de cada paso (de A1, A2, S1, S3...) */
     if (seq_frame(p, &smode, &frame)) {
-        a = player_anim(p, smode);
+        a = player_anim_draw(p, smode);
         frames = charanim_frames(a);
-        if (frame >= frames)
-            frame = frames - 1;
     }
+    if (frame >= frames) /* (el dibujo del equipo de antes puede tener menos cuadros que el que calcula la lógica) */
+        frame = p->state == PS_NORMAL && frames > 0 ? frame % frames : frames - 1;
     /* El Salto: en el aire se lo ve más arriba */
     if (p->jumping) {
         float t = ((float)p->anim_acc / 256.0f - (float)p->jump_f0) / (float)(p->jump_f1 - p->jump_f0 > 0 ? p->jump_f1 - p->jump_f0 : 1);
@@ -13251,8 +13783,11 @@ static void draw_player(int x, int y, int index)
         }
     }
 
-    if (s_num_players > 1)
-        font_draw_centered(x, y - 104, index == 0 ? "J1" : "J2", 2, COL(p->label, 14));
+    if (s_num_players > 1) {
+        char tag[8];
+        snprintf(tag, sizeof tag, "J%d", index + 1);
+        font_draw_centered(x, y - 104, tag, 2, COL(p->label, 14));
+    }
 }
 
 /* Los tiles especiales (orientación 10 y 11) que no se dibujan: las marcas
@@ -13878,7 +14413,7 @@ static void render_world_body(float cam_x, float cam_y, float alpha)
             const Player *p = &s_pl[dr->index];
             float sx, sy;
             iso_to_screen(p->decoy_x, p->decoy_y, &sx, &sy);
-            const CharAnim *a = player_anim(p, MODE_NU);
+            const CharAnim *a = player_anim_draw(p, MODE_NU);
             fb_shade_ellipse(ox + (int)lroundf(sx), oy + (int)lroundf(sy), 18, 8, 14);
             charanim_draw(a, p->decoy_sector, (s_anim_ticks / 2) % (charanim_frames(a) > 0 ? charanim_frames(a) : 1),
                           ox + (int)lroundf(sx), oy + (int)lroundf(sy));
@@ -13997,6 +14532,7 @@ static void draw_player_banners(const Player *p, int cx, int y, int max_w)
     if (p->levelup_ticks > 0) {
         snprintf(text, sizeof text, tr("SUBISTE AL NIVEL %d"), p->level_num);
         y += draw_banner_line(cx, y, max_w, text, 3, COL(R_GOLD, 15));
+        y += draw_banner_line(cx, y, max_w, "Select + X: atributos   Select + Y: habilidades", 1, COL(R_GRAY, 15));
     }
     if (p->state >= PS_DYING)
         draw_banner_line(cx, y, max_w, "MORISTE", 4, COL(R_RED, 13));
@@ -14012,13 +14548,13 @@ static void draw_banners(void)
         font_draw_centered(SCREEN_W / 2, y, s_quest_banner, 3, COL(R_GOLD, 15));
         y += 30;
     }
-    if (s_num_players == 1) {
-        draw_player_banners(&s_pl[0], SCREEN_W / 2, y, SCREEN_W - 40);
+    if (s_num_local == 1) {
+        draw_player_banners(&s_pl[s_local[0]], SCREEN_W / 2, y, SCREEN_W - 40);
         return;
     }
     if (!s_split) {
-        draw_player_banners(&s_pl[0], SCREEN_W / 4, y, SCREEN_W / 2 - 16);
-        draw_player_banners(&s_pl[1], SCREEN_W * 3 / 4, y, SCREEN_W / 2 - 16);
+        draw_player_banners(&s_pl[s_local[0]], SCREEN_W / 4, y, SCREEN_W / 2 - 16);
+        draw_player_banners(&s_pl[s_local[1]], SCREEN_W * 3 / 4, y, SCREEN_W / 2 - 16);
         return;
     }
     for (int i = 0; i < 2; i++) {
@@ -14045,7 +14581,7 @@ static void draw_banners(void)
             }
         }
         clip_half_plane(SCREEN_W / 2.0f, SCREEN_H / 2.0f, s_split_nx, s_split_ny, i == 0 ? -1 : +1);
-        draw_player_banners(&s_pl[i], best_x, best_y, 300);
+        draw_player_banners(&s_pl[s_local[i]], best_x, best_y, 300);
         clip_reset();
     }
 }
@@ -14194,16 +14730,25 @@ static int player_index(const Player *p)
     return (int)(p - s_pl);
 }
 
+/* Su lugar en esta máquina (0 o 1: con dos, la mitad izquierda o la derecha), -1 = no es de acá */
+static int local_slot(const Player *p)
+{
+    for (int k = 0; k < s_num_local; k++)
+        if (s_local[k] == player_index(p))
+            return k;
+    return -1;
+}
+
 static int panel_x(const Player *p)
 {
-    return s_num_players == 1 || player_index(p) == 1 ? SCREEN_W - PANEL_W : 0;
+    return s_num_local == 1 || local_slot(p) == 1 ? SCREEN_W - PANEL_W : 0;
 }
 
 /* Mitad de la pantalla de ese jugador (con uno solo, toda) */
 static void half_range(const Player *p, int *x0, int *x1)
 {
-    *x0 = s_num_players == 1 || player_index(p) == 0 ? 0 : SCREEN_W / 2;
-    *x1 = s_num_players == 1 || player_index(p) == 1 ? SCREEN_W : SCREEN_W / 2;
+    *x0 = s_num_local == 1 || local_slot(p) == 0 ? 0 : SCREEN_W / 2;
+    *x1 = s_num_local == 1 || local_slot(p) == 1 ? SCREEN_W : SCREEN_W / 2;
 }
 
 /* El arcón (el cofre del pueblo) con un solo jugador va en su propio panel a
@@ -14214,7 +14759,7 @@ static void half_range(const Player *p, int *x0, int *x1)
    cambia su esquina. */
 static int stash_side(const Player *p)
 {
-    return p->stash_open && s_num_players == 1;
+    return p->stash_open && s_num_local == 1;
 }
 
 static int stash_px(const Player *p)
@@ -14423,9 +14968,9 @@ static const int k_slot_rect[SLOT_COUNT][4] = {
 /* x del primer lugar del cinturón en la barra de abajo */
 static int belt_x(const Player *p)
 {
-    if (s_num_players == 1)
+    if (s_num_local == 1)
         return 422;
-    int right = player_index(p) == 1;
+    int right = local_slot(p) == 1;
     int strip = right ? SCREEN_W - 117 - (STRIP_TO - STRIP_FROM) : 117;
     return strip - STRIP_FROM + 257;
 }
@@ -14674,12 +15219,19 @@ static void draw_inventory(const Player *p)
     int px = panel_x(p), py = PANEL_Y, sx = stash_px(p), x0, x1;
     half_range(p, &x0, &x1);
     int side = stash_side(p), covered = p->cube_open || (p->stash_open && !side); /* (el equipo, tapado) */
-    draw_panel_header(p, p->cube_open ? "Cubo Horádrico" : p->stash_open && !side ? str_get("stash") : "Inventario",
-                      p->held.type ? "A o X: soltar acá   RB o Y: tirar al suelo   B: guardar"
-                      : p->cube_open ? "A: levantar   X: pasar   RB: tirar al suelo   B: cerrar"
-                      : side         ? "A: levantar   X: al arcón   LB: ordenar   B: cerrar"
-                      : p->stash_open ? "A: levantar   X: pasar   LB: ordenar   B: cerrar"
-                                      : "A: levantar  X: usar  RB: tirar  LB: ordenar  Y: más");
+    int shop = p->dialog_npc >= 0 && p->shop_open; /* al lado de la tienda (o en su lugar, vendiendo) */
+    if (shop)
+        draw_panel_header(p, p->shop_selling ? "Vender" : "Inventario",
+                          p->gambling       ? ""
+                          : p->shop_selling ? "A: vender   Select: comprar   B: volver"
+                                            : "Select: vender lo de la mochila");
+    else
+        draw_panel_header(p, p->cube_open ? "Cubo Horádrico" : p->stash_open && !side ? str_get("stash") : "Inventario",
+                          p->held.type ? "A o X: soltar acá   RB o Y: tirar al suelo   B: guardar"
+                          : p->cube_open ? "A: levantar   X: pasar   RB: tirar al suelo   B: cerrar"
+                          : side         ? "A: levantar   X: al arcón   LB: ordenar   B: cerrar"
+                          : p->stash_open ? "A: levantar   X: pasar   LB: ordenar   B: cerrar"
+                                          : "A: levantar  X: usar  RB: tirar  LB: ordenar  Y: más");
     ui_grid("panel/invchar6", 4, 4, 2, px, py);
 
     if (p->cube_open)
@@ -14722,6 +15274,8 @@ static void draw_inventory(const Player *p)
     /* Botón Personaje: la cruz roja del original (titila si hay puntos sin repartir) */
     inv_entry_rect(p, INV_STATS, &x, &y, &w, &h);
     ui_frame("panel/level", p->stat_points > 0 ? (int)(s_ticks / 10) % 2 : 0, x + (w - 30) / 2, y + (h - 30) / 2);
+    if (shop && !p->shop_selling) /* (el cursor está en la tienda) */
+        return;
 
     /* Cursor: marca el objeto entero, o el lugar donde caería lo de la mano */
     inv_entry_rect(p, p->inv_sel, &x, &y, &w, &h);
@@ -14827,6 +15381,12 @@ static void draw_inventory(const Player *p)
     draw_frame(x - 1, y - 1, w + 2, h + 2, COL(R_GOLD, (s_ticks / 6) % 2 ? 15 : 11));
     if (under) {
         n = item_tip(p, under, tip);
+        if (shop) { /* vendiendo: lo que le pagan (lo de las misiones no se vende) */
+            char buf[64];
+            int quest = is_quest_item(under->type);
+            snprintf(buf, sizeof buf, "%s: %d", tr("Te pagan"), items_price(under, 1));
+            n = tip_add(tip, n, quest ? TIP_RED : TIP_GOLD, quest ? "Eso no se vende" : buf);
+        }
     } else if (p->inv_sel < SLOT_COUNT) {
         static const char *const names[SLOT_COUNT] = { "Arma", "Escudo", "Armadura", "Casco", "Guantes", "Botas",
                                                        "Cinturón", "Amuleto", "Anillo", "Anillo" };
@@ -15421,6 +15981,33 @@ static void draw_merc_portrait(const Player *p, int x, int y)
     draw_life_bar(x, y + 43, w, 5, hp, max_hp);
 }
 
+/* Los compañeros de las otras máquinas (en red, hasta 8 en la partida): una fila chica por cada
+   uno, arriba a la izquierda debajo del retrato del mercenario, con su color, su número, la clase,
+   el nivel y una barra de vida finita. Ocupan poco a propósito: con la pantalla partida no tienen
+   que tapar el juego (con 8 jugadores son 6 filas, unos 80 píxeles de alto) */
+#define PARTY_ROW 13
+#define PARTY_W   112
+static void draw_party_list(void)
+{
+    int y = 64, x = 6;
+    for (int i = 0; i < s_num_players; i++) {
+        const Player *o = &s_pl[i];
+        if (local_slot(o) >= 0)
+            continue;
+        int dead = o->state >= PS_DYING;
+        fb_shade_rect(x, y, PARTY_W, PARTY_ROW - 1, 10);
+        fb_fill_rect(x, y, 3, PARTY_ROW - 1, COL(o->label, 14)); /* su color (el de su nombre y del mapa) */
+        char text[48];
+        snprintf(text, sizeof text, "J%d %s %d", i + 1, game_class_name(o->cls), o->level_num);
+        if (font_width(text, 1) > PARTY_W - 8) /* (los nombres largos de algunos idiomas: la abreviatura) */
+            snprintf(text, sizeof text, "J%d %s %d", i + 1, s_classes[o->cls].abbr, o->level_num);
+        font_draw(x + 5, y - 2, text, 1, dead ? COL(R_STONE, 9) : COL(R_GRAY, 15));
+        if (!dead)
+            draw_life_bar(x + 5, y + PARTY_ROW - 4, PARTY_W - 8, 2, o->hp, o->hp_max);
+        y += PARTY_ROW;
+    }
+}
+
 /* La vida de las invocaciones. En D2R se ven arriba a la izquierda; acá van
    en una fila justo arriba de los botones de su dueño: un casillero por
    habilidad con su ícono, cuántas hay y la barra de vida.
@@ -15449,15 +16036,16 @@ static void draw_pet_bar(const Player *p, int x, int y, int right)
     }
 }
 
-/* Tienda: solapas Comprar / Vender, la grilla, el precio y el oro */
 /* Tienda: el panel del vendedor del original (panel/buysell) con sus
    solapas, la grilla y el oro; el precio va en la descripción */
-static void draw_shop(Player *p)
+static void draw_shop_panel(Player *p)
 {
-    int px = panel_x(p), py = PANEL_Y, x0, x1;
+    int px = shop_px(p), py = PANEL_Y, x0, x1, tab = p->shop_selling ? SHOP_SELL : p->shop_tab;
     half_range(p, &x0, &x1);
-    draw_panel_header(p, units_display_name(p->dialog_npc),
-                      p->gambling ? "A: apostar   B: volver" : "Izq/Der: solapas   A: comprar/vender   B: volver");
+    draw_panel_header_at(px, units_display_name(p->dialog_npc),
+                         p->gambling       ? "A: apostar   B: volver"
+                         : p->shop_selling ? "LB/RB: solapas   B: volver"
+                                           : "A: comprar   LB/RB: solapas   B: volver");
     ui_grid("panel/buysell", 0, 4, 2, px, py);
     if (p->gambling) {
         ui_frame("panel/buyselltabs", 0, px + 1, py + 1);
@@ -15465,8 +16053,8 @@ static void draw_shop(Player *p)
     }
     for (int t = 0; t < SHOP_TABS && !p->gambling; t++) {
         int tx = px + 1 + t * 80;
-        ui_frame("panel/buyselltabs", t == p->shop_tab ? t % 4 : 4 + t % 4, tx, py + 1);
-        text_in(tx, py + 2, 79, 24, k_shop_tabs[t], 2, t == p->shop_tab ? COL(R_GOLD, 15) : COL(R_STONE, 11));
+        ui_frame("panel/buyselltabs", t == tab ? t % 4 : 4 + t % 4, tx, py + 1);
+        text_in(tx, py + 2, 79, 24, k_shop_tabs[t], 2, t == tab ? COL(R_GOLD, 15) : COL(R_STONE, 11));
     }
 
     Item *items[SHOP_LIST_MAX];
@@ -15492,11 +16080,11 @@ static void draw_shop(Player *p)
     text_in(px + 78, py + 358, 120, 16, text, 2, COL(R_GRAY, 15));
 
     if (n == 0) {
-        text_in(px + 16, py + 180, 290, 20,
-                p->gambling ? "No queda nada" : p->shop_tab == SHOP_SELL ? "No tenés nada para vender" : "No queda mercadería",
-                2, COL(R_STONE, 11));
+        text_in(px + 16, py + 180, 290, 20, p->gambling ? "No queda nada" : "No queda mercadería", 2, COL(R_STONE, 11));
         return;
     }
+    if (p->shop_selling) /* (el cursor está en la mochila) */
+        return;
     if (p->shop_sel >= n)
         p->shop_sel = n - 1;
     ShopCtx ctx = { px, py, items, col, row };
@@ -15514,15 +16102,25 @@ static void draw_shop(Player *p)
         return;
     }
     int k = item_tip(p, items[p->shop_sel], tip);
-    int price = items_price(items[p->shop_sel], p->shop_tab == SHOP_SELL);
-    snprintf(text, sizeof text, "%s: %d", p->shop_tab == SHOP_SELL ? tr("Te pagan") : tr("Costo"), price);
-    k = tip_add(tip, k, p->shop_tab != SHOP_SELL && p->gold < price ? TIP_RED : TIP_GOLD, text);
-    if (p->shop_tab != SHOP_SELL && strcmp(items[p->shop_sel]->type->code, "tsc") == 0) {
+    int price = items_price(items[p->shop_sel], 0);
+    snprintf(text, sizeof text, "%s: %d", tr("Costo"), price);
+    k = tip_add(tip, k, p->gold < price ? TIP_RED : TIP_GOLD, text);
+    if (strcmp(items[p->shop_sel]->type->code, "tsc") == 0) {
         int fill = shop_fill_count(p, items[p->shop_sel]->type);
         snprintf(text, sizeof text, tr("X: llenar la pila (%d por %d)"), fill, fill * price);
         k = tip_add(tip, k, TIP_WHITE, text);
     }
     draw_tip(tip, k, x, y, w, h, x0, x1);
+}
+
+/* La tienda: con un solo jugador, su panel con el inventario al lado; con
+   dos, uno u otro (el inventario mientras vende) */
+static void draw_shop(Player *p)
+{
+    if (s_num_local == 1 || !p->shop_selling)
+        draw_shop_panel(p);
+    if (s_num_local == 1 || p->shop_selling)
+        draw_inventory(p);
 }
 
 /* ---- Barra de control del juego (panel/800ctrlpnl7) ----
@@ -15644,13 +16242,13 @@ static void draw_skill_up(const Player *p, int x, int y)
    debajo de los números del orbe. */
 static void draw_player_messages(void)
 {
-    for (int i = 0; i < s_num_players; i++) {
-        const Player *p = &s_pl[i];
+    for (int i = 0; i < s_num_local; i++) {
+        const Player *p = &s_pl[s_local[i]];
         if (p->message_ticks <= 0)
             continue;
         /* con dos jugadores, más abajo: con un panel abierto los botones se corren arriba del aviso */
-        int w = font_width(p->message, 2), h = font_height(2), y = s_num_players == 1 ? PANEL_TOP - 24 : PANEL_TOP - 19;
-        int cx = s_num_players == 1 ? SCREEN_W / 2 : i == 0 ? 130 + w / 2 : SCREEN_W - 130 - w / 2;
+        int w = font_width(p->message, 2), h = font_height(2), y = s_num_local == 1 ? PANEL_TOP - 24 : PANEL_TOP - 19;
+        int cx = s_num_local == 1 ? SCREEN_W / 2 : i == 0 ? 130 + w / 2 : SCREEN_W - 130 - w / 2;
         ui_dark_box(cx - w / 2 - 6, y - 3, w + 12, h + 6);
         font_draw_centered(cx, y, p->message, 2, COL(R_RED, 13));
     }
@@ -16204,14 +16802,14 @@ static void draw_waypoints(const Player *p)
    todo: con el inventario o una tienda abiertos, el panel los tapaba. */
 static void draw_orb_numbers(void)
 {
-    if (s_num_players == 1) {
-        const Player *p = &s_pl[0];
+    if (s_num_local == 1) {
+        const Player *p = &s_pl[s_local[0]];
         draw_value(69, PANEL_TOP - 16, p->hp, p->hp_max);
         draw_value(729, PANEL_TOP - 16, p->mana, p->mana_max);
         return;
     }
     for (int right = 0; right < 2; right++) {
-        const Player *p = &s_pl[right];
+        const Player *p = &s_pl[s_local[right]];
         int orb_x = right ? SCREEN_W - 117 + 6 : 29;
         char text[24];
         snprintf(text, sizeof text, "%d / %d", p->hp, p->mana);
@@ -16221,9 +16819,9 @@ static void draw_orb_numbers(void)
 
 static void draw_hud_body(void)
 {
-    const Player *p1 = &s_pl[0], *p2 = &s_pl[1];
+    const Player *p1 = &s_pl[s_local[0]], *p2 = &s_pl[s_local[s_num_local > 1 ? 1 : 0]];
     draw_target_bar();
-    if (s_num_players == 1) {
+    if (s_num_local == 1) {
         draw_hud_single(p1);
         draw_effects(p1, SCREEN_W / 2, MIDDLE_TOP - 3, 683 - 165);
     } else {
@@ -16235,10 +16833,12 @@ static void draw_hud_body(void)
         draw_effects(p2, SCREEN_W - 117 - half, MIDDLE_TOP - 3, STRIP_TO - STRIP_FROM);
     }
     draw_merc_portrait(p1, 10, 10);
-    if (s_num_players > 1)
+    if (s_num_local > 1)
         draw_merc_portrait(p2, SCREEN_W - 56, 10);
-    for (int k = 0; k < s_num_players; k++) {
-        Player *pk = &s_pl[k];
+    if (s_num_players > s_num_local)
+        draw_party_list();
+    for (int k = 0; k < s_num_local; k++) { /* (los paneles de los de esta máquina) */
+        Player *pk = &s_pl[s_local[k]];
         if (pk->dialog_npc >= 0 && pk->shop_open)
             draw_shop(pk);
         else if (pk->dialog_npc >= 0 && pk->hire_open)
@@ -16509,8 +17109,8 @@ static void draw_prompts(float cam_x, float cam_y)
 {
     int ox = SCREEN_W / 2 - (int)lroundf(cam_x), oy = SCREEN_H / 2 - (int)lroundf(cam_y);
     int shown[MAX_PLAYERS], num_shown = 0;
-    for (int k = 0; k < s_num_players && !s_paused; k++) {
-        const Player *p = &s_pl[k];
+    for (int k = 0; k < s_num_local && !s_paused; k++) {
+        const Player *p = &s_pl[s_local[k]];
         if (p->state >= PS_DYING || p->dialog_npc >= 0 || p->inv_open || p->wp_open ||
             items_ground_nearest(p->x, p->y, 1.8f, 0) >= 0)
             continue;
@@ -16772,7 +17372,7 @@ static void draw_guide_runewords(void)
     static int  nl, shown = -1;
     char title[96];
     if (w != shown) {
-        nl = items_runeword_describe(w, s_pl[0].level_num, lines, 18);
+        nl = items_runeword_describe(w, s_pl[s_local[0]].level_num, lines, 18);
         shown = w;
     }
     ui_dark_box(30, 386, SCREEN_W - 60, 190);
@@ -16931,17 +17531,17 @@ static void draw_pause(void)
     snprintf(values[PAUSE_COLOR16], sizeof values[0], "< %s >", (s_color16 < 0 ? video_is_565() : s_color16) ? tr("SÍ") : tr("NO"));
     fb_shade_rect(0, 0, SCREEN_W, SCREEN_H, 6);
 
-    const Player *qp = &s_pl[s_pause_qp < s_num_players ? s_pause_qp : 0];
+    const Player *qp = &s_pl[s_local[s_pause_qp < s_num_local ? s_pause_qp : 0]];
     int qx = 28, qy = 84, act = s_pause_qact, sel = s_pause_qsel;
     if (act <= 0) /* recién abierta (antes del primer tick) */
         quest_log_pick(qp, &act, &sel);
     char title[64];
     if (s_num_players > 1)
-        snprintf(title, sizeof title, tr("Misiones de J%d: %s"), s_pause_qp + 1, tr(s_classes[qp->cls].title));
+        snprintf(title, sizeof title, tr("Misiones de J%d: %s"), player_index(qp) + 1, tr(s_classes[qp->cls].title));
     else
         snprintf(title, sizeof title, tr("Misiones: %s"), tr(s_classes[qp->cls].title));
     font_draw_centered(qx + PANEL_W / 2, qy - 26, title, 2, COL(R_GOLD, 15));
-    draw_quest_log(qp, qx, qy, act, sel, s_pause_qanim, "LB / RB: otra misión", s_num_players > 1 ? "X: el otro jugador" : NULL);
+    draw_quest_log(qp, qx, qy, act, sel, s_pause_qanim, "LB / RB: otra misión", s_num_local > 1 ? "X: el otro jugador" : NULL);
 
     int ox = qx + PANEL_W + 24, ow = SCREEN_W - 28 - ox, oy = qy;
     ui_dark_box(ox, oy, ow, PANEL_H);
@@ -16987,20 +17587,22 @@ static void render_frame(float alpha)
     }
 
     clip_reset();
-    if (s_num_players == 1) {
+    int la = s_local[0], lb = s_local[s_num_local > 1 ? 1 : 0]; /* los de esta máquina */
+    if (s_num_local == 1) {
         /* Con el inventario abierto (mitad derecha) el personaje queda en el
-           centro de la mitad izquierda, como en el original */
-        float shift = (s_pl[0].inv_open || s_pl[0].shop_open) ? PANEL_W / 2.0f : 0.0f;
-        render_world(sx[0] + shift, sy[0], alpha);
-        draw_darkness(sx[0] + shift, sy[0], sx, sy, 0);
-        overlays_draw(sx[0] + shift, sy[0], overlay_pos);
-        draw_coll_debug(sx[0] + shift, sy[0]);
-        draw_item_labels(sx[0] + shift, sy[0]);
-        draw_prompts(sx[0] + shift, sy[0]);
-        draw_npc_news(sx[0] + shift, sy[0]);
-        draw_view_automap(sx[0] + shift, sy[0], 0);
-        s_view_x[0] = SCREEN_W / 2.0f - shift;
-        s_view_y[0] = SCREEN_H / 2.0f;
+           centro de la mitad izquierda, como en el original; con la tienda
+           (a la izquierda, con el inventario a la derecha), en el medio */
+        float shift = s_pl[la].dialog_npc >= 0 && s_pl[la].shop_open ? 0.0f : s_pl[la].inv_open ? PANEL_W / 2.0f : 0.0f;
+        render_world(sx[la] + shift, sy[la], alpha);
+        draw_darkness(sx[la] + shift, sy[la], sx, sy, la);
+        overlays_draw(sx[la] + shift, sy[la], overlay_pos);
+        draw_coll_debug(sx[la] + shift, sy[la]);
+        draw_item_labels(sx[la] + shift, sy[la]);
+        draw_prompts(sx[la] + shift, sy[la]);
+        draw_npc_news(sx[la] + shift, sy[la]);
+        draw_view_automap(sx[la] + shift, sy[la], la);
+        s_view_x[la] = SCREEN_W / 2.0f - shift;
+        s_view_y[la] = SCREEN_H / 2.0f;
         bossfx_draw();
         draw_hud();
         draw_banners();
@@ -17017,7 +17619,7 @@ static void render_frame(float alpha)
     /* Cámara compartida mientras los dos entran en pantalla; si se alejan,
        la pantalla se parte con una línea perpendicular a la recta que los une.
        En el punto de corte las dos cámaras coinciden, así no hay salto. */
-    float dx = sx[1] - sx[0], dy = sy[1] - sy[0];
+    float dx = sx[lb] - sx[la], dy = sy[lb] - sy[la];
     float dist = sqrtf(dx * dx + dy * dy);
     float nx = 1.0f, ny = 0.0f, k = 0.0f;
     if (dist > 0.001f) {
@@ -17032,7 +17634,7 @@ static void render_frame(float alpha)
     s_split_nx = nx;
     s_split_ny = ny;
     if (dist * 0.5f <= k) {
-        float cx = (sx[0] + sx[1]) * 0.5f, cy = (sy[0] + sy[1]) * 0.5f;
+        float cx = (sx[la] + sx[lb]) * 0.5f, cy = (sy[la] + sy[lb]) * 0.5f;
         render_world(cx, cy, alpha);
         draw_darkness(cx, cy, sx, sy, -1);
         overlays_draw(cx, cy, overlay_pos);
@@ -17041,37 +17643,37 @@ static void render_frame(float alpha)
         draw_prompts(cx, cy);
         draw_npc_news(cx, cy);
         draw_view_automap(cx, cy, -1);
-        for (int i = 0; i < MAX_PLAYERS; i++) {
+        for (int i = 0; i < s_num_players; i++) {
             s_view_x[i] = SCREEN_W / 2.0f + sx[i] - cx;
             s_view_y[i] = SCREEN_H / 2.0f + sy[i] - cy;
         }
     } else {
-        float c1x = sx[0] + nx * k, c1y = sy[0] + ny * k;
-        float c2x = sx[1] - nx * k, c2y = sy[1] - ny * k;
+        float c1x = sx[la] + nx * k, c1y = sy[la] + ny * k;
+        float c2x = sx[lb] - nx * k, c2y = sy[lb] - ny * k;
         clip_half_plane(SCREEN_W / 2.0f, SCREEN_H / 2.0f, nx, ny, -1);
         render_world(c1x, c1y, alpha);
-        draw_darkness(c1x, c1y, sx, sy, 0);
+        draw_darkness(c1x, c1y, sx, sy, la);
         overlays_draw(c1x, c1y, overlay_pos);
         draw_coll_debug(c1x, c1y);
         draw_item_labels(c1x, c1y);
         draw_prompts(c1x, c1y);
         draw_npc_news(c1x, c1y);
-        draw_view_automap(c1x, c1y, 0);
+        draw_view_automap(c1x, c1y, la);
         clip_half_plane(SCREEN_W / 2.0f, SCREEN_H / 2.0f, nx, ny, +1);
         render_world(c2x, c2y, alpha);
-        draw_darkness(c2x, c2y, sx, sy, 1);
+        draw_darkness(c2x, c2y, sx, sy, lb);
         overlays_draw(c2x, c2y, overlay_pos);
         draw_coll_debug(c2x, c2y);
         draw_item_labels(c2x, c2y);
         draw_prompts(c2x, c2y);
         draw_npc_news(c2x, c2y);
-        draw_view_automap(c2x, c2y, 1);
+        draw_view_automap(c2x, c2y, lb);
         clip_reset();
         draw_divider(nx, ny, dist * 0.5f - k);
-        s_view_x[0] = SCREEN_W / 2.0f - nx * k;
-        s_view_y[0] = SCREEN_H / 2.0f - ny * k;
-        s_view_x[1] = SCREEN_W / 2.0f + nx * k;
-        s_view_y[1] = SCREEN_H / 2.0f + ny * k;
+        s_view_x[la] = SCREEN_W / 2.0f - nx * k;
+        s_view_y[la] = SCREEN_H / 2.0f - ny * k;
+        s_view_x[lb] = SCREEN_W / 2.0f + nx * k;
+        s_view_y[lb] = SCREEN_H / 2.0f + ny * k;
     }
     bossfx_draw();
     draw_hud();

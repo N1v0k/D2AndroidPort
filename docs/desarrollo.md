@@ -1931,6 +1931,11 @@ Variables de depuración:
 | `D2_TZTEST=1` | Las zonas de terror (`src/endgame.inc`, `src/tztest.inc`), con `D2_DIFF=2 D2_ACT=1 D2_TZ=1 D2_TZ_ZONE=2 D2_TZ_HERALD=1`: lo que se leyó de `desecratedzones.json`, la rotación, las clases de tesoro por nivel, los monstruos de las Cold Plains aterrorizadas (y los del Blood Moor, que no), un Heraldo que sale, muere y sube el grado, una astilla y un amuleto Sunder. Dice `TERROR: BIEN` o `TERROR: MAL` en cada cosa |
 | `D2_ECO=1` | Arranca una corrida del Eco del Odio (`src/eco.inc`, `docs/plan-eco-del-odio.md`) en vez de la historia, con los personajes de las partidas 1 y 2. `D2_ECO_ARENA=0..3` la arena (el Trono, la Cumbre del Arreat, Uber Tristram, la Colossal Summit), `D2_ECO_WAVE=N` empezar en esa oleada, `D2_ECO_LEVEL=N` el nivel de los monstruos de la oleada 1 (si no, el de los personajes), `D2_ECO_DIFF=0..2` las tablas de esa dificultad, `D2_ECO_CAP=N` el tope del desborde, `D2_ECO_DEBUG=1` lo que hace cada oleada (y cada 5 segundos, cuántos vivos y muertos); `D2_ECO_PROBE=x,y` dibuja en la consola lo que se camina alrededor de ese lugar de la arena |
 | `--autotest eco` | Con `D2_ECO=1`: el bot pelea las oleadas (sin daño y de un golpe, en área; `D2_ECO_REAL=1` de verdad) hasta la 25 con cada jefe, termina desde la pausa, abre el cofre y entra al portal. Con `D2_ECO_WAVE=29`, la segunda vuelta (los uber, hasta la 50). Los pasos de las oleadas altas pueden fallar por desborde (el bot no da abasto): `D2_ECO_CAP=150` |
+| `D2_LOCKSTEP=1` | Como en la red: nada de la partida depende de cuánto tarda algo (las zonas se arman en partes por cantidad de piezas, los monstruos se mueven aunque sus dibujos no estén) |
+| `D2_HASH=N` | Cada N ticks, `HASH tN` con el resumen del estado (`game_state_hash`): dos corridas iguales tienen que dar lo mismo. `D2_HASH_DUMP=T` vuelca en el tick T cada unidad y cada jugador, para encontrar dónde se separan |
+| `D2_NO_JOBS=1` | (con `--autotest`) sin el hilo de carga: todo en el hilo del juego, para comparar. `D2_JOBS_JITTER=N`: hasta N ms de espera al azar antes de cada trabajo del hilo |
+| `D2_NET_HOST=N` / `D2_NET_JOIN=ip` | La red sin ventana (`src/net.c`, `docs/plan-lan.md`): con `--autotest` crea la partida y empieza cuando hay N jugadores, o se une; `--players` dice cuántos son de esta máquina, `D2_NET_SLOTS="1,2"` sus partidas guardadas (sin, personajes nuevos de `D2_CLASSES`), `D2_NET_PORT` el puerto (6112), `D2_NET_PREPLAY=N` antes juega N ticks de otra partida; con `D2_ECO=1` (y `--autotest eco`), una corrida del Eco del Odio en red. Al final dice `red: sin separarse` o por qué se cortó |
+| `D2_SPREAD=1` / `D2_TICK_PERF=N` | Para medir: cada jugador en otro nivel del acto (el peor caso), y cada N ticks lo que tarda la lógica, las zonas armadas y las unidades (sin `--autotest`) |
 | `D2_TZ=1` o `0` | Zonas de terror sí o no, sin mirar si el jugador 1 mató a Baal en esa dificultad (sin la variable, en la demostración y las pruebas automáticas no hay) |
 | `D2_TZ_ZONE=n` | La zona aterrorizada es la número n de `desecratedzones.json` (0 = Burial Grounds, 2 = Cold Plains...), en vez de la del turno |
 | `D2_TZ_TIME=segundos` | La hora (desde 1970) con la que se calcula el turno de la rotación |
@@ -1958,7 +1963,7 @@ Variables de depuración:
 | `D2_SKILLS="Bash:3,Howl"` | Les da esas habilidades y las pone en los botones |
 | `D2_ATTACK=x` | Con `--demo`, usa el botón B, X o Y en vez del A |
 | `D2_BAG="sbw,lea"` | Pone esos objetos en la mochila |
-| `D2_MENU_SCRIPT="ada"` | Sin `--players`, aprieta botones en el menú (u/d/l/r, a, b, x) |
+| `D2_MENU_SCRIPT="ada"` | Sin `--players`, aprieta botones en el menú (u/d/l/r, a, b, x); `D2_MENU_DELAY=ms` espera entre ticks (para ver la red: una máquina crea con `ddaaadaa` y otra la busca con `ddaada`) |
 | `D2_SAVE_DIR=carpeta` | Dónde se guardan las partidas (con `--headless` solo se guarda si está) |
 | `D2_NOSOUND=1` | Sin sonido |
 | `D2_AUDIO_LOG=1` | Muestra cada sonido que arranca, los cambios de música y los archivos que faltan |
@@ -2091,6 +2096,7 @@ tenía al lado y los enemigos vivos cerca (`at_stuck_report`).
 | `D2_WARP_DEBUG=1` | Muestra cada salto entre zonas y dónde se llega |
 | `D2_COLL_DEBUG=1` | Dibuja la colisión de cada subtile cerca de la cámara: rojo pared que frena proyectiles, amarillo solo no se camina, naranja solo frena proyectiles, celeste solo tapa la vista, azul puerta, violeta objeto, verde salida, gris el grosor de una pared |
 | `D2_STASH_TEST=1` | Prueba sin gráficos del cofre (pestañas, compra, oro, pasar objetos, guardar y cargar), los pergaminos apilados, el tomo viejo y el oro al morir; `=2`, `=3` y `=4` dejan el cofre abierto para las capturas (la pestaña "+", un objeto, uno en la mano) |
+| `D2_SHOP_TEST=1` | (Acto 1) Prueba sin gráficos de la tienda de Charsi con controles de mentira: LB / RB y Select cambian de solapa, la cruceta pasa de la mercadería a la mochila y vuelve, A vende (y el vendedor lo pone a la venta) o compra, lo de las misiones no se vende; `=2` deja la tienda abierta para una captura y `=3` vendiendo |
 | `D2_TPTEST=1` | Con `D2_START` afuera del pueblo: abre un portal al pueblo, entra, vuelve y revisa que se cierre |
 | `D2_NO_CINEMA=1` | Arranca sin los logos ni la presentación |
 | `D2_CINEMA=nombre` | Pasa esa cinemática (`act02start`...) en la ventana y sale |

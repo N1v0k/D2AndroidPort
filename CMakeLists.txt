@@ -57,6 +57,7 @@ add_executable(d2port
   src/menu.c
   src/controls.c
   src/game.c
+  src/net.c
 )
 target_link_libraries(d2port PRIVATE d2fmtlib SDL2::SDL2 m)
 target_compile_options(d2port PRIVATE -Wall -Wextra)

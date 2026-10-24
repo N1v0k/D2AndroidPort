@@ -185,6 +185,11 @@ static int recipe_category(const Recipe *rc)
     return CUBE_CAT_OTHER;
 }
 
+void cube_reset_rng(uint32_t seed)
+{
+    s_rng = 0xC0BEu ^ (seed * 668265263u);
+}
+
 int cube_init(void)
 {
     TxtTable t = { 0 };

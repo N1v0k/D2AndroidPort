@@ -1,6 +1,7 @@
 #include "jobs.h"
 
 #include <SDL.h>
+#include <stdlib.h>
 
 #define JOB_QUEUE 1024
 
@@ -37,6 +38,16 @@ static int worker(void *unused)
             s_idle_count--;
         }
         SDL_UnlockMutex(s_mx);
+        /* D2_JOBS_JITTER=N: hasta N ms de espera al azar antes de cada trabajo (prueba que la partida
+           no dependa de cuánto tarda la carga: la red) */
+        static int jitter = -1;
+        static uint32_t jrng = 12345;
+        if (jitter < 0)
+            jitter = getenv("D2_JOBS_JITTER") ? atoi(getenv("D2_JOBS_JITTER")) : 0;
+        if (jitter > 0) {
+            jrng = jrng * 1664525u + 1013904223u;
+            SDL_Delay((jrng >> 8) % (uint32_t)(jitter + 1));
+        }
         j.fn(j.ptr, j.arg);
         __atomic_sub_fetch(&s_pending, 1, __ATOMIC_ACQ_REL);
     }

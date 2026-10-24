@@ -810,3 +810,46 @@
 809	Tués : %d / %d
 810	Submergé ! %d
 811	Ouvrez le coffre ; le portail ramène au menu
+812	RÉSEAU LOCAL
+813	Jusqu'à 8 joueurs sur plusieurs machines du même réseau (1 ou 2 par machine).
+814	Toutes doivent avoir la même version du jeu.
+815	CRÉER UNE PARTIE
+816	REJOINDRE UNE PARTIE
+817	Gauche / droite : %d joueur(s) sur cette machine
+818	Recherche de parties sur le réseau...
+819	%s (%d joueurs)
+820	A : rejoindre     B : retour
+821	VOTRE PARTIE EN RÉSEAU
+822	SALLE D'ATTENTE
+823	Les autres machines la trouvent toutes seules (celle-ci est %s)
+824	J%d  %s  niveau %d  (machine %d)
+825	A : commencer     Gauche / droite : difficulté     B : fermer
+826	En attente du lancement par l'hôte...
+827	B : quitter
+828	Une autre machine doit être connectée
+829	Impossible de créer la partie (le port 6112 est-il occupé ?)
+830	Impossible de rejoindre cette partie
+831	La connexion avec l'hôte a été perdue
+832	La machine %d est partie
+833	L'hôte ne répond pas
+834	La machine %d ne répond pas
+835	Les machines se sont désynchronisées (machine %d, tick %u)
+836	Des données incompréhensibles sont arrivées
+837	L'hôte a envoyé un lancement incompréhensible
+838	A : acheter   LB/RB : onglets   B : retour
+839	LB/RB : onglets   B : retour
+840	A : vendre   Select : acheter   B : retour
+841	Select : vendre depuis le sac
+842	Cela ne se vend pas
+843	Attributs
+844	Select + X : attributs   Select + Y : compétences
+845	HISTOIRE
+846	RETOUR
+847	Les cinq actes de l'histoire, de Normal à Enfer.
+848	Combien jouent sur cette machine ?
+849	Vous créez la partie : les autres machines du réseau la trouvent toutes seules.
+850	Vous cherchez une partie créée sur une autre machine de ce réseau.
+851	Écho de la haine (joueurs : %d)
+852	Histoire (joueurs : %d)
+853	Le niveau des personnages fixe la difficulté
+854	A : commencer     B : fermer

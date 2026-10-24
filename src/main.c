@@ -11,6 +11,7 @@
 #include "lang.h"
 #include "map.h"
 #include "menu.h"
+#include "net.h"
 #include "units.h"
 #include "video.h"
 
@@ -23,6 +24,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <string.h>
 
 #if defined(__linux__) && defined(__GLIBC__)
@@ -153,13 +155,13 @@ static void demo_input(InputState *in, const Options *o, int tick)
 
     /* D2_INV_SCRIPT="ddda": una tecla cada 5 ticks para el jugador 1, como
        los botones del joystick (u/d/l/r = cruceta, a/b/x/y = botones,
-       i = inventario, t = árbol de habilidades, o = LB, c = R3 (frases), . = nada) */
+       i = inventario, t = árbol de habilidades, g = atributos, o = LB, c = R3 (frases), . = nada) */
     const char *script = getenv("D2_INV_SCRIPT");
     if (script) {
         in->player[0].move_x = in->player[0].move_y = 0.0f;
         in->player[0].nav_up = in->player[0].nav_down = in->player[0].nav_left = 0;
         in->player[0].nav_right = in->player[0].action = in->player[0].drop = in->player[0].inventory = 0;
-        in->player[0].back = in->player[0].skill_tree = in->player[0].potion_life = in->player[0].chat = 0;
+        in->player[0].back = in->player[0].skill_tree = in->player[0].stats_page = in->player[0].potion_life = in->player[0].chat = 0;
         memset(in->player[0].button, 0, sizeof in->player[0].button);
         if (tick % 5 == 0 && (size_t)(tick / 5) < strlen(script)) {
             char c = script[tick / 5];
@@ -173,6 +175,7 @@ static void demo_input(InputState *in, const Options *o, int tick)
             in->player[0].button[3] = c == 'y';
             in->player[0].inventory = c == 'i';
             in->player[0].skill_tree = c == 't';
+            in->player[0].stats_page = c == 'g';
             in->player[0].potion_life = c == 'o'; /* LB: ordenar en el inventario */
             in->player[0].chat = c == 'c';
         }
@@ -194,6 +197,160 @@ static void demo_input(InputState *in, const Options *o, int tick)
             in->player[i].action = b == 0 && tick % 12 == 0;
         }
     }
+}
+
+/* Un tick en red: manda los controles de los de esta máquina para el tick t + la demora y, si ya
+   están los de todos para t, lo juega. bots: los controles salen del bot de la prueba (todos en
+   in->player, por su número en la partida); si no, de los joysticks. 0 = esperando, 1 = jugó,
+   2 = se terminó (salir o se cortó la red). wait: esperar hasta tenerlos (las pruebas sin ventana). */
+static uint32_t s_net_sent = UINT32_MAX; /* el último tick para el que ya se mandaron los controles */
+static uint32_t s_net_tick;              /* el próximo tick de la partida en red */
+
+static int net_step(const InputState *in, uint32_t t, int bots, int wait)
+{
+    if (s_net_sent != t + NET_DELAY) {
+        PlayerInput loc[MAX_LOCAL];
+        int n = game_num_local();
+        if (bots)
+            for (int k = 0; k < n; k++) {
+                loc[k] = in->player[game_local_player(k)];
+                loc[k].always_run = 0;
+            }
+        else
+            n = game_local_inputs(in, loc);
+        net_send_input(t + NET_DELAY, loc, n);
+        s_net_sent = t + NET_DELAY;
+    }
+    PlayerInput all[MAX_PLAYERS];
+    for (;;) { /* (lo que ya llegó se juega aunque después se haya cortado: así todas llegan al final de
+                  una corrida del Eco, que termina en el mismo tick en todas) */
+        net_poll();
+        if (net_frame(t, all))
+            break;
+        if (net_error())
+            return 2;
+        if (!wait)
+            return 0;
+        SDL_Delay(1);
+    }
+    game_set_frame(all);
+    int r = game_tick(in);
+    game_set_frame(NULL);
+    if ((t + 1) % 25 == 0)
+        net_send_hash(t + 1, game_state_hash());
+    return r == GAME_EXIT ? 3 : 1; /* (3: terminó bien, como la salida del Eco) */
+}
+
+/* Lo de esta máquina para la red: sus jugadores con la partida guardada de cada uno (texts: lo que
+   hay que liberar después de crear o unirse) */
+static void net_local_from(int n, const int *slots, const int *classes, NetLocal *mine, char **texts)
+{
+    memset(mine, 0, sizeof *mine);
+    mine->num = n < 1 ? 1 : n > MAX_LOCAL ? MAX_LOCAL : n;
+    for (int k = 0; k < mine->num; k++) {
+        texts[k] = NULL;
+        mine->cls[k] = classes ? classes[k] : k;
+        mine->level[k] = 1;
+        SlotInfo info;
+        if (slots[k] > 0 && game_slot_info(slots[k], &info)) {
+            mine->cls[k] = info.cls;
+            mine->level[k] = info.level;
+            mine->diffmax[k] = info.diff_max;
+            texts[k] = game_slot_text(slots[k], &mine->save_len[k]);
+            mine->save[k] = texts[k];
+        }
+    }
+}
+
+/* Llegó el comienzo: la partida con lo que mandó el anfitrión (local_slots: las partidas guardadas
+   de los jugadores de esta máquina) */
+static void net_begin_game(const int *local_slots)
+{
+    const NetStart *ns = net_started();
+    game_set_difficulty(ns->diff);
+    game_set_terror_zones(ns->terror);
+    game_set_mode(ns->mode);
+    int slots[MAX_PLAYERS], classes[MAX_PLAYERS];
+    game_net_begin(ns, local_slots, slots, classes);
+    game_start_slots(ns->num_players, slots, classes);
+    game_net_started();
+    s_net_sent = UINT32_MAX;
+    s_net_tick = 0;
+}
+
+/* Se terminó la partida en red (salió alguno o se cortó): se guarda y al menú, con el porqué (ended:
+   terminó bien, como la salida del Eco del Odio: no hay porqué) */
+static void net_leave(int ended)
+{
+    char why[160];
+    snprintf(why, sizeof why, "%s", net_error() && !ended ? net_error() : "");
+    game_save();
+    net_close();
+    game_net_end();
+    menu_open();
+    if (why[0])
+        menu_net_failed(why);
+}
+
+/* Las pruebas de la red sin ventana (docs/plan-lan.md): D2_NET_HOST=N crea la partida y empieza
+   cuando hay N jugadores; D2_NET_JOIN=ip se une (D2_NET_PORT, si no el 6112). --players dice cuántos
+   son de esta máquina (1 o 2), con las partidas D2_NET_SLOTS="1,2" de D2_SAVE_DIR (sin, personajes
+   nuevos de las clases D2_CLASSES). Devuelve los jugadores de la partida, -1 = no se pudo. */
+static int net_test_begin(int local)
+{
+    /* D2_NET_PREPLAY=N: antes, N ticks de otra partida (la prueba de que una máquina que ya jugó
+       empieza la de red igual que una recién abierta) */
+    if (getenv("D2_NET_PREPLAY")) {
+        InputState z;
+        memset(&z, 0, sizeof z);
+        game_start(2);
+        for (int t = 0; t < atoi(getenv("D2_NET_PREPLAY")); t++) {
+            z.player[0].move_x = (t / 50) % 2 ? 1.0f : -0.5f;
+            z.player[0].action = t % 40 == 0;
+            game_tick(&z);
+        }
+        printf("red: antes se jugaron %s ticks de otra partida\n", getenv("D2_NET_PREPLAY"));
+    }
+    NetLocal mine;
+    int lslots[MAX_LOCAL] = { 0 }, lcls[MAX_LOCAL] = { 0, 1 };
+    char *texts[MAX_LOCAL] = { NULL };
+    const char *se = getenv("D2_NET_SLOTS"), *ce = getenv("D2_CLASSES");
+    for (int k = 0; k < MAX_LOCAL; k++) {
+        lslots[k] = se && *se ? atoi(se) : 0;
+        lcls[k] = ce && *ce ? atoi(ce) : k;
+        if (se && *se)
+            se += strcspn(se, ","), se += *se == ',';
+        if (ce && *ce)
+            ce += strcspn(ce, ","), ce += *ce == ',';
+    }
+    net_local_from(local, lslots, lcls, &mine, texts);
+    mine.mode = getenv("D2_ECO") != NULL; /* (D2_ECO=1: una corrida del Eco del Odio en red) */
+    int port = getenv("D2_NET_PORT") ? atoi(getenv("D2_NET_PORT")) : NET_PORT;
+    int host = getenv("D2_NET_HOST") != NULL;
+    int ok = host ? net_host(port, &mine) : net_join(getenv("D2_NET_JOIN"), port, &mine);
+    for (int k = 0; k < MAX_LOCAL; k++)
+        free(texts[k]);
+    if (ok != 0)
+        return -1;
+    int want = host ? atoi(getenv("D2_NET_HOST")) : 0;
+    Uint32 t0 = SDL_GetTicks();
+    while (!net_started()) {
+        net_poll();
+        if (net_error())
+            return -1;
+        int c[MAX_PLAYERS], l[MAX_PLAYERS], o[MAX_PLAYERS];
+        if (host && net_lobby(c, l, o, NULL, MAX_PLAYERS) >= want) {
+            uint32_t seed = getenv("D2_SEED") ? (uint32_t)strtoul(getenv("D2_SEED"), NULL, 10) : (uint32_t)time(NULL);
+            net_start(getenv("D2_DIFF") ? atoi(getenv("D2_DIFF")) : 0, mine.mode, 1, seed, (long long)time(NULL));
+        }
+        if (SDL_GetTicks() - t0 > 600000) {
+            fprintf(stderr, "red: nadie se unió en 10 minutos\n");
+            return -1;
+        }
+        SDL_Delay(5);
+    }
+    net_begin_game(lslots);
+    return net_started()->num_players;
 }
 
 static int save_screenshot(const char *path)
@@ -387,7 +544,8 @@ static int run_headless(const Options *o)
 
     if (o->players == 0) {
         /* D2_MENU_SCRIPT="dda": una tecla por tick en el menú (u/d/l/r, a = aceptar,
-           b = volver, x = borrar), para probar las pantallas sin ventana */
+           b = volver, x = borrar), para probar las pantallas sin ventana (D2_MENU_DELAY=ms: espera
+           entre ticks, para la red) */
         menu_open();
         const char *script = getenv("D2_MENU_SCRIPT");
         int ticks = o->frames > 0 ? o->frames : (script ? (int)strlen(script) + 1 : 1);
@@ -401,6 +559,8 @@ static int run_headless(const Options *o)
             in.confirm = c == 'a';
             in.menu_back = c == 'b';
             in.menu_delete = c == 'x';
+            if (getenv("D2_MENU_DELAY")) /* (pruebas de la red: ticks de verdad, para que la otra máquina conteste) */
+                SDL_Delay((Uint32)atoi(getenv("D2_MENU_DELAY")));
             MenuResult r = menu_tick(&in);
             dump_tick();
             if (r == MENU_START) {
@@ -416,17 +576,38 @@ static int run_headless(const Options *o)
                 game_set_language(menu_language());
                 printf("idioma elegido: %s\n", menu_language());
             }
+            if (r == MENU_NET_HOST || r == MENU_NET_JOIN) { /* (la red: para ver la sala de espera) */
+                NetLocal mine;
+                char *texts[MAX_LOCAL];
+                net_local_from(menu_players(), menu_slots(), menu_classes(), &mine, texts);
+                mine.mode = menu_mode();
+                int port = getenv("D2_NET_PORT") ? atoi(getenv("D2_NET_PORT")) : NET_PORT;
+                int ok = r == MENU_NET_HOST ? net_host(port, &mine) : net_join(menu_net_ip(), port, &mine);
+                for (int k = 0; k < mine.num; k++)
+                    free(texts[k]);
+                if (ok == 0)
+                    menu_net_lobby();
+                else
+                    menu_net_failed("No pude conectarme a esa partida");
+            }
         }
         menu_render();
     } else if (o->autotest) {
         /* La prueba automática: hasta que el bot termina (o se pasa de 3 horas de juego) */
-        jobs_start(); /* como en el juego: los gráficos se cargan en otro hilo */
+        if (!getenv("D2_NO_JOBS")) /* (D2_NO_JOBS: todo en el hilo del juego, para comparar) */
+            jobs_start(); /* como en el juego: los gráficos se cargan en otro hilo */
         if (getenv("D2_AUTOTEST_DEMO")) { /* lo mismo que la demostración del menú (1 Bárbaro, 2 Amazona, 3 Hechicera, 4 Paladín, 5 Nigromante, 6 Asesina, 7 Druida, 8 Brujo; con la clase que sigue; 9 el Brujo con el Paladín) */
             int d = atoi(getenv("D2_AUTOTEST_DEMO"));
             if (d == 9)
                 game_demo_start_pair(7, 3);
             else
                 game_demo_start(d - 1);
+        } else if (getenv("D2_NET_HOST") || getenv("D2_NET_JOIN")) { /* la prueba en red: cada máquina con su bot */
+            int n = net_test_begin(o->players);
+            if (n < 0 || game_autotest_start(o->autotest, n) != 0) {
+                fprintf(stderr, "no pude empezar la prueba en red\n");
+                return 2;
+            }
         } else {
             game_start(o->players);
             if (game_autotest_start(o->autotest, o->players) != 0) {
@@ -444,7 +625,18 @@ static int run_headless(const Options *o)
         for (int t = 0; r == 1 && t < cap; t++) {
             r = game_autotest_input(&in, last);
             Uint64 t0 = SDL_GetPerformanceCounter();
-            game_tick(&in);
+            if (net_role() != NET_OFF) { /* en red: con los controles de todas las máquinas */
+                int st = net_step(&in, (uint32_t)t, 1, 1);
+                if (st == 3) {
+                    printf("red: la partida terminó (la salida del Eco)\n");
+                    r = 0;
+                } else if (st == 2) {
+                    fprintf(stderr, "red: %s\n", net_error() ? net_error() : "se terminó");
+                    r = -1;
+                }
+            } else {
+                game_tick(&in);
+            }
             last = (double)(SDL_GetPerformanceCounter() - t0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
             dump_tick(); /* el sonido avanza como en el juego (y se graba con D2_AUDIO_DUMP) */
             /* D2_FX_SHOTS=prefijo: capturas de los efectos de los jefes y de
@@ -496,6 +688,11 @@ static int run_headless(const Options *o)
             }
         }
         game_autotest_report();
+        if (net_role() != NET_OFF) {
+            printf("red: %s\n", net_error() ? net_error() : "sin separarse");
+            net_close();
+            game_net_end();
+        }
         dump_close();
         if (o->screenshot)
             save_screenshot(o->screenshot);
@@ -504,10 +701,22 @@ static int run_headless(const Options *o)
         game_start(o->players);
         int ticks = o->frames > 0 ? o->frames : 1;
         int verbose = getenv("D2_DEBUG") != NULL;
+        int perf = getenv("D2_TICK_PERF") ? atoi(getenv("D2_TICK_PERF")) : 0; /* cada cuántos ticks, lo que tarda la lógica */
+        double perf_sum = 0, perf_max = 0;
         for (int t = 0; t < ticks; t++) {
             if (o->demo)
                 demo_input(&in, o, t);
+            Uint64 p0 = SDL_GetPerformanceCounter();
             game_tick(&in);
+            double pms = (double)(SDL_GetPerformanceCounter() - p0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
+            perf_sum += pms;
+            perf_max = pms > perf_max ? pms : perf_max;
+            if (perf > 0 && (t + 1) % perf == 0) {
+                char line[128];
+                game_perf_line(line, sizeof line);
+                printf("tick %d: lógica %.2f ms (peor %.1f), %s\n", t + 1, perf_sum / perf, perf_max, line);
+                perf_sum = perf_max = 0;
+            }
             dump_tick();
             /* D2_SHOTS=prefijo,desde,hasta,cada: también acá (los proyectiles de un D2_SPAWN) */
             if (getenv("D2_SHOTS")) {
@@ -615,6 +824,25 @@ static int run_window(const Options *o)
                     game_set_language(menu_language());
                     s_restart = 1;
                     in.quit = 1;
+                } else if (r == MENU_NET_HOST || r == MENU_NET_JOIN) { /* la red: crear la partida o unirse */
+                    NetLocal mine;
+                    char *texts[MAX_LOCAL];
+                    net_local_from(menu_players(), menu_slots(), menu_classes(), &mine, texts);
+                    mine.mode = menu_mode();
+                    int ok = r == MENU_NET_HOST ? net_host(NET_PORT, &mine) : net_join(menu_net_ip(), NET_PORT, &mine);
+                    for (int k = 0; k < mine.num; k++)
+                        free(texts[k]);
+                    if (ok == 0)
+                        menu_net_lobby();
+                    else
+                        menu_net_failed(r == MENU_NET_HOST ? "No pude crear la partida (¿el puerto 6112 está ocupado?)"
+                                                           : "No pude conectarme a esa partida");
+                } else if (r == MENU_NET_GO) { /* el anfitrión la empieza */
+                    net_start(menu_net_difficulty(), menu_mode(), menu_terror_zones(),
+                              (uint32_t)time(NULL) ^ (uint32_t)SDL_GetPerformanceCounter(), (long long)time(NULL));
+                } else if (r == MENU_NET_START) { /* llegó el comienzo: a jugar */
+                    net_begin_game(menu_slots());
+                    state = ST_GAME;
                 }
                 /* D2_RESTART_LANG=deDE (prueba): como si se eligiera ese idioma en el menú */
                 const char *rl = getenv("D2_RESTART_LANG");
@@ -659,12 +887,26 @@ static int run_window(const Options *o)
                 if (o->demo)
                     demo_input(&in, o, tick);
                 Uint64 l0 = SDL_GetPerformanceCounter();
-                if (game_tick(&in) == GAME_EXIT) {
+                if (net_role() != NET_OFF) { /* en red: con los controles de todas las máquinas */
+                    int st = net_step(&in, s_net_tick, 0, 0);
+                    if (st == 0) { /* todavía no llegaron los de todos: se espera (sin perder lo que se apretó) */
+                        acc = acc > tick_s ? tick_s : acc;
+                        break;
+                    }
+                    if (st == 1) {
+                        s_net_tick++;
+                    } else {
+                        net_leave(st == 3);
+                        state = ST_MENU;
+                    }
+                } else if (game_tick(&in) == GAME_EXIT) {
                     menu_open();
                     state = ST_MENU;
                 }
-                /* Fin de un acto: su cinemática, antes de seguir */
+                /* Fin de un acto: su cinemática, antes de seguir (en red no: los otros seguirían jugando) */
                 const char *mv = state == ST_GAME && !o->demo ? game_take_movie() : NULL;
+                if (net_role() != NET_OFF)
+                    mv = NULL;
                 if (mv) {
                     in.quit = cinema_play(mv) == 1;
                     movie = 1;

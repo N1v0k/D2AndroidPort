@@ -20,10 +20,17 @@ typedef struct {
     int     hit_frame; /* cuadro en el que el ataque pega (evento 1 de animdata) */
     int8_t  blend[COMP_COUNT]; /* capas transparentes (los fantasmas): modo BLEND_* + 1, 0 = opaca */
     int     ok;
+    char    mode[4], wclass[4]; /* con los que se encontró el COF (para leer después sus capas) */
 } CharAnim;
 
 void charanim_set_animdata(const AnimData *ad);
 int  charanim_load(CharAnim *a, const CharLook *look, const char *mode, const char *wclass);
+/* En dos partes: lo que usa la lógica (el COF y animdata.d2: cuadros, direcciones, velocidad y el
+   cuadro del golpe), que es chico y se lee en el momento, y los dibujos de cada capa (los DCC), lo
+   pesado, que pueden ir al hilo de carga. Así la partida no depende de cuándo terminan de cargarse
+   (la red: todas las máquinas tienen que calcular lo mismo). */
+int  charanim_load_meta(CharAnim *a, const CharLook *look, const char *mode, const char *wclass);
+void charanim_load_layers(CharAnim *a, const CharLook *look);
 void charanim_free(CharAnim *a);
 int  charanim_frames(const CharAnim *a);
 int  charanim_dirs(const CharAnim *a);

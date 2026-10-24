@@ -61,6 +61,14 @@ static int load_layer_fallback(Sprite *s, const char *dir, const char *suffix)
 
 int charanim_load(CharAnim *a, const CharLook *look, const char *mode, const char *wclass)
 {
+    if (charanim_load_meta(a, look, mode, wclass) != 0)
+        return -1;
+    charanim_load_layers(a, look);
+    return 0;
+}
+
+int charanim_load_meta(CharAnim *a, const CharLook *look, const char *mode, const char *wclass)
+{
     memset(a, 0, sizeof *a);
     const char *base = look->base[0] ? look->base : "chars";
     char path[256];
@@ -81,7 +89,43 @@ int charanim_load(CharAnim *a, const CharLook *look, const char *mode, const cha
         return -1;
     }
     free(d);
+    snprintf(a->mode, sizeof a->mode, "%s", mode);
+    snprintf(a->wclass, sizeof a->wclass, "%s", wclass);
 
+    /* Efecto de dibujo del COF de las capas transparentes */
+    static const int8_t k_effect_blend[] = { BLEND_25, BLEND_50, BLEND_75, BLEND_ADD, BLEND_MUL };
+    for (int i = 0; i < a->cof.num_layers; i++) {
+        const CofLayer *l = &a->cof.layers[i];
+        if (l->transparent && l->component < COMP_COUNT)
+            a->blend[l->component] =
+                (int8_t)(1 + (l->draw_effect < sizeof k_effect_blend ? k_effect_blend[l->draw_effect] : BLEND_50));
+    }
+
+    a->speed = 256;
+    a->hit_frame = a->cof.frames_per_dir / 2;
+    if (s_animdata) {
+        char name[16];
+        snprintf(name, sizeof name, "%s%s%s", look->token, mode, wclass);
+        const AnimRecord *rec = animdata_find(s_animdata, name);
+        if (rec) {
+            a->speed = rec->speed;
+            for (int f = 0; f < rec->frames_per_dir && f < (int)sizeof rec->events; f++)
+                if (rec->events[f] == 1) {
+                    a->hit_frame = f;
+                    break;
+                }
+        }
+    }
+    a->ok = 1;
+    return 0;
+}
+
+void charanim_load_layers(CharAnim *a, const CharLook *look)
+{
+    if (!a->ok)
+        return;
+    const char *base = look->base[0] ? look->base : "chars", *mode = a->mode;
+    char path[256];
     for (int i = 0; i < a->cof.num_layers; i++) {
         const CofLayer *l = &a->cof.layers[i];
         const char *part = look->part[l->component];
@@ -122,33 +166,6 @@ int charanim_load(CharAnim *a, const CharLook *look, const char *mode, const cha
         if (load_layer_fallback(&a->layer[l->component], dir, suffix) != 0)
             fprintf(stderr, "falta %s\n", path);
     }
-
-    /* Efecto de dibujo del COF de las capas transparentes */
-    static const int8_t k_effect_blend[] = { BLEND_25, BLEND_50, BLEND_75, BLEND_ADD, BLEND_MUL };
-    for (int i = 0; i < a->cof.num_layers; i++) {
-        const CofLayer *l = &a->cof.layers[i];
-        if (l->transparent && l->component < COMP_COUNT)
-            a->blend[l->component] =
-                (int8_t)(1 + (l->draw_effect < sizeof k_effect_blend ? k_effect_blend[l->draw_effect] : BLEND_50));
-    }
-
-    a->speed = 256;
-    a->hit_frame = a->cof.frames_per_dir / 2;
-    if (s_animdata) {
-        char name[16];
-        snprintf(name, sizeof name, "%s%s%s", look->token, mode, wclass);
-        const AnimRecord *rec = animdata_find(s_animdata, name);
-        if (rec) {
-            a->speed = rec->speed;
-            for (int f = 0; f < rec->frames_per_dir && f < (int)sizeof rec->events; f++)
-                if (rec->events[f] == 1) {
-                    a->hit_frame = f;
-                    break;
-                }
-        }
-    }
-    a->ok = 1;
-    return 0;
 }
 
 void charanim_free(CharAnim *a)

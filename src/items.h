@@ -371,6 +371,9 @@ int         items_ground_count(void);
 const Item *items_ground_item(int i, float *x, float *y); /* NULL si la casilla está libre */
 void        items_ground_remove(int i);
 int         items_ground_age(int i); /* ticks que lleva en el piso (-1 = casilla libre) */
+/* Los jugadores que cuentan para el NoDrop de las tiradas que siguen (1 = como siempre) */
+void        items_set_drop_players(int n);
+void        items_reset_rng(uint32_t seed); /* en red: el mismo azar en todas las máquinas */
 int         items_ground_nearest(float x, float y, float range, int gold_only); /* -1 si no hay */
 void        items_ground_draw(int i, int sx, int sy);
 /* Texto y color del cartel con el nombre; 0 si todavía está cayendo */

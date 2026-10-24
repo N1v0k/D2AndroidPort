@@ -78,6 +78,11 @@ int itemstats_find(const char *name)
     return -1;
 }
 
+void itemstats_reset_rng(uint32_t seed)
+{
+    s_rng = 0x51C0DEu ^ (seed * 3266489917u);
+}
+
 int itemstats_init(void)
 {
     TxtTable isc = { 0 }, pr = { 0 };

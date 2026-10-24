@@ -810,3 +810,46 @@
 809	Mortos: %d / %d
 810	Sobrepujado! %d
 811	Abra o baú; o portal volta ao menu
+812	REDE LOCAL
+813	Até 8 jogadores em várias máquinas da mesma rede (1 ou 2 em cada).
+814	Todas precisam ter a mesma versão do jogo.
+815	CRIAR PARTIDA
+816	ENTRAR EM UMA PARTIDA
+817	Esq. / dir.: %d jogador(es) nesta máquina
+818	Procurando partidas na rede...
+819	%s (%d jogadores)
+820	A: entrar     B: voltar
+821	SUA PARTIDA EM REDE
+822	SALA DE ESPERA
+823	As outras máquinas a encontram sozinhas (esta é %s)
+824	J%d  %s  nível %d  (máquina %d)
+825	A: começar     Esq. / dir.: dificuldade     B: fechar
+826	Esperando o anfitrião começar...
+827	B: sair
+828	Falta outra máquina conectada
+829	Não foi possível criar a partida (a porta 6112 está em uso?)
+830	Não foi possível conectar a essa partida
+831	A conexão com o anfitrião caiu
+832	A máquina %d saiu
+833	O anfitrião não responde
+834	A máquina %d não responde
+835	As máquinas perderam a sincronia (máquina %d, no tick %u)
+836	Chegou algo que não dá para entender
+837	O anfitrião mandou um começo que não dá para entender
+838	A: comprar   LB/RB: abas   B: voltar
+839	LB/RB: abas   B: voltar
+840	A: vender   Select: comprar   B: voltar
+841	Select: vender da mochila
+842	Isso não pode ser vendido
+843	Atributos
+844	Select + X: atributos   Select + Y: habilidades
+845	HISTÓRIA
+846	VOLTAR
+847	Os cinco atos da história, do Normal ao Tormento.
+848	Quantos jogam nesta máquina?
+849	Você cria a partida: as outras máquinas da rede a encontram sozinhas.
+850	Você procura uma partida criada em outra máquina desta rede.
+851	Eco do Ódio (jogadores: %d)
+852	História (jogadores: %d)
+853	O nível dos personagens define a dificuldade
+854	A: começar     B: fechar

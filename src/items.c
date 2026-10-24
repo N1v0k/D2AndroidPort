@@ -158,6 +158,7 @@ static GemDef      s_gems[MAX_GEMS];
 static int         s_num_gems;
 static Ratio       s_ratio[2][2]; /* [uber][de clase] */
 static TxtTable    s_tc;
+static int         s_drop_players = 1; /* items_set_drop_players: los jugadores que cuentan para el NoDrop */
 static GroundItem  s_ground[MAX_GROUND];
 static uint32_t    s_ground_now; /* los ticks de items_ground_tick */
 static int         s_ground_top; /* uno más que el último lugar usado: los recorridos llegan hasta acá */
@@ -2103,6 +2104,13 @@ static void roll(const char *name, int mlvl, TcMods m, Item *out, int *n, int ma
     }
     int picks = txt_get_int(&s_tc, row, "Picks", 1);
     int nodrop = txt_get_int(&s_tc, row, "NoDrop", 0);
+    if (nodrop > 0 && s_drop_players > 1) { /* con más jugadores, menos veces nada (ITEMS_RollTreasureClass) */
+        double base = (double)nodrop / (double)(sum + nodrop), ratio = base;
+        for (int k = s_drop_players - 1; k > 0; --k)
+            ratio *= base;
+        double inv = 1.0 - ratio;
+        nodrop = inv == 0.0 ? 0 : (int)((double)sum / inv * (1.0 - inv));
+    }
     if (picks < 0) {
         /* Picks negativo: suelta cada opción tantas veces como su probabilidad */
         for (int i = 0; i < count; i++)
@@ -2439,6 +2447,16 @@ void items_draw_item(const Item *it, int x, int y)
 int items_ground_age(int i)
 {
     return i >= 0 && i < s_ground_top && s_ground[i].used ? (int)(s_ground_now - s_ground[i].since) : -1;
+}
+
+void items_reset_rng(uint32_t seed)
+{
+    s_rng = 0xC0FFEEu ^ (seed * 2246822519u);
+}
+
+void items_set_drop_players(int n)
+{
+    s_drop_players = n < 1 ? 1 : n > 8 ? 8 : n;
 }
 
 int items_ground_add(const Item *it, float x, float y)

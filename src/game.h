@@ -4,6 +4,7 @@
 #include "input.h"
 
 #include <stddef.h>
+#include <stdint.h>
 
 /* La lógica del original corre a 25 cuadros por segundo; el dibujo interpola. */
 #define TICK_RATE 25
@@ -23,6 +24,21 @@ void game_set_mode(int mode); /* lo que se juega con game_start_slots: 0 la hist
 void game_set_language(const char *code); /* el idioma elegido en el menú (opciones.txt; se usa al arrancar) */
 int  game_difficulty(void);
 int  game_tick(const InputState *in);
+uint64_t game_state_hash(void); /* el resumen del estado (la red compara el de todas las máquinas) */
+/* En red (docs/plan-lan.md): los controles de los jugadores de esta máquina para mandar, y los de
+   todos los de la partida para el tick que sigue (NULL = sin red: los joysticks) */
+int  game_local_inputs(const InputState *in, PlayerInput *out);
+void game_set_frame(const PlayerInput *all);
+struct NetStart;
+/* Antes de game_start_slots en red: lo que mandó el anfitrión (net.h), las partidas guardadas de los
+   jugadores de esta máquina; llena slots y classes. game_net_started después; game_net_end al salir. */
+void game_net_begin(const struct NetStart *ns, const int *local_slots, int *slots, int *classes);
+void game_net_started(void);
+void game_net_end(void);
+int  game_local_player(int k); /* el jugador de la partida que maneja el joystick k de esta máquina (-1 = ninguno) */
+int  game_num_local(void);
+void game_perf_line(char *out, size_t cap); /* D2_TICK_PERF: zonas armadas, unidades y jugadores */
+char *game_slot_text(int slot, size_t *len); /* el texto de una partida guardada (hay que liberarlo), NULL = no hay */
 void game_render(float alpha);
 void game_bench_parts(char *out, size_t cap); /* el desglose del dibujo desde la última vez (y lo reinicia) */
 /* Rendimiento medido por main (cada segundo), para la opción VER RENDIMIENTO */

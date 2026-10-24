@@ -1,7 +1,10 @@
 #ifndef INPUT_H
 #define INPUT_H
 
-#define MAX_PLAYERS 2
+/* Los jugadores de una partida (8, como el original: en red, de varias máquinas) y los de una
+   máquina (los joysticks; con dos, la pantalla partida) */
+#define MAX_PLAYERS 8
+#define MAX_LOCAL   2
 
 typedef struct {
     float move_x, move_y; /* dirección en pantalla (-1..1, y hacia abajo) */
@@ -10,7 +13,8 @@ typedef struct {
     /* Eventos de un solo disparo: los consume el siguiente tick de lógica */
     int action;         /* A: atacar, levantar un objeto o hablar */
     int button[4];      /* A, B, X e Y: cada uno tira la habilidad de su casillero */
-    int skill_tree;     /* abrir el árbol de habilidades (teclado: T / U) */
+    int skill_tree;     /* abrir el árbol de habilidades (Select + Y; teclado: T / U) */
+    int stats_page;     /* abrir los atributos (Select + X; teclado: G / H) */
     int potion_life;    /* LB: la primera poción de vida del cinturón */
     int potion_mana;    /* LT: la primera de maná */
     int potion_stamina; /* apretar el stick izquierdo (L3) */
@@ -22,6 +26,7 @@ typedef struct {
     int drop;           /* X, o Q para el 1 y M para el 2: tirar el objeto elegido */
     int back;           /* B, o Retroceso para el 1 y Suprimir para el 2: cerrar diálogos y tiendas */
     int held[4];        /* A, B, X e Y mantenidos ahora (no son eventos): para canalizar (Vincular demonio) */
+    int always_run;     /* la opción "correr siempre" de su máquina (en red viaja con los controles) */
 } PlayerInput;
 
 /* El primer joystick que se usa maneja al jugador 1 y el segundo al jugador
@@ -35,7 +40,7 @@ typedef struct {
    cuatro casilleros de habilidad (teclado: Espacio, E, R, F para el 1 y
    Enter, J, L, O para el 2). */
 typedef struct {
-    PlayerInput player[MAX_PLAYERS];
+    PlayerInput player[MAX_PLAYERS]; /* los joysticks llenan los primeros MAX_LOCAL; en red, todos los de la partida */
 
     /* El mouse controla al jugador 1 */
     int mouse_x, mouse_y;

@@ -86,14 +86,18 @@ enum { ST_IDLE, ST_CHASE, ST_ATTACK, ST_HIT, ST_RISE, ST_DYING, ST_DEAD };
 #define MERC_COOLDOWN 10
 
 /* Gráficos compartidos entre unidades iguales (por ejemplo, todos los
-   Fallen). En el juego se decodifican en otro hilo (la Pi tiene 4 núcleos):
-   mientras tanto la unidad existe pero no se mueve ni se dibuja. */
+   Fallen). Lo que usa la lógica (los COF y animdata: cuadros, velocidad, el
+   golpe) se lee al pedirlos; los dibujos se decodifican en otro hilo (la Pi
+   tiene 4 núcleos): mientras tanto la unidad se mueve pero no se dibuja.
+   Antes esperaba quieta, y la partida dependía de cuánto tardaba la carga
+   (en red, todas las máquinas tienen que calcular lo mismo). */
 enum { GFX_EMPTY, GFX_LOADING, GFX_READY, GFX_FAILED };
 typedef struct {
     char         key[32]; /* "" = lugar libre */
     CharAnim     anim[ANIM_COUNT];
     int          refs;    /* unidades que lo usan: con 0 queda guardado un rato */
-    int          state;   /* GFX_* (job_flag_get/set): el hilo que carga lo pone en READY o FAILED */
+    int          state;   /* GFX_* (job_flag_get/set): el hilo que carga lo pone en READY */
+    int          meta;    /* los COF ya están (lo de la lógica): desde que se piden */
     CharLook     look;
     char         wclass[8];
     const char  *modes[ANIM_COUNT]; /* los que se piden (NULL = no cargar); apuntan a mode_buf */
@@ -199,6 +203,7 @@ typedef struct {
     int8_t herald;   /* un Heraldo de las zonas de terror: su grado (1..5) */
     int8_t tc_boost; /* niveles de más al elegir su clase de tesoro (los Heraldos) */
     int8_t hunt;     /* el Eco del Odio (eco.inc): va a buscar a los jugadores aunque no los vea */
+    int8_t players;  /* los jugadores de la partida cuando salió (STAT_MONSTER_PLAYERCOUNT: el botín) */
     uint32_t died_at; /* el cazador: cuándo murió (s_unit_ticks; sus cadáveres se van: units_hunt_corpses) */
     int unique;   /* jefe con nombre propio (superuniques.txt) */
     int attack_delay; /* ticks entre ataques (aidel de monstats.txt) */
@@ -363,6 +368,7 @@ typedef struct {
 /* Monstruos que murieron por veneno: la experiencia la reparte game.c */
 static struct { int unit, owner, exp; } s_kills[MAX_KILLS];
 static int s_num_kills;
+static int s_mon_group = -1; /* las novas de los monstruos: a cada jugador le pega uno solo (game.c) */
 
 static TxtTable   s_objpreset, s_monpreset, s_objects, s_monstats, s_monstats2, s_monlvl, s_superuniques;
 static TxtTable   s_monsounds, s_monequip, s_skilltab, s_monumod, s_difflv;
@@ -452,6 +458,8 @@ void units_set_level_query(int (*level_id_at)(float x, float y))
     s_level_id_at = level_id_at;
 }
 static int        s_spawn_zone = -1; /* zona de las unidades que se crean ahora */
+static int        s_lockstep;        /* en red: nada de la lógica depende de cuándo terminan de cargarse los dibujos */
+static int        s_player_count = 1; /* los jugadores de la partida (units_set_player_count) */
 static float dist_to(const Unit *u, float x, float y);
 static void  set_state(Unit *u, int state);
 static int   in_radius(const Unit *u, float x, float y, float radius);
@@ -771,10 +779,10 @@ static int gfx_ready(const UnitGfx *g)
     return gfx_state(g) == GFX_READY;
 }
 
-/* ¿Tiene esa animación? Mientras se carga, la que se pidió */
+/* ¿Tiene esa animación? (su COF: lo de la lógica, que está desde que se pidieron los gráficos) */
 static int gfx_has(const UnitGfx *g, int a)
 {
-    return gfx_ready(g) ? g->anim[a].ok : g && g->modes[a] != NULL;
+    return g && g->meta && g->anim[a].ok;
 }
 
 static size_t anim_bytes(const CharAnim *a)
@@ -788,14 +796,14 @@ static size_t anim_bytes(const CharAnim *a)
     return n;
 }
 
-/* Decodifica las animaciones (en el hilo de carga o, sin él, ahí mismo) */
-static void gfx_decode(UnitGfx *g)
+/* Lo de la lógica: los COF de los modos pedidos (en el momento). 0 = no tiene la de estar quieto */
+static int gfx_meta(UnitGfx *g)
 {
     int chars = g->look.base[0] == '\0' || strcmp(g->look.base, "chars") == 0;
     for (int a = 0; a < ANIM_COUNT; a++)
         if (g->modes[a]) /* los personajes mueren sin arma: no hay muerte con otra clase */
-            charanim_load(&g->anim[a], &g->look, g->modes[a],
-                          chars && (a == ANIM_DEATH || a == ANIM_DEAD) ? "hth" : g->wclass);
+            charanim_load_meta(&g->anim[a], &g->look, g->modes[a],
+                               chars && (a == ANIM_DEATH || a == ANIM_DEAD) ? "hth" : g->wclass);
     if (strcmp(g->look.base, "objects") != 0) { /* caminan y corren al paso de su velocidad */
         g->anim[ANIM_WALK].speed = (int)((float)g->anim[ANIM_WALK].speed * MON_WALK_BONUS + 0.5f);
         g->anim[ANIM_RUN].speed = (int)((float)g->anim[ANIM_RUN].speed * MON_RUN_BONUS + 0.5f);
@@ -805,8 +813,18 @@ static void gfx_decode(UnitGfx *g)
             charanim_free(&g->anim[a]);
         fprintf(stderr, "sin gráficos para %s\n", g->key);
         job_flag_set(&g->state, GFX_FAILED);
-        return;
+        return 0;
     }
+    g->meta = 1;
+    return 1;
+}
+
+/* Decodifica los dibujos de las animaciones (en el hilo de carga o, sin él, ahí mismo) */
+static void gfx_decode(UnitGfx *g)
+{
+    for (int a = 0; a < ANIM_COUNT; a++)
+        if (g->anim[a].ok)
+            charanim_load_layers(&g->anim[a], &g->look);
     size_t bytes = 0;
     for (int a = 0; a < ANIM_COUNT; a++)
         bytes += anim_bytes(&g->anim[a]);
@@ -907,16 +925,14 @@ static UnitGfx *get_gfx(const char *key, const CharLook *look, const char *const
         s_num_gfx++;
     if (getenv("D2_LIST_GFX"))
         printf("gráficos: %s\n", key);
-    if (jobs_running()) { /* en otro hilo: la unidad espera quieta */
+    if (!gfx_meta(g)) /* (queda marcado: los que lo pidan después reciben NULL) */
+        return NULL;
+    if (jobs_running()) { /* los dibujos, en otro hilo: la unidad se mueve sin verse */
         job_flag_set(&g->state, GFX_LOADING);
         jobs_push(gfx_job, g, 0);
         return g;
     }
     gfx_decode(g);
-    if (gfx_state(g) == GFX_FAILED) {
-        gfx_release(g);
-        return NULL;
-    }
     return g;
 }
 
@@ -1150,6 +1166,21 @@ static int             s_hunt_hp_pct, s_hunt_dmg_pct; /* lo de más (pasado el n
 static int             s_hunt_deaths;                 /* los cazadores que murieron (los mate quien los mate) */
 static const uint16_t *s_flow;                        /* los pasos (en subtiles) hasta un jugador; 0xffff = no se llega */
 static int             s_flow_x0, s_flow_y0, s_flow_w, s_flow_h;
+
+void units_set_lockstep(int on)
+{
+    s_lockstep = on != 0;
+}
+
+void units_set_player_count(int n)
+{
+    s_player_count = n < 1 ? 1 : n > 8 ? 8 : n;
+}
+
+int units_player_count_of(int i)
+{
+    return i >= 0 && i < s_num_units && s_units[i].players > 0 ? s_units[i].players : 1;
+}
 
 void units_set_hunt(int zone, int hp_pct, int dmg_pct)
 {
@@ -1809,6 +1840,17 @@ static Unit *create_monster_raw(const char *id, float x, float y, int level, int
 static Unit *create_monster(const char *id, float x, float y, int level, int enemy)
 {
     Unit *u = create_monster_raw(id, x, y, level, enemy);
+    if (u && enemy == 1) {
+        /* Con más jugadores, 50 % más de vida y de experiencia por cada uno de más (MONSTER_GetHpBonus;
+           los del original son los malos: los enemigos) */
+        u->players = (int8_t)s_player_count;
+        if (s_player_count > 1) {
+            int bonus = (s_player_count - 1) * 50;
+            int64_t hp = (int64_t)u->max_hp * (100 + bonus) / 100;
+            u->max_hp = u->hp = hp > (1 << 23) - 1 ? (1 << 23) - 1 : (int)hp;
+            u->exp = (int)((int64_t)u->exp * (100 + bonus) / 100);
+        }
+    }
     if (u && enemy == 1 && hunt_spawning())
         hunt_power(u);
     return u;
@@ -3772,7 +3814,6 @@ static void enemy_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
             UnitTarget *t = &pl[u->target];
             const char *name = u->missile2[0] && missiles_exists(u->missile2) && rnd(u) % 3 == 0 ? u->missile2 : u->missile;
             int shots = u->ring > 0 ? u->ring : u->spray > 1 ? u->spray : 1;
-            static int s_mon_group = -1; /* las novas de los monstruos: a cada jugador le pega uno solo (game.c) */
             int group = (u->spell_flags & MF_GROUP) ? s_mon_group-- : 0;
             for (int s = 0; s < shots; s++) {
             float a = u->ring > 0 ? (float)s * 2.0f * PI_F / (float)shots /* la Nova: alrededor */
@@ -5297,7 +5338,7 @@ void units_pet_damage(int i, int amount)
         set_state(u, ST_DYING);
         if (u->convert_ticks > 0) /* convertido: muere como enemigo (su cadáver es de los otros) */
             u->convert_ticks = 1;
-    } else if (amount * 4 >= u->max_hp && gfx_ready(u->gfx) && u->gfx->anim[ANIM_HIT].ok && u->state != ST_ATTACK) {
+    } else if (amount * 4 >= u->max_hp && gfx_has(u->gfx, ANIM_HIT) && u->state != ST_ATTACK) {
         set_state(u, ST_HIT); /* solo los golpes fuertes los frenan: si no, los esqueletos no llegan a pegar */
     }
 }
@@ -5416,7 +5457,7 @@ void units_merc_damage(int i, int amount)
     if (u->hp <= 0) {
         u->hp = 0;
         set_state(u, ST_DYING);
-    } else if (amount * 12 >= u->max_hp && gfx_ready(u->gfx) && u->gfx->anim[ANIM_HIT].ok && u->state != ST_ATTACK) {
+    } else if (amount * 12 >= u->max_hp && gfx_has(u->gfx, ANIM_HIT) && u->state != ST_ATTACK) {
         set_state(u, ST_HIT);
     }
 }
@@ -5460,7 +5501,7 @@ void units_tick(const Map *m, UnitTarget *players, int num_players)
         u->prev_x = u->x;
         u->prev_y = u->y;
         int st = gfx_state(u->gfx);
-        if (st == GFX_FAILED && !u->merc) { /* no hay con qué dibujarlo: no existe */
+        if ((st == GFX_FAILED || !u->gfx) && !u->merc) { /* no hay con qué dibujarlo: no existe */
             unit_gfx_refs(u, -1);
             memset(u, 0, sizeof *u);
             u->zone = ZONE_FREE;
@@ -5469,8 +5510,11 @@ void units_tick(const Map *m, UnitTarget *players, int num_players)
             unit_freed((int)(u - s_units));
             continue;
         }
-        if (st != GFX_READY)
-            continue; /* todavía se está cargando: quieto */
+        if (!u->gfx || !u->gfx->meta)
+            continue; /* (la mercenaria sin gráficos; los COF se leen al pedirlos) */
+        if (st != GFX_READY && !s_lockstep)
+            continue; /* sin red, espera quieta a tener sus dibujos (así nunca pega uno que no se ve); en red se
+                         mueve igual: cuándo termina de cargarse depende de cada máquina */
         if (u->enemy) {
             if (u->curse_ticks > 0 && --u->curse_ticks == 0)
                 u->curse_def_flat = u->curse_def_pct = u->curse_dmg_pct = u->curse_ar_pct = 0;
@@ -6077,7 +6121,7 @@ int units_damage(int i, int amount)
         return u->exp > 0 ? u->exp : 1;
     }
     /* Como en el original: si el golpe le saca 1/8 de la vida o más, se resiente */
-    if (amount * 8 >= u->max_hp && gfx_ready(u->gfx) && u->gfx->anim[ANIM_HIT].ok && !(u->jab && u->ai == AI_SANDLEAPER)) {
+    if (amount * 8 >= u->max_hp && gfx_has(u->gfx, ANIM_HIT) && !(u->jab && u->ai == AI_SANDLEAPER)) {
         u->jab = 0;
         u->ai_move = u->ai_wait = 0;
         set_state(u, ST_HIT);
@@ -6647,4 +6691,27 @@ void units_free(void)
     txt_free(&s_superuniques);
     txt_free(&s_monumod);
     txt_free(&s_difflv);
+}
+
+/* Una partida en red: todas las máquinas empiezan con las unidades igual (ninguna de antes, los
+   lugares desde el primero y el mismo azar), aunque alguna haya jugado otra partida antes */
+void units_reset_game(uint32_t seed)
+{
+    for (int i = 0; i < s_num_units; i++)
+        if (s_units[i].zone != ZONE_FREE)
+            units_remove(i);
+    s_num_units = s_free_from = 0;
+    s_spawn_rng = 12345u ^ (seed * 2654435761u);
+    s_unit_ticks = 0;
+    s_num_kills = 0;
+    s_mon_group = -1;
+    s_num_seqs = 0;
+    s_zealots_flee = 0;
+    s_clone_pending = 0;
+    s_clone_unit = -1;
+    s_hunt_deaths = 0;
+    s_hunt_zone = -1;
+    s_num_aura = s_num_heals = s_num_shots = 0;
+    s_tick_npl = 0;
+    s_a5_ancients = s_a5_baal_left = 0;
 }

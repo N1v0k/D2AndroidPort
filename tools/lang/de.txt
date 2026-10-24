@@ -810,3 +810,46 @@
 809	Getötet: %d / %d
 810	Überrannt! %d
 811	Öffne die Truhe; das Portal führt zurück zum Menü
+812	LOKALES NETZWERK
+813	Bis zu 8 Spieler auf mehreren Geräten im selben Netzwerk (1 oder 2 pro Gerät).
+814	Alle müssen dieselbe Spielversion haben.
+815	SPIEL ERSTELLEN
+816	SPIEL BEITRETEN
+817	Links / rechts: %d Spieler auf diesem Gerät
+818	Suche nach Spielen im Netzwerk...
+819	%s (%d Spieler)
+820	A: beitreten     B: zurück
+821	DEIN NETZWERKSPIEL
+822	WARTERAUM
+823	Die anderen Geräte finden es von selbst (dieses ist %s)
+824	S%d  %s  Stufe %d  (Gerät %d)
+825	A: starten     Links / rechts: Schwierigkeit     B: schließen
+826	Warte auf den Start durch den Gastgeber...
+827	B: verlassen
+828	Ein weiteres Gerät muss verbunden sein
+829	Spiel konnte nicht erstellt werden (ist Port 6112 belegt?)
+830	Verbindung zu diesem Spiel nicht möglich
+831	Die Verbindung zum Gastgeber wurde unterbrochen
+832	Gerät %d hat das Spiel verlassen
+833	Der Gastgeber antwortet nicht
+834	Gerät %d antwortet nicht
+835	Die Geräte sind nicht mehr synchron (Gerät %d, bei Tick %u)
+836	Es kam etwas Unverständliches an
+837	Der Gastgeber hat einen unverständlichen Start gesendet
+838	A: kaufen   LB/RB: Reiter   B: zurück
+839	LB/RB: Reiter   B: zurück
+840	A: verkaufen   Select: kaufen   B: zurück
+841	Select: aus dem Rucksack verkaufen
+842	Das kann man nicht verkaufen
+843	Attribute
+844	Select + X: Attribute   Select + Y: Fertigkeiten
+845	GESCHICHTE
+846	ZURÜCK
+847	Die fünf Akte der Geschichte, von Normal bis Hölle.
+848	Wie viele spielen an diesem Gerät?
+849	Du erstellst das Spiel: Die anderen Geräte im Netzwerk finden es von selbst.
+850	Du suchst ein Spiel, das auf einem anderen Gerät in diesem Netzwerk erstellt wurde.
+851	Echo des Hasses (Spieler: %d)
+852	Geschichte (Spieler: %d)
+853	Die Stufe der Charaktere bestimmt die Schwierigkeit
+854	A: starten     B: schließen

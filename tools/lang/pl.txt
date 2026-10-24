@@ -810,3 +810,46 @@
 809	Zabici: %d / %d
 810	Przytłoczenie! %d
 811	Otwórz skrzynię; portal wraca do menu
+812	SIEĆ LOKALNA
+813	Do 8 graczy na kilku urządzeniach w tej samej sieci (1 lub 2 na każdym).
+814	Wszystkie muszą mieć tę samą wersję gry.
+815	UTWÓRZ GRĘ
+816	DOŁĄCZ DO GRY
+817	W lewo / w prawo: graczy na tym urządzeniu: %d
+818	Szukanie gier w sieci...
+819	%s (graczy: %d)
+820	A: dołącz     B: wróć
+821	TWOJA GRA SIECIOWA
+822	POCZEKALNIA
+823	Inne urządzenia znajdą ją same (to urządzenie: %s)
+824	G%d  %s  poziom %d  (urządzenie %d)
+825	A: rozpocznij     W lewo / w prawo: poziom trudności     B: zamknij
+826	Czekanie, aż gospodarz rozpocznie...
+827	B: wyjdź
+828	Potrzebne jest drugie podłączone urządzenie
+829	Nie udało się utworzyć gry (czy port 6112 jest zajęty?)
+830	Nie udało się połączyć z tą grą
+831	Utracono połączenie z gospodarzem
+832	Urządzenie %d odeszło
+833	Gospodarz nie odpowiada
+834	Urządzenie %d nie odpowiada
+835	Urządzenia rozsynchronizowały się (urządzenie %d, tik %u)
+836	Dotarło coś niezrozumiałego
+837	Gospodarz wysłał niezrozumiały start
+838	A: kup   LB/RB: zakładki   B: wróć
+839	LB/RB: zakładki   B: wróć
+840	A: sprzedaj   Select: kup   B: wróć
+841	Select: sprzedaj z plecaka
+842	Tego nie można sprzedać
+843	Atrybuty
+844	Select + X: atrybuty   Select + Y: umiejętności
+845	FABUŁA
+846	WRÓĆ
+847	Pięć aktów fabuły, od Normalnego do Piekła.
+848	Ilu gra na tym urządzeniu?
+849	Tworzysz grę: inne urządzenia w sieci znajdą ją same.
+850	Szukasz gry utworzonej na innym urządzeniu w tej sieci.
+851	Echo Nienawiści (gracze: %d)
+852	Fabuła (gracze: %d)
+853	Poziom postaci wyznacza poziom trudności
+854	A: rozpocznij     B: zamknij

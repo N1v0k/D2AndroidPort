@@ -14,7 +14,8 @@
 #define CUBE_W 3
 #define CUBE_H 4
 
-int cube_init(void); /* carga cubemain.txt (después de items_init); cuántas recetas sirven */
+int cube_init(void);
+void cube_reset_rng(uint32_t seed); /* en red: el mismo azar en todas las máquinas */ /* carga cubemain.txt (después de items_init); cuántas recetas sirven */
 
 /* Transmuta lo que hay en el cubo (in, n objetos) con el nivel del
    personaje: si es una receta, deja el resultado en out (devuelve cuántos;

@@ -933,6 +933,8 @@ static int tz_zone_of(long long turn)
 static long long tz_now(void)
 {
     const char *e = getenv("D2_TZ_TIME"); /* (para probar: los segundos desde 1970) */
+    if (s_lockstep) /* (en red, el reloj de la partida: el del anfitrión al empezar más los ticks) */
+        return (e ? atoll(e) : s_epoch) + (long long)(s_ticks / TICK_RATE);
     return e ? atoll(e) : (long long)time(NULL);
 }
 

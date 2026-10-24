@@ -100,3 +100,7 @@
 
 /* El Eco del Odio (eco.inc y menu.c) */
 { "Abrí el cofre; el portal vuelve al menú", "Abre el cofre; el portal vuelve al menú" },
+
+/* El menú: la historia o el Eco, la red con cuántos juegan en cada máquina (menu.c) */
+{ "Creás la partida: las otras máquinas de la red la encuentran solas.", "Creas la partida: las otras máquinas de la red la encuentran solas." },
+{ "Buscás una partida que se creó en otra máquina de esta red.", "Buscas una partida que se creó en otra máquina de esta red." },
