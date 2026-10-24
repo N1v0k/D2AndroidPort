@@ -131,11 +131,64 @@ se atrasa, esperan todas.
 - Más de 8 no: es el tope del original (la vida, la experiencia y el botín
   de los monstruos llegan hasta 8 jugadores) y del protocolo. La memoria
   sería lo primero en acabarse.
-- Todas las máquinas tienen que ser Pi (o todas PC) con el mismo
-  ejecutable: una PC y una Pi no redondean igual y se separan.
+- Pueden mezclarse Pi, PC con Linux y PC con Windows (ver "La Pi, Linux y
+  Windows juntas", abajo), con la misma versión del código.
 - Falta probarlo con dos Pi de verdad (acá fue una real y las otras
   emuladas en la PC) y con gente jugando. Quedó anotado un tirón de 376 ms
   en el dibujo, una sola vez al empezar, en el pueblo (no es de la red).
+
+## Windows (24/10/2026)
+
+La misma red en Windows, con Winsock (`net.c`: unas macros para lo que cambia; la IP propia
+"conectando" un UDP afuera; la búsqueda pregunta a cada red de la máquina, porque con
+255.255.255.255 sola Windows la manda por una sola placa, a veces la virtual de WSL o Hyper-V).
+La primera vez que una PC crea una partida, el firewall pregunta: hay que dejarlo en redes
+privadas.
+
+Probado en una PC con dos copias (`D2_NET_BIND=127.0.0.1`, para que no pregunte el firewall): el
+Acto 1 con 4 jugadores en 2 máquinas, 68 de 68 en las dos y 271 resúmenes iguales; el Eco del Odio
+con 2; y la búsqueda desde el menú (el anfitrión contesta con un número de la partida, así la misma
+no aparece dos veces, por su IP y por 127.0.0.1). Falta probarlo entre dos PC.
+
+## La Pi, Linux y Windows juntas (24/10/2026)
+
+Para jugar entre máquinas distintas, todas tienen que calcular exactamente lo mismo, bit por bit.
+Linux y Windows en x86 ya daban lo mismo; la Pi (ARM) se separaba. Lo que había:
+
+- **FMA**: el ARM junta multiplicación y suma en una sola operación que redondea una vez en lugar
+  de dos. `-ffp-contract=off` en todas (CMakeLists.txt); en la Pi no se notó en la velocidad.
+- **El orden de los sorteos**: C no dice en qué orden se evalúan los argumentos de una llamada ni
+  los operandos de una cuenta, y GCC los evalúa al revés en x86 y en ARM. Con
+  `maze_build(..., rnd() % 5, rnd() % 5, ...)` la sala de entrada quedaba en (x, y) en una y en
+  (y, x) en la otra: todos los laberintos (cuevas, Cárcel, Catacumbas, cloacas, tumbas...) salían
+  distintos. Lo mismo en las almas del Acto 4, el daño por tick del fuego y del frío, el Charged
+  Bolt, el daño de los espectrales y dos IA. Ahora, de a un sorteo por línea. **Regla: nunca dos
+  sorteos (ni dos funciones que sorteen) en la misma expresión, salvo separados por `&&`, `||`,
+  `?:` o en declaraciones distintas (`int a = rnd(), b = rnd();` está bien).**
+- **math.h**: `sinf`, `cosf`, `atan2f` y `expf` de Windows, y `atan2f` y `expf` de la Pi, difieren
+  en el último bit de las de Linux (medido con 10 millones de valores). La simulación usa las de
+  `src/dmath.h` / `dmath.c`: solo sumas, productos, divisiones y raíces en double, el float más
+  cercano y los mismos bits en las cuatro (x86 Linux, Windows, ARM emulado y la Pi real). Los
+  archivos de la simulación (game.c, units.c, world.c, bot.c, missiles.c, main.c) incluyen
+  `dmath.h` después de `<math.h>`, y los nombres de siempre pasan a ser esos.
+- **qsort**: deja los empates en otro orden según la biblioteca: la mochila y el cofre se ordenan
+  con un ordenamiento estable, y las baldosas desempatan por su número.
+- **char**: en ARM es sin signo; `-fsigned-char` en todas.
+- **La versión**: la red solo junta máquinas con el mismo commit (`D2_VERSION`, de git, en el
+  saludo); `package-release.sh` revisa que la Pi y Windows sean de la misma.
+
+Probado: los mapas de los 5 actos con `D2_ZONETEST=1 D2_COLLHASH=1` (2 semillas) iguales en x86 y
+en ARM; las mismas partidas en un proceso (`D2_LOCKSTEP=1 D2_NO_JOBS=1 D2_HASH=50`: los 5 actos con
+2 jugadores, el Acto 1 con 6 y el Eco del Odio) con todos los resúmenes iguales en x86, ARM emulado
+y Windows; y en red, una partida de 6 jugadores entre Linux, una Pi emulada y Windows, 8000 ticks
+sin separarse, y otra con la Pi real de anfitrión (por Wi-Fi) y Linux y Windows unidos: 6000 ticks,
+los 24 resúmenes iguales en las tres. En la Pi, `dmath.c` no se nota: 1,54 ms de lógica por tick en
+la demostración del Acto 1 con las dos, y 3,34 a 3,40 contra 3,35 a 3,47 en el Acto 5.
+
+Si una máquina tiene otra versión, el anfitrión no la deja entrar y le dice por qué ("Otra versión
+del juego: hace falta la misma en todas", en el idioma de la que se une: el anfitrión manda el texto
+en español y la otra lo traduce); lo mismo si la partida está llena o ya empezó. Antes la que se unía
+veía solo "se cortó la conexión": leía el cierre antes que el mensaje que ya le había llegado.
 
 ## Cómo correr las pruebas
 

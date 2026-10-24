@@ -7,6 +7,19 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# La red local entre la Pi, Linux y Windows: todas tienen que calcular exactamente lo mismo, y el ARM
+# junta multiplicación y suma en una sola operación (FMA) que redondea distinto: sin eso, los mismos
+# números en las tres. Y char con signo, como en x86 (en ARM es sin signo). Las funciones de math.h
+# que usa la simulación son las de src/dmath.h (las del sistema difieren en el último bit).
+add_compile_options(-ffp-contract=off -fsigned-char)
+
+# La versión del código (la red solo junta máquinas con la misma): el commit de git, o "dev"
+execute_process(COMMAND git rev-parse --short=12 HEAD WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+                OUTPUT_VARIABLE D2_GIT_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT D2_GIT_VERSION)
+  set(D2_GIT_VERSION dev)
+endif()
+
 find_package(SDL2 REQUIRED)
 
 # En la Pi (Cortex-A53, que ejecuta en orden) la vectorización SLP de GCC
@@ -58,9 +71,19 @@ add_executable(d2port
   src/controls.c
   src/game.c
   src/net.c
+  src/compat.c
+  src/dmath.c
 )
-target_link_libraries(d2port PRIVATE d2fmtlib SDL2::SDL2 m)
 target_compile_options(d2port PRIVATE -Wall -Wextra)
+target_compile_definitions(d2port PRIVATE D2_VERSION="${D2_GIT_VERSION}")
+if(WIN32)
+  # Windows (cmake/mingw-w64.cmake): el main de SDL (antes que SDL2), clock_gettime de winpthread, sin
+  # ventana de consola y sin las DLL de MinGW (al lado del .exe solo va SDL2.dll)
+  target_link_libraries(d2port PRIVATE d2fmtlib SDL2::SDL2main SDL2::SDL2 m pthread ws2_32 iphlpapi)
+  target_link_options(d2port PRIVATE -mwindows -static-libgcc -static)
+else()
+  target_link_libraries(d2port PRIVATE d2fmtlib SDL2::SDL2 m)
+endif()
 
 add_executable(d2fmt tools/d2fmt.c)
 target_link_libraries(d2fmt PRIVATE d2fmtlib)

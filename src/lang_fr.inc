@@ -920,3 +920,10 @@
 { "Historia (jugadores: %d)", "Histoire (joueurs : %d)" },
 { "La dificultad la da el nivel de los personajes", "Le niveau des personnages fixe la difficulté" },
 { "A: empezar     B: cerrar", "A : commencer     B : fermer" },
+
+/* Los puntos que quedan para repartir (la página de atributos) */
+{ "restantes", "restants" },
+
+/* Por qué no entra una máquina a la partida en red (lo manda el anfitrión, net.c) */
+{ "Otra versión del juego: hace falta la misma en todas", "Autre version du jeu : il faut la même partout" },
+{ "La partida está llena o ya empezó", "La partie est pleine ou a déjà commencé" },

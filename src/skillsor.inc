@@ -240,7 +240,8 @@ static int telekinesis(Player *p, const SkillDef *s, int lvl)
     int lo, hi, plo, phi;
     spell_damage(p, s, lvl, ELEM_LTNG, &lo, &hi);
     skill_phys(s, lvl, &plo, &phi);
-    int u = p->target, dmg = spell_resist((int)(p - s_pl), u, ELEM_LTNG, roll(lo, hi)) + units_resist(u, ELEM_NONE, roll(plo, phi));
+    int u = p->target, dmg = spell_resist((int)(p - s_pl), u, ELEM_LTNG, roll(lo, hi)); /* (de a una tirada: el orden) */
+    dmg += units_resist(u, ELEM_NONE, roll(plo, phi));
     float ux, uy;
     units_position(u, 1.0f, &ux, &uy);
     overlays_add("lightning", OV_AT_UNIT, u, ux, uy, 0);
@@ -704,7 +705,7 @@ static void sorc_tick(Player *p)
         float reach = 12.0f * (5.0f / 6.0f / TICK_RATE) * (float)(range > 4 ? range : 4); /* lo que avanza una llama */
         int ids[16], n = units_enemies_near(p->x + ax * reach / 2.0f, p->y + ay * reach / 2.0f, reach / 2.0f + 0.8f, ids, 16);
         for (int k = 0; k < n; k++) {
-            int d = roll(lo, hi) / TICK_RATE + ((int)(rnd() % TICK_RATE) < roll(lo, hi) % TICK_RATE);
+            int full = roll(lo, hi), d = full / TICK_RATE + ((int)(rnd() % TICK_RATE) < full % TICK_RATE);
             int exp = d > 0 ? units_damage(ids[k], s_one_hit ? 1 << 20 : units_resist(ids[k], ELEM_FIRE, d)) : 0;
             if (exp > 0)
                 award_kill(p, ids[k], exp);

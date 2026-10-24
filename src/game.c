@@ -28,11 +28,13 @@
 
 #include <ctype.h>
 #include <math.h>
+#include "dmath.h" /* (sinf, atan2f... iguales en todas las máquinas: la red) */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include "compat.h"
 #ifdef __GLIBC__
 #include <malloc.h> /* malloc_trim: devolverle al sistema lo que liberó una zona */
 #endif
@@ -769,6 +771,7 @@ static int  meets_reqs(const Player *p, const ItemType *t);
 static int  meets_item(const Player *p, const Item *it);
 static int  equip_slot_for(const Player *p, const ItemType *t);
 static int  panel_x(const Player *p);
+static int  stash_side(const Player *p);
 static int  nav_nearest(int count, int sel, int dx, int dy, void (*rect)(const void *, int, int *, int *, int *, int *),
                         const void *ctx);
 static void inv_rect_cb(const void *ctx, int i, int *x, int *y, int *w, int *h);
@@ -3311,12 +3314,25 @@ static int cmp_bag_items(const void *a, const void *b)
     return strcmp(x->type->code, y->type->code);
 }
 
+/* Ordenar de forma estable (los iguales quedan como estaban): el qsort de cada sistema deja los
+   empates en otro orden, y en red todas las máquinas tienen que ordenar igual */
+static void sort_items(Item *items, int n)
+{
+    for (int i = 1; i < n; i++) {
+        Item it = items[i];
+        int j = i;
+        for (; j > 0 && cmp_bag_items(&items[j - 1], &it) > 0; j--)
+            items[j] = items[j - 1];
+        items[j] = it;
+    }
+}
+
 static void bag_sort(Player *p)
 {
     Item items[BAG_MAX];
     int n = p->bag_count;
     memcpy(items, p->bag, sizeof(Item) * (size_t)n);
-    qsort(items, (size_t)n, sizeof items[0], cmp_bag_items);
+    sort_items(items, n);
     p->bag_count = 0;
     for (int i = 0; i < n; i++)
         if (!bag_add(p, &items[i])) /* no debería pasar: lo que no entra cae al suelo */
@@ -3469,7 +3485,7 @@ static void stash_sort(Player *p, int tab)
     static Item items[STASH_CELLS];
     int n = p->stash_count[tab];
     memcpy(items, p->stash[tab], sizeof(Item) * (size_t)n);
-    qsort(items, (size_t)n, sizeof items[0], cmp_bag_items);
+    sort_items(items, n);
     p->stash_count[tab] = 0;
     for (int i = 0; i < n; i++)
         if (!stash_add(p, tab, &items[i]) && !bag_add(p, &items[i])) /* no debería pasar */
@@ -8689,7 +8705,7 @@ void game_set_save_dir(const char *dir)
 {
     snprintf(s_save_dir, sizeof s_save_dir, "%s", dir ? dir : "");
     if (s_save_dir[0]) {
-        mkdir(s_save_dir, 0755);
+        compat_mkdir(s_save_dir);
         migrate_old_saves();
         load_options();
     }
@@ -8832,7 +8848,7 @@ static void save_character(const Player *p)
         return; /* el personaje de la demostración no se guarda */
     if (!save_path(p->slot, path, sizeof path))
         return;
-    mkdir(s_save_dir, 0755);
+    compat_mkdir(s_save_dir);
     snprintf(tmp, sizeof tmp, "%s.tmp", path);
     FILE *f = fopen(tmp, "w");
     if (!f) {
@@ -8844,7 +8860,7 @@ static void save_character(const Player *p)
        mitad, queda la partida anterior entera */
     int ok = fflush(f) == 0;
     ok &= fclose(f) == 0;
-    if (!ok || rename(tmp, path) != 0)
+    if (!ok || compat_replace(tmp, path) != 0)
         fprintf(stderr, "no pude guardar %s\n", path);
 }
 
@@ -9122,12 +9138,60 @@ static int load_character_from(FILE *f, Player *p, const char *path)
     return 1;
 }
 
+/* Lo que save_character_to escribe, en memoria (malloc, con su largo; NULL = no se pudo): la campaña de
+   la demostración y la prueba de la red. Con open_memstream; en Windows, que no lo tiene, por un temporal */
+static char *character_text(const Player *p, size_t *len)
+{
+    *len = 0;
+#ifdef _WIN32
+    FILE *f = compat_tmpfile();
+    if (!f)
+        return NULL;
+    save_character_to(f, p);
+    long n = ftell(f);
+    char *buf = n >= 0 ? malloc((size_t)n + 1) : NULL;
+    rewind(f);
+    if (buf && fread(buf, 1, (size_t)n, f) == (size_t)n) {
+        buf[n] = '\0';
+        *len = (size_t)n;
+    } else {
+        free(buf);
+        buf = NULL;
+    }
+    fclose(f);
+    return buf;
+#else
+    char *buf = NULL;
+    FILE *f = open_memstream(&buf, len);
+    if (!f)
+        return NULL;
+    save_character_to(f, p);
+    fclose(f);
+    return buf;
+#endif
+}
+
+/* Un FILE para leer un texto que está en memoria (fmemopen; en Windows, por un temporal) */
+static FILE *mem_reader(const char *buf, size_t len)
+{
+#ifdef _WIN32
+    FILE *f = compat_tmpfile();
+    if (f) {
+        fwrite(buf, 1, len, f);
+        rewind(f);
+    }
+    return f;
+#else
+    return fmemopen((void *)buf, len, "r");
+#endif
+}
+
 static int load_character(Player *p)
 {
     char path[300];
     int i = (int)(p - s_pl);
     if (i >= 0 && i < MAX_PLAYERS && s_carry[i]) { /* la campaña de la demostración: el de la dificultad anterior */
-        FILE *f = fmemopen(s_carry[i], s_carry_len[i], "r");
+        FILE *f = mem_reader(s_carry[i], s_carry_len[i]);
         return f ? load_character_from(f, p, "el personaje de la demostración") : 0;
     }
     if (!save_path(p->slot, path, sizeof path))
@@ -12562,11 +12626,7 @@ static int demo_campaign_next(int r)
         int slots[MAX_PLAYERS] = { 0 }, classes[MAX_PLAYERS] = { 0 };
         for (int i = 0; i < s_num_players; i++) {
             classes[i] = s_pl[i].cls;
-            FILE *f = open_memstream(&s_carry[i], &s_carry_len[i]);
-            if (f) {
-                save_character_to(f, &s_pl[i]);
-                fclose(f);
-            }
+            s_carry[i] = character_text(&s_pl[i], &s_carry_len[i]);
         }
         game_set_difficulty(s_diff + 1);
         game_start_slots(s_num_players, slots, classes);
@@ -14519,8 +14579,7 @@ static void draw_divider(float nx, float ny, float amount)
 /* Un cartel centrado en cx: en tamaño 3 si entra en max_w, si no en 2 */
 static int draw_banner_line(int cx, int y, int max_w, const char *text, int scale, uint8_t color)
 {
-    while (scale > 2 && font_width(text, scale) > max_w)
-        scale--;
+    scale = font_fit(text, scale, max_w); /* (si no entra, más chico) */
     font_draw_centered(cx, y, text, scale, color);
     return font_height(scale) + 8;
 }
@@ -14554,7 +14613,14 @@ static void draw_banners(void)
         y += 30;
     }
     if (s_num_local == 1) {
-        draw_player_banners(&s_pl[s_local[0]], SCREEN_W / 2, y, SCREEN_W - 40);
+        /* En lo que queda libre: con un panel a la derecha, la mitad izquierda; con la tienda o el arcón
+           (un panel de cada lado), el medio (si no, tapaban el título del panel) */
+        const Player *p = &s_pl[s_local[0]];
+        int shop = p->dialog_npc >= 0 && p->shop_open;
+        int right = shop || p->inv_open || p->wp_open, left = shop || stash_side(p);
+        int cx = left ? SCREEN_W / 2 : right ? (SCREEN_W - PANEL_W) / 2 : SCREEN_W / 2;
+        int w = left && right ? SCREEN_W - 2 * PANEL_W - 8 : right ? SCREEN_W - PANEL_W - 20 : SCREEN_W - 40;
+        draw_player_banners(p, cx, y, w);
         return;
     }
     if (!s_split) {
@@ -14798,6 +14864,9 @@ static void draw_panel_header(const Player *p, const char *title, const char *he
 /* Texto centrado dentro de un rectángulo del panel */
 static void text_in(int x, int y, int w, int h, const char *text, int scale, uint8_t color)
 {
+    char cut[160];
+    scale = font_fit(text, scale, w - 2); /* (si no entra, más chico; y si ni así, abreviado) */
+    text = font_shorten(text, scale, w - 2, cut, sizeof cut);
     font_draw_centered(x + w / 2, y + (h - font_height(scale)) / 2, text, scale, color);
 }
 

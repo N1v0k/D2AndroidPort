@@ -1,6 +1,7 @@
 #ifndef FONT_H
 #define FONT_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 /* Texto en pantalla. Con las fuentes del juego cargadas (font_init_d2) usa
@@ -26,6 +27,12 @@ int  font_width(const char *s, int scale);
 int  font_height(int scale);
 void font_draw(int x, int y, const char *s, int scale, uint8_t color);
 void font_draw_centered(int cx, int y, const char *s, int scale, uint8_t color);
+/* El tamaño para que s entre en max_w píxeles: el pedido o, si no entra, el siguiente más chico de la
+   misma familia (como el original con los textos largos de otros idiomas). D2_TEXT_CHECK=1 anota los que
+   no entran ni con el más chico */
+int  font_fit(const char *s, int scale, int max_w);
+/* Si s no entra en max_w ni así: abreviado con un punto ("Wytrzym."), en buf; si entra, s */
+const char *font_shorten(const char *s, int scale, int max_w, char *buf, size_t cap);
 /* Cuántos bytes del principio de s entran en max_w píxeles (sin pasar de un
    salto de línea): corta en el último espacio que entra o, en chino, japonés
    y coreano, entre dos letras. El texto ya tiene que estar en el idioma de

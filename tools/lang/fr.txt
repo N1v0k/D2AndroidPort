@@ -853,3 +853,6 @@
 852	Histoire (joueurs : %d)
 853	Le niveau des personnages fixe la difficulté
 854	A : commencer     B : fermer
+855	restants
+856	Autre version du jeu : il faut la même partout
+857	La partie est pleine ou a déjà commencé

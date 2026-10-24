@@ -556,6 +556,62 @@ void font_draw_centered(int cx, int y, const char *s, int scale, uint8_t color)
     font_draw(cx - font_width(s, scale) / 2, y, s, scale, color);
 }
 
+/* El tamaño más chico que sigue en la misma familia de letra (-1 = no hay): los de tamaño de 42 a 8 y
+   después la más chica; la Exocet y la Formal, su versión chica y después la de 8 */
+static int smaller(int scale)
+{
+    switch (scale) {
+    case FONT_EXOCET:
+    case FONT_EXOCET_ENGRAVED: return FONT_EXOCET_SMALL;
+    case FONT_EXOCET_SMALL: return 1;
+    case FONT_FORMAL: return FONT_FORMAL_SMALL;
+    case FONT_FORMAL_SMALL: return 1;
+    case FONT_TINY: return -1;
+    default: break;
+    }
+    if (scale >= 6)
+        return 5;
+    if (scale >= 4)
+        return 3;
+    return scale >= 2 ? scale - 1 : FONT_TINY;
+}
+
+int font_fit(const char *s, int scale, int max_w)
+{
+    int sc = scale;
+    while (font_width(s, sc) > max_w && smaller(sc) >= 0)
+        sc = smaller(sc);
+    if (font_width(s, sc) > max_w && getenv("D2_TEXT_CHECK")) /* (pruebas: los que no entran ni así) */
+        printf("texto que no entra: \"%s\" (%d px en %d)\n", lang_screen(s), font_width(s, sc), max_w);
+    return sc;
+}
+
+const char *font_shorten(const char *s, int scale, int max_w, char *buf, size_t cap)
+{
+    s = lang_screen(s);
+    if (font_width(s, scale) <= max_w || cap < 8)
+        return s;
+    size_t n = 0;
+    const char *p = s;
+    while (*p) { /* de a una letra entera (UTF-8) mientras entre con el punto */
+        const char *q = p;
+        next_cp(&q);
+        size_t len = (size_t)(q - s);
+        if (len + 2 > cap)
+            break;
+        char try_[256];
+        snprintf(try_, sizeof try_, "%.*s.", (int)len, s);
+        if (font_width(try_, scale) > max_w)
+            break;
+        n = len;
+        p = q;
+    }
+    while (n > 0 && s[n - 1] == ' ') /* (sin el espacio antes del punto) */
+        n--;
+    snprintf(buf, cap, "%.*s.", (int)n, s);
+    return buf;
+}
+
 /* Se puede cortar el renglón antes de una letra de China, Japón o Corea
    (esos textos no llevan espacios) */
 static int cjk(uint32_t cp)

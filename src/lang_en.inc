@@ -945,3 +945,10 @@
 { "Historia (jugadores: %d)", "Story (players: %d)" },
 { "La dificultad la da el nivel de los personajes", "The level of the characters sets the difficulty" },
 { "A: empezar     B: cerrar", "A: start     B: close" },
+
+/* Los puntos que quedan para repartir (la página de atributos) */
+{ "restantes", "remaining" },
+
+/* Por qué no entra una máquina a la partida en red (lo manda el anfitrión, net.c) */
+{ "Otra versión del juego: hace falta la misma en todas", "Another version of the game: all need the same one" },
+{ "La partida está llena o ya empezó", "The game is full or has already started" },

@@ -920,3 +920,10 @@
 { "Historia (jugadores: %d)", "Сюжет (игроков: %d)" },
 { "La dificultad la da el nivel de los personajes", "Сложность зависит от уровня персонажей" },
 { "A: empezar     B: cerrar", "A: начать     B: закрыть" },
+
+/* Los puntos que quedan para repartir (la página de atributos) */
+{ "restantes", "осталось" },
+
+/* Por qué no entra una máquina a la partida en red (lo manda el anfitrión, net.c) */
+{ "Otra versión del juego: hace falta la misma en todas", "Другая версия игры: у всех должна быть одна и та же" },
+{ "La partida está llena o ya empezó", "Игра заполнена или уже началась" },

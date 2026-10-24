@@ -920,3 +920,10 @@
 { "Historia (jugadores: %d)", "劇情（玩家：%d）" },
 { "La dificultad la da el nivel de los personajes", "難度由角色等級決定" },
 { "A: empezar     B: cerrar", "A：開始     B：關閉" },
+
+/* Los puntos que quedan para repartir (la página de atributos) */
+{ "restantes", "剩餘" },
+
+/* Por qué no entra una máquina a la partida en red (lo manda el anfitrión, net.c) */
+{ "Otra versión del juego: hace falta la misma en todas", "遊戲版本不同：所有機器需要相同的版本" },
+{ "La partida está llena o ya empezó", "遊戲已滿或已經開始" },

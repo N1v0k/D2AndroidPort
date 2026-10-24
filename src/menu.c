@@ -49,7 +49,7 @@ static int      s_picking;      /* qué jugador está eligiendo */
 static int      s_slots[2], s_classes[2];
 static uint32_t s_ticks;
 static SlotInfo s_info[SAVE_SLOTS];
-static char     s_note[64];     /* aviso corto ("Ya la eligió el jugador 1") */
+static char     s_note[128];    /* aviso corto ("Ya la eligió el jugador 1") */
 static int      s_note_ticks;
 static int      s_movie_sel;    /* en el panel de cinemáticas (la última fila es "Cancelar") */
 static int      s_diff_sel;     /* la dificultad elegida (0 Normal, 1 Pesadilla, 2 Infierno) */
@@ -574,8 +574,8 @@ static void draw_wide_button(int x, int y, const char *text, int selected)
 {
     ui_frame("frontend/widebuttonblank", selected ? 2 : 0, x, y);
     ui_frame("frontend/widebuttonblank", selected ? 3 : 1, x + 256, y);
-    int w = font_width(text, FONT_EXOCET_ENGRAVED);
-    font_draw_centered(x + 136, y + (35 - font_height(FONT_EXOCET_ENGRAVED)) / 2 + 1, text, FONT_EXOCET_ENGRAVED,
+    int f = font_fit(text, FONT_EXOCET_ENGRAVED, 236), w = font_width(text, f); /* (entre los pentagramas) */
+    font_draw_centered(x + 136, y + (35 - font_height(f)) / 2 + 1, text, f,
                        COL(R_GRAY, 5)); /* grabado en la piedra; lo elegido lo marcan los pentagramas */
     if (selected) /* el botón mide 272 x 35: en el medio de la altura */
         draw_pentagrams(x + 136, y + 18, w, 26);
@@ -657,7 +657,7 @@ static void draw_slots(void)
     }
     font_draw_centered(317, 530, "A: jugar     X: borrar     B: volver", 2, COL(R_GRAY, 14));
     if (s_note_ticks > 0)
-        font_draw_centered(317, 112, s_note, 2, COL(R_RED, 13));
+        font_draw_centered(317, 112, s_note, font_fit(s_note, 2, 600), COL(R_RED, 13));
 }
 
 /* Contorno del personaje elegido: doble línea dorada con las esquinas
@@ -832,7 +832,7 @@ static void draw_choice(const char *title, uint8_t title_col, const char *const 
     }
     font_draw_centered(SCREEN_W / 2, SCREEN_H - 30, "A: elegir     B: volver", 1, COL(R_GRAY, 13));
     if (s_note_ticks > 0)
-        font_draw_centered(SCREEN_W / 2, SCREEN_H - 52, s_note, 2, COL(R_RED, 13));
+        font_draw_centered(SCREEN_W / 2, SCREEN_H - 52, s_note, font_fit(s_note, 2, SCREEN_W - 20), COL(R_RED, 13));
 }
 
 /* La historia o el Eco del Odio (uno o dos jugadores, o la partida en red que se crea) */

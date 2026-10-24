@@ -1,4 +1,5 @@
 #include "input.h"
+#include "video.h"
 #include "lang.h"
 
 #include <SDL.h>
@@ -235,6 +236,12 @@ static void on_key(InputState *in, const SDL_KeyboardEvent *k)
                   s_key_blocked[k->keysym.scancode] ? " (trabada desde el principio: no cuenta)" : "");
     if (s_key_blocked[k->keysym.scancode])
         return;
+    /* F11 o Alt+Enter: pantalla completa o ventana (en la PC) */
+    if (k->keysym.sym == SDLK_F11 || ((k->keysym.sym == SDLK_RETURN || k->keysym.sym == SDLK_KP_ENTER) && (k->keysym.mod & KMOD_ALT))) {
+        if (!k->repeat)
+            video_toggle_fullscreen();
+        return;
+    }
     switch (k->keysym.sym) {
     case SDLK_w:     in->menu_up = 1;   p1->nav_up = 1;    return;
     case SDLK_s:     in->menu_down = 1; p1->nav_down = 1;  return;

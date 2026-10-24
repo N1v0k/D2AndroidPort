@@ -6,6 +6,7 @@
 #include <SDL.h>
 
 #include <math.h>
+#include "dmath.h" /* (sinf, atan2f... iguales en todas las máquinas: la red) */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

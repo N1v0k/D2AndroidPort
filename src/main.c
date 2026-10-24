@@ -3,6 +3,7 @@
 #include "cinema.h"
 #include "fmt/fs.h"
 #include "charanim.h"
+#include "compat.h"
 #include "font.h"
 #include "game.h"
 #include "input.h"
@@ -22,6 +23,7 @@
 #include <unistd.h>
 #endif
 #include <math.h>
+#include "dmath.h" /* (sinf, atan2f... iguales en todas las máquinas: la red) */
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -101,7 +103,7 @@ static void usage(const char *argv0)
 static int parse_args(int argc, char **argv, Options *o)
 {
     memset(o, 0, sizeof *o);
-    o->scale = 1;
+    o->scale = 0; /* (sin --scale: en Windows, la ventana más grande que entra; si no, 800x600) */
     o->demo_angle = 20.0f;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--selftest")) {
@@ -1039,6 +1041,7 @@ static int run_window(const Options *o)
 
 int main(int argc, char **argv)
 {
+    compat_start(); /* (Windows: la carpeta del .exe y el registro) */
     Options o;
     if (parse_args(argc, argv, &o) != 0)
         return 2;

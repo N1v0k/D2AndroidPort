@@ -853,3 +853,6 @@
 852	Geschichte (Spieler: %d)
 853	Die Stufe der Charaktere bestimmt die Schwierigkeit
 854	A: starten     B: schließen
+855	übrig
+856	Andere Spielversion: alle brauchen dieselbe
+857	Das Spiel ist voll oder hat schon begonnen

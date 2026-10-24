@@ -34,7 +34,9 @@ build() { # destino prefijo-del-compilador sistema-cmake
     [ "$name" = windows ] && defs+=(-DCASCLIB_DETECT_UNICODE_MISMATCHES)
     "${pre}gcc" -O2 -Wall -Wextra "${defs[@]}" -I"$casc/src" -c "$root/tools/d2port-importar.c" \
         -o "$lib/d2port-importar.o"
-    "${pre}g++" -static -s "$lib/d2port-importar.o" "$lib/libcasc.a" -o "$out/$name/$exe" -pthread
+    local libs=()
+    [ "$name" = windows ] && libs+=(-lws2_32) # (los sockets de CascLib, que el importador no usa)
+    "${pre}g++" -static -s "$lib/d2port-importar.o" "$lib/libcasc.a" -o "$out/$name/$exe" -pthread "${libs[@]}"
     echo "== $name: $out/$name/$exe"
 }
 

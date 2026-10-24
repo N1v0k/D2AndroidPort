@@ -958,12 +958,8 @@ static int at_check(const char *check, char *why, size_t cap)
             if (net_role() != NET_OFF) {
                 /* En red cada máquina guarda solo los suyos (y la prueba, sin D2_NET_SLOTS, a
                    ninguno): se revisa lo que se guarda, igual en todas las máquinas */
-                FILE *w = open_memstream(&mem, &mem_len);
-                if (w) {
-                    save_character_to(w, p);
-                    fclose(w);
-                }
-                f = mem && mem_len > 0 ? fmemopen(mem, mem_len, "r") : NULL;
+                mem = character_text(p, &mem_len);
+                f = mem && mem_len > 0 ? mem_reader(mem, mem_len) : NULL;
             } else if (save_path(p->slot, path, sizeof path)) {
                 f = fopen(path, "r");
             }

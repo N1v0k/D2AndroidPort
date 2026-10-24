@@ -979,7 +979,8 @@ static void a5_dismount(Unit *u, const Map *m)
     u->killable = 1;
     u->solid = 1;
     float r = (float)a5_aip("imp1", 1);
-    ai_teleport(u, m, u->x + (rndf(u) * 2.0f - 1.0f) * r, u->y + (rndf(u) * 2.0f - 1.0f) * r);
+    float tx = u->x + (rndf(u) * 2.0f - 1.0f) * r, ty = u->y + (rndf(u) * 2.0f - 1.0f) * r; /* (de a uno: el orden) */
+    ai_teleport(u, m, tx, ty);
     if (u->max_hp > 0 && u->hp * 10 < u->max_hp) {
         u->hp = 0;
         units_play_death(self);

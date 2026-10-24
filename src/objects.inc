@@ -644,8 +644,12 @@ static void obj_trapped_souls(int ox, int oy)
         while (obj_rn(s, base >> 1) == 0 && found) {
             found = 0;
             for (int c = 0, lim = 3 * (left > 4 ? left : 4); c < lim && !found; c++) {
-                x += 2 * (obj_rn(s, 5) + 5) * k_sx[obj_rnd(s) & 7];
-                y += 2 * (obj_rn(s, 5) + 5) * k_sy[obj_rnd(s) & 7];
+                /* (de a un sorteo por línea: el orden de los operandos no está definido en C, y en red la Pi,
+                   Linux y Windows tienen que poner las almas en el mismo lugar) */
+                int step = 2 * (obj_rn(s, 5) + 5);
+                x += step * k_sx[obj_rnd(s) & 7];
+                step = 2 * (obj_rn(s, 5) + 5);
+                y += step * k_sy[obj_rnd(s) & 7];
                 found = obj_soul_spot(r, x, y, (const int (*)[2])souls, n);
             }
             if (found) {

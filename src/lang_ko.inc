@@ -920,3 +920,10 @@
 { "Historia (jugadores: %d)", "스토리 (플레이어: %d)" },
 { "La dificultad la da el nivel de los personajes", "난이도는 캐릭터 레벨로 정해집니다" },
 { "A: empezar     B: cerrar", "A: 시작     B: 닫기" },
+
+/* Los puntos que quedan para repartir (la página de atributos) */
+{ "restantes", "남음" },
+
+/* Por qué no entra una máquina a la partida en red (lo manda el anfitrión, net.c) */
+{ "Otra versión del juego: hace falta la misma en todas", "게임 버전이 다릅니다: 모두 같은 버전이어야 합니다" },
+{ "La partida está llena o ya empezó", "게임이 가득 찼거나 이미 시작되었습니다" },

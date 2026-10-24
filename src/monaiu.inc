@@ -303,7 +303,8 @@ static int colossal_think(Unit *u, UnitTarget *pl, int t)
     l = l > 0.01f ? l : 1.0f;
     if (u->col_phase >= 2 && rnd(u) % 100 < 15) {
         if (u->colossal == 1 && (k = col_find(u, "Volcano")) >= 0) {
-            col_strike(u, k, "volcano", tp->x + (float)((int)(rnd(u) % 5) - 2), tp->y + (float)((int)(rnd(u) % 5) - 2), ELEM_FIRE, 30, 75);
+            float vx = tp->x + (float)((int)(rnd(u) % 5) - 2), vy = tp->y + (float)((int)(rnd(u) % 5) - 2);
+            col_strike(u, k, "volcano", vx, vy, ELEM_FIRE, 30, 75);
             ai_attack(u, t, ANIM_ATTACK);
             return 1;
         }

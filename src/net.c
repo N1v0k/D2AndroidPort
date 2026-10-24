@@ -9,38 +9,75 @@
    de la Pi (little endian); los controles van tal cual (PlayerInput): todas las máquinas tienen el
    mismo ejecutable (se revisa al unirse). */
 
-#ifdef _WIN32 /* (la red, por ahora solo en Linux: la Pi y la PC) */
-int net_host(int port, const NetLocal *mine) { (void)port; (void)mine; return -1; }
-int net_join(const char *host, int port, const NetLocal *mine) { (void)host; (void)port; (void)mine; return -1; }
-void net_poll(void) {}
-int net_role(void) { return NET_OFF; }
-int net_lobby(int *cls, int *level, int *owner, int *diffmax, int max) { (void)cls; (void)level; (void)owner; (void)diffmax; (void)max; return 0; }
-int net_start(int diff, int mode, int terror, uint32_t seed, long long epoch) { (void)diff; (void)mode; (void)terror; (void)seed; (void)epoch; return -1; }
-const NetStart *net_started(void) { return NULL; }
-void net_send_input(uint32_t tick, const PlayerInput *in, int n) { (void)tick; (void)in; (void)n; }
-int net_frame(uint32_t tick, PlayerInput *all) { (void)tick; (void)all; return 0; }
-void net_send_hash(uint32_t tick, uint64_t hash) { (void)tick; (void)hash; }
-const char *net_error(void) { return "sin red en Windows"; }
-void net_close(void) {}
-void net_discover_start(void) {}
-int net_discover_poll(char (*hosts)[64], int *players, int *modes, int max) { (void)hosts; (void)players; (void)modes; (void)max; return 0; }
-void net_discover_stop(void) {}
-const char *net_my_ip(void) { return ""; }
+#ifdef _WIN32
+/* Windows: Winsock. Los sockets (SOCKET) se guardan en int, como en Linux: los números que da Windows
+   entran de sobra, y INVALID_SOCKET queda en -1 */
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0601
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
+#include <time.h>
+#define MSG_NOSIGNAL 0
+#define sock_close(s) closesocket((SOCKET)(s))
+#define sock_err() WSAGetLastError()
+#define SOCK_AGAIN(e) ((e) == WSAEWOULDBLOCK || (e) == WSAEINTR)
+#define SOCK_INPROGRESS(e) ((e) == WSAEWOULDBLOCK || (e) == WSAEINPROGRESS)
+static void sock_nonblock(int s)
+{
+    u_long one = 1;
+    ioctlsocket((SOCKET)s, FIONBIO, &one);
+}
+static void sock_init(void)
+{
+    static int done;
+    WSADATA d;
+    if (!done)
+        done = WSAStartup(MAKEWORD(2, 2), &d) == 0;
+}
+static const char *sock_strerror(int e)
+{
+    static char b[32];
+    snprintf(b, sizeof b, "error %d", e);
+    return b;
+}
 #else
-
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <ifaddrs.h>
+#include <net/if.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <poll.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
+#define sock_close(s) close(s)
+#define sock_err() errno
+#define SOCK_AGAIN(e) ((e) == EAGAIN || (e) == EWOULDBLOCK || (e) == EINTR)
+#define SOCK_INPROGRESS(e) ((e) == EINPROGRESS)
+#define sock_strerror(e) strerror(e)
+static void sock_nonblock(int s)
+{
+    fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK);
+}
+static void sock_init(void)
+{
+}
+#endif
 
-#define NET_MAGIC   "D2PN1 " __DATE__ " " __TIME__ /* (el mismo ejecutable en todas) */
+/* La misma versión del código en todas (D2_VERSION: el commit, CMakeLists.txt): con eso la Pi, Linux y
+   Windows calculan lo mismo (sin FMA, ordenamientos iguales) y pueden jugar juntas */
+#ifndef D2_VERSION
+#define D2_VERSION "dev"
+#endif
+#define NET_MAGIC_TEXT "D2PN2 " D2_VERSION
+/* (entera en el ejecutable: package-release.sh revisa que la Pi y Windows sean de la misma versión) */
+const char d2_net_magic[] = NET_MAGIC_TEXT;
+#define NET_MAGIC d2_net_magic
 #define NET_RING    256 /* ticks de controles guardados (10 segundos) */
 #define NET_HRING   64  /* resúmenes del estado guardados */
 #define NET_TIMEOUT 60  /* segundos sin noticias de una máquina: se cortó (armar zonas en la Pi tarda) */
@@ -185,11 +222,11 @@ static void send_to(Peer *p, Msg *m)
 static void flush_peer(Peer *p)
 {
     while (p->fd >= 0 && p->out_len > 0) {
-        ssize_t k = send(p->fd, p->out, p->out_len, MSG_NOSIGNAL);
+        ssize_t k = send(p->fd, (const char *)p->out, (int)p->out_len, MSG_NOSIGNAL);
         if (k <= 0) {
-            if (k < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+            if (k < 0 && SOCK_AGAIN(sock_err()))
                 return;
-            close(p->fd);
+            sock_close(p->fd);
             p->fd = -1;
             p->out_len = 0;
             return;
@@ -215,14 +252,23 @@ static void broadcast(Msg *m) /* a todos los que están conectados (el anfitrió
 static void set_socket(int fd)
 {
     int one = 1;
-    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one); /* (los controles, ya: sin juntarlos) */
-    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
+    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char *)&one, sizeof one); /* (los controles, ya: sin juntarlos) */
+    sock_nonblock(fd);
+}
+
+/* D2_NET_BIND=ip (pruebas): escuchar solo en esa dirección (127.0.0.1: en Windows no pregunta el
+   firewall); si no, en todas */
+static uint32_t bind_addr(void)
+{
+    struct in_addr in;
+    const char *b = getenv("D2_NET_BIND");
+    return b && inet_pton(AF_INET, b, &in) == 1 ? in.s_addr : htonl(INADDR_ANY);
 }
 
 static void peer_free(Peer *p)
 {
     if (p->fd >= 0)
-        close(p->fd);
+        sock_close(p->fd);
     free(p->in);
     free(p->out);
     for (int k = 0; k < MAX_LOCAL; k++)
@@ -312,39 +358,45 @@ static void reset_state(void)
     s_lobby_n = 0;
 }
 
-static int s_host_mode; /* lo que anuncia el anfitrión (NetLocal.mode) */
+static int      s_host_mode; /* lo que anuncia el anfitrión (NetLocal.mode) */
+static unsigned s_host_id;   /* un número de esta partida: el que busca junta las respuestas de la misma
+                                (la misma máquina contesta por su IP y por 127.0.0.1) */
 
 int net_host(int port, const NetLocal *mine)
 {
     net_close();
     reset_state();
+    sock_init();
     s_host_mode = mine->mode;
-    s_listen = socket(AF_INET, SOCK_STREAM, 0);
+    s_host_id = (unsigned)time(NULL) * 2654435761u ^ (unsigned)clock() ^ (unsigned)(uintptr_t)&mine;
+    s_listen = (int)socket(AF_INET, SOCK_STREAM, 0);
     if (s_listen < 0)
         return -1;
     int one = 1;
-    setsockopt(s_listen, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+#ifndef _WIN32 /* (en Windows SO_REUSEADDR deja que otro use el mismo puerto: no hace falta) */
+    setsockopt(s_listen, SOL_SOCKET, SO_REUSEADDR, (const char *)&one, sizeof one);
+#endif
     struct sockaddr_in a;
     memset(&a, 0, sizeof a);
     a.sin_family = AF_INET;
-    a.sin_addr.s_addr = htonl(INADDR_ANY);
+    a.sin_addr.s_addr = bind_addr();
     a.sin_port = htons((uint16_t)port);
     if (bind(s_listen, (struct sockaddr *)&a, sizeof a) != 0 || listen(s_listen, NET_MAX_PEERS) != 0) {
-        fprintf(stderr, "red: no pude escuchar en el puerto %d: %s\n", port, strerror(errno));
-        close(s_listen);
+        fprintf(stderr, "red: no pude escuchar en el puerto %d: %s\n", port, sock_strerror(sock_err()));
+        sock_close(s_listen);
         s_listen = -1;
         return -1;
     }
-    fcntl(s_listen, F_SETFL, fcntl(s_listen, F_GETFL, 0) | O_NONBLOCK);
+    sock_nonblock(s_listen);
     /* Las respuestas a los que buscan partidas (UDP, el mismo puerto) */
-    s_udp = socket(AF_INET, SOCK_DGRAM, 0);
+    s_udp = (int)socket(AF_INET, SOCK_DGRAM, 0);
     if (s_udp >= 0) {
-        setsockopt(s_udp, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+        setsockopt(s_udp, SOL_SOCKET, SO_REUSEADDR, (const char *)&one, sizeof one);
         if (bind(s_udp, (struct sockaddr *)&a, sizeof a) != 0) {
-            close(s_udp);
+            sock_close(s_udp);
             s_udp = -1;
         } else {
-            fcntl(s_udp, F_SETFL, fcntl(s_udp, F_GETFL, 0) | O_NONBLOCK);
+            sock_nonblock(s_udp);
         }
     }
     s_role = NET_HOST;
@@ -362,6 +414,7 @@ int net_join(const char *host, int port, const NetLocal *mine)
 {
     net_close();
     reset_state();
+    sock_init();
     struct addrinfo hints, *res = NULL;
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET;
@@ -373,23 +426,29 @@ int net_join(const char *host, int port, const NetLocal *mine)
         return -1;
     }
     /* Sin bloquear el menú más de 3 segundos si no hay nadie en esa IP */
-    int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol), ok = 0;
+    int fd = (int)socket(res->ai_family, res->ai_socktype, res->ai_protocol), ok = 0;
     if (fd >= 0) {
-        fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
-        if (connect(fd, res->ai_addr, res->ai_addrlen) == 0) {
+        sock_nonblock(fd);
+        if (connect(fd, res->ai_addr, (int)res->ai_addrlen) == 0) {
             ok = 1;
-        } else if (errno == EINPROGRESS) {
-            struct pollfd pf = { fd, POLLOUT, 0 };
+        } else if (SOCK_INPROGRESS(sock_err())) { /* (select: el WSAPoll de Windows no avisa si no conecta) */
+            fd_set w, e;
+            FD_ZERO(&w);
+            FD_ZERO(&e);
+            FD_SET(fd, &w);
+            FD_SET(fd, &e);
+            struct timeval tv = { 3, 0 };
             int err = 0;
             socklen_t el = sizeof err;
-            ok = poll(&pf, 1, 3000) == 1 && getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &el) == 0 && err == 0;
+            ok = select(fd + 1, NULL, &w, &e, &tv) == 1 && FD_ISSET(fd, &w) &&
+                 getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&err, &el) == 0 && err == 0;
         }
     }
     freeaddrinfo(res);
     if (!ok) {
-        fprintf(stderr, "red: no pude conectarme a %s:%d (%s)\n", host, port, strerror(errno));
+        fprintf(stderr, "red: no pude conectarme a %s:%d (%s)\n", host, port, sock_strerror(sock_err()));
         if (fd >= 0)
-            close(fd);
+            sock_close(fd);
         return -1;
     }
     set_socket(fd);
@@ -548,13 +607,26 @@ void net_send_hash(uint32_t tick, uint64_t hash)
 
 /* ---- Lo que llega ---- */
 
+/* La que se une no entra: se le dice por qué (en español: la otra lo traduce al mostrarlo, con su
+   idioma) y se la saca */
+static void refuse(Peer *p, const char *why)
+{
+    Msg m;
+    m_begin(&m, M_ERROR);
+    m_bytes(&m, why, strlen(why) + 1);
+    send_to(p, &m);
+    free(m.d);
+    flush_peer(p);
+    peer_free(p);
+}
+
 static void on_hello(int pi, Rd *r)
 {
     Peer *p = &s_peer[pi];
     const uint8_t *magic = r_bytes(r, strlen(NET_MAGIC) + 1);
     if (!magic || memcmp(magic, NET_MAGIC, strlen(NET_MAGIC) + 1) != 0) {
         fprintf(stderr, "red: la máquina %d tiene otra versión del juego: no entra\n", pi + 1);
-        peer_free(p);
+        refuse(p, "Otra versión del juego: hace falta la misma en todas");
         return;
     }
     p->num = (int)r_u8(r);
@@ -574,7 +646,7 @@ static void on_hello(int pi, Rd *r)
     }
     if (r->bad || lobby_count() + p->num > MAX_PLAYERS || s_started) {
         fprintf(stderr, "red: la máquina %d no entra (llena o ya empezó)\n", pi + 1);
-        peer_free(p);
+        refuse(p, "La partida está llena o ya empezó");
         return;
     }
     p->hello = 1;
@@ -686,35 +758,42 @@ static void on_message(int pi, int type, Rd *r)
     }
 }
 
+/* Se cortó la conexión con esa máquina */
+static void peer_closed(int pi)
+{
+    Peer *p = &s_peer[pi];
+    char msg[96];
+    if (s_role == NET_CLIENT)
+        snprintf(msg, sizeof msg, "%s", tr("Se cortó la conexión con el anfitrión"));
+    else
+        snprintf(msg, sizeof msg, tr("Se fue la máquina %d"), pi + 1);
+    int was = p->hello;
+    sock_close(p->fd);
+    p->fd = -1;
+    if (s_role == NET_HOST && !s_started) { /* (en el lobby se va y listo) */
+        peer_free(p);
+        if (was)
+            send_lobby();
+        return;
+    }
+    fail(msg);
+}
+
 static void read_peer(int pi)
 {
     Peer *p = &s_peer[pi];
+    int closed = 0;
     for (;;) {
         uint8_t buf[16384];
-        ssize_t k = recv(p->fd, buf, sizeof buf, 0);
+        ssize_t k = recv(p->fd, (char *)buf, (int)sizeof buf, 0);
         if (k > 0) {
             buf_add(&p->in, &p->in_len, &p->in_cap, buf, (size_t)k);
             continue;
         }
-        if (k < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+        if (k < 0 && SOCK_AGAIN(sock_err()))
             break;
-        /* se cortó */
-        char msg[96];
-        if (s_role == NET_CLIENT)
-            snprintf(msg, sizeof msg, "%s", tr("Se cortó la conexión con el anfitrión"));
-        else
-            snprintf(msg, sizeof msg, tr("Se fue la máquina %d"), pi + 1);
-        int was = p->hello;
-        close(p->fd);
-        p->fd = -1;
-        if (s_role == NET_HOST && !s_started) { /* (en el lobby se va y listo) */
-            peer_free(p);
-            if (was)
-                send_lobby();
-            return;
-        }
-        fail(msg);
-        return;
+        closed = 1; /* (lo que llegó antes se lee igual: el anfitrión manda por qué no se entra y cierra) */
+        break;
     }
     size_t pos = 0;
     while (p->in_len - pos >= 5) {
@@ -736,6 +815,8 @@ static void read_peer(int pi)
         memmove(p->in, p->in + pos, p->in_len - pos);
         p->in_len -= pos;
     }
+    if (closed && s_peer[pi].used && s_peer[pi].fd >= 0)
+        peer_closed(pi);
 }
 
 void net_poll(void)
@@ -744,7 +825,7 @@ void net_poll(void)
         return;
     if (s_role == NET_HOST && s_listen >= 0 && !s_started) {
         for (;;) {
-            int fd = accept(s_listen, NULL, NULL);
+            int fd = (int)accept(s_listen, NULL, NULL);
             if (fd < 0)
                 break;
             int slot = -1;
@@ -752,7 +833,7 @@ void net_poll(void)
                 if (!s_peer[i].used)
                     slot = i;
             if (slot < 0) {
-                close(fd);
+                sock_close(fd);
                 continue;
             }
             set_socket(fd);
@@ -770,13 +851,13 @@ void net_poll(void)
             char q[16];
             struct sockaddr_in from;
             socklen_t fl = sizeof from;
-            ssize_t k = recvfrom(s_udp, q, sizeof q, 0, (struct sockaddr *)&from, &fl);
+            ssize_t k = recvfrom(s_udp, q, (int)sizeof q, 0, (struct sockaddr *)&from, &fl);
             if (k <= 0)
                 break;
             if (k >= 5 && memcmp(q, "D2PN?", 5) == 0) {
                 char a[16];
-                int n = snprintf(a, sizeof a, "D2PN!%d %d", lobby_count(), s_host_mode);
-                sendto(s_udp, a, (size_t)n, 0, (struct sockaddr *)&from, fl);
+                int n = snprintf(a, sizeof a, "D2PN!%d %d %u", lobby_count(), s_host_mode, s_host_id);
+                sendto(s_udp, a, n, 0, (struct sockaddr *)&from, fl);
             }
         }
     }
@@ -882,7 +963,7 @@ int net_start(int diff, int mode, int terror, uint32_t seed, long long epoch)
     s->me = 0;
     s_started = 1;
     if (s_listen >= 0) { /* ya no entra nadie */
-        close(s_listen);
+        sock_close(s_listen);
         s_listen = -1;
     }
     build_frames(); /* (los primeros ticks, quietos) */
@@ -905,9 +986,9 @@ void net_close(void)
 {
     flush_all();
     if (s_listen >= 0)
-        close(s_listen);
+        sock_close(s_listen);
     if (s_udp >= 0)
-        close(s_udp);
+        sock_close(s_udp);
     s_listen = s_udp = -1;
     for (int i = 0; i < NET_MAX_PEERS; i++)
         peer_free(&s_peer[i]);
@@ -918,28 +999,75 @@ void net_close(void)
 
 /* ---- Buscar partidas ---- */
 
-static char s_found[8][64];
-static int  s_found_players[8], s_found_mode[8], s_nfound;
+static char     s_found[8][64];
+static int      s_found_players[8], s_found_mode[8], s_nfound;
+static unsigned s_found_id[8];
 
-/* La pregunta a toda la red; la primera vez abre el socket y empieza la lista (después la lista
-   se mantiene: preguntar de nuevo solo agrega o actualiza) */
+/* Las direcciones de difusión de cada red de esta máquina (en el orden de la red): con
+   255.255.255.255 sola, Windows la manda por una sola placa, a veces la virtual de WSL o Hyper-V */
+static int bcast_addrs(uint32_t *out, int max)
+{
+    int n = 0;
+#ifdef _WIN32
+    ULONG size = 16384;
+    IP_ADAPTER_ADDRESSES *list = malloc(size);
+    ULONG flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER;
+    ULONG r = list ? GetAdaptersAddresses(AF_INET, flags, NULL, list, &size) : ERROR_NOT_ENOUGH_MEMORY;
+    if (r == ERROR_BUFFER_OVERFLOW) {
+        free(list);
+        list = malloc(size);
+        r = list ? GetAdaptersAddresses(AF_INET, flags, NULL, list, &size) : ERROR_NOT_ENOUGH_MEMORY;
+    }
+    for (IP_ADAPTER_ADDRESSES *ad = r == NO_ERROR ? list : NULL; ad && n < max; ad = ad->Next) {
+        if (ad->OperStatus != IfOperStatusUp || ad->IfType == IF_TYPE_SOFTWARE_LOOPBACK)
+            continue;
+        for (IP_ADAPTER_UNICAST_ADDRESS *u = ad->FirstUnicastAddress; u && n < max; u = u->Next) {
+            if (u->Address.lpSockaddr->sa_family != AF_INET || u->OnLinkPrefixLength == 0 || u->OnLinkPrefixLength > 30)
+                continue;
+            uint32_t ip = ntohl(((struct sockaddr_in *)u->Address.lpSockaddr)->sin_addr.s_addr);
+            uint32_t mask = 0xFFFFFFFFu << (32 - u->OnLinkPrefixLength);
+            out[n++] = htonl(ip | ~mask);
+        }
+    }
+    free(list);
+#else
+    struct ifaddrs *list = NULL;
+    if (getifaddrs(&list) == 0)
+        for (struct ifaddrs *i = list; i && n < max; i = i->ifa_next)
+            if (i->ifa_addr && i->ifa_addr->sa_family == AF_INET && (i->ifa_flags & IFF_BROADCAST) && i->ifa_broadaddr)
+                out[n++] = ((struct sockaddr_in *)i->ifa_broadaddr)->sin_addr.s_addr;
+    freeifaddrs(list);
+#endif
+    return n;
+}
+
+/* La pregunta a toda la red (a cada red de la máquina, a 255.255.255.255 y a esta misma, por si la
+   partida está en la misma PC); la primera vez abre el socket y empieza la lista (después la lista se
+   mantiene: preguntar de nuevo solo agrega o actualiza) */
 void net_discover_start(void)
 {
     if (s_disc < 0) {
+        sock_init();
         s_nfound = 0;
-        s_disc = socket(AF_INET, SOCK_DGRAM, 0);
+        s_disc = (int)socket(AF_INET, SOCK_DGRAM, 0);
         if (s_disc < 0)
             return;
         int one = 1;
-        setsockopt(s_disc, SOL_SOCKET, SO_BROADCAST, &one, sizeof one);
-        fcntl(s_disc, F_SETFL, fcntl(s_disc, F_GETFL, 0) | O_NONBLOCK);
+        setsockopt(s_disc, SOL_SOCKET, SO_BROADCAST, (const char *)&one, sizeof one);
+        sock_nonblock(s_disc);
     }
-    struct sockaddr_in a;
-    memset(&a, 0, sizeof a);
-    a.sin_family = AF_INET;
-    a.sin_port = htons(NET_PORT);
-    a.sin_addr.s_addr = htonl(INADDR_BROADCAST);
-    sendto(s_disc, "D2PN?", 5, 0, (struct sockaddr *)&a, sizeof a);
+    uint32_t to[18];
+    int n = bcast_addrs(to, 16);
+    to[n++] = htonl(INADDR_BROADCAST);
+    to[n++] = htonl(INADDR_LOOPBACK);
+    for (int i = 0; i < n; i++) {
+        struct sockaddr_in a;
+        memset(&a, 0, sizeof a);
+        a.sin_family = AF_INET;
+        a.sin_port = htons(NET_PORT);
+        a.sin_addr.s_addr = to[i];
+        sendto(s_disc, "D2PN?", 5, 0, (struct sockaddr *)&a, sizeof a);
+    }
 }
 
 int net_discover_poll(char (*hosts)[64], int *players, int *modes, int max)
@@ -948,7 +1076,7 @@ int net_discover_poll(char (*hosts)[64], int *players, int *modes, int max)
         char a[32];
         struct sockaddr_in from;
         socklen_t fl = sizeof from;
-        ssize_t k = recvfrom(s_disc, a, sizeof a - 1, 0, (struct sockaddr *)&from, &fl);
+        ssize_t k = recvfrom(s_disc, a, (int)sizeof a - 1, 0, (struct sockaddr *)&from, &fl);
         if (k <= 0)
             break;
         a[k] = '\0';
@@ -956,15 +1084,23 @@ int net_discover_poll(char (*hosts)[64], int *players, int *modes, int max)
             continue;
         char ip[64];
         inet_ntop(AF_INET, &from.sin_addr, ip, sizeof ip);
-        int at = 0; /* "D2PN!jugadores modo": una nueva, o la misma con los jugadores de ahora */
-        while (at < s_nfound && strcmp(s_found[at], ip) != 0)
+        int players = 0, mode = 0;
+        unsigned id = 0;
+        sscanf(a + 5, "%d %d %u", &players, &mode, &id);
+        /* "D2PN!jugadores modo número": una nueva, o la misma (por su número o su IP) con los jugadores
+           de ahora; de la misma, mejor la IP de la red que 127.0.0.1 */
+        int at = 0;
+        while (at < s_nfound && !(id && s_found_id[at] == id) && strcmp(s_found[at], ip) != 0)
             at++;
-        if (at == 8)
+        if (at >= 8)
             continue;
+        if (at == s_nfound || (strcmp(s_found[at], "127.0.0.1") == 0 && strcmp(ip, "127.0.0.1") != 0))
+            snprintf(s_found[at], sizeof s_found[0], "%s", ip);
         if (at == s_nfound)
-            snprintf(s_found[s_nfound++], sizeof s_found[0], "%s", ip);
-        s_found_players[at] = s_found_mode[at] = 0;
-        sscanf(a + 5, "%d %d", &s_found_players[at], &s_found_mode[at]);
+            s_nfound++;
+        s_found_players[at] = players;
+        s_found_mode[at] = mode;
+        s_found_id[at] = id;
     }
     int n = s_nfound < max ? s_nfound : max;
     for (int i = 0; i < n; i++) {
@@ -978,7 +1114,7 @@ int net_discover_poll(char (*hosts)[64], int *players, int *modes, int max)
 void net_discover_stop(void)
 {
     if (s_disc >= 0)
-        close(s_disc);
+        sock_close(s_disc);
     s_disc = -1;
 }
 
@@ -986,6 +1122,23 @@ const char *net_my_ip(void)
 {
     static char ip[64];
     ip[0] = '\0';
+#ifdef _WIN32
+    /* La de la placa por la que sale todo: "conectar" un UDP afuera (no se manda nada) y preguntar */
+    sock_init();
+    int s = (int)socket(AF_INET, SOCK_DGRAM, 0);
+    if (s < 0)
+        return ip;
+    struct sockaddr_in to, me;
+    memset(&to, 0, sizeof to);
+    to.sin_family = AF_INET;
+    to.sin_port = htons(53);
+    to.sin_addr.s_addr = htonl(0x08080808);
+    socklen_t ml = sizeof me;
+    if (connect(s, (struct sockaddr *)&to, sizeof to) == 0 && getsockname(s, (struct sockaddr *)&me, &ml) == 0)
+        inet_ntop(AF_INET, &me.sin_addr, ip, sizeof ip);
+    sock_close(s);
+    return ip;
+#else
     struct ifaddrs *list = NULL;
     if (getifaddrs(&list) != 0)
         return ip;
@@ -996,6 +1149,6 @@ const char *net_my_ip(void)
         }
     freeifaddrs(list);
     return ip;
+#endif
 }
 
-#endif

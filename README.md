@@ -3,8 +3,8 @@
 [![d2port: split screen on a Raspberry Pi](https://img.youtube.com/vi/zcsaPHeL3lw/hqdefault.jpg)](https://youtube.com/shorts/zcsaPHeL3lw)
 
 A Diablo II–style engine **written from scratch** in C99 + SDL2, to play on
-**Batocera on a Raspberry Pi 3B** with a gamepad: alone, two players on the
-same screen, or **up to 8 players over the local network** (for example
+**Batocera on a Raspberry Pi 3B** (and on **Windows**) with a gamepad: alone,
+two players on the same screen, or **up to 8 players over the local network** (for example
 four Pis with two players each). Besides the story it has its own wave
 mode, the **Echo of Hatred**. It uses the graphics, maps, tables, sounds and
 voices of **your own copy of Diablo II: Resurrected**, which still ships the
@@ -57,7 +57,7 @@ non-commercial fan project.</sub>
 
 **Contents**
 
-1. [Installing on Batocera](#installing-on-batocera)
+1. [Installing on Batocera](#installing-on-batocera) (or [on Windows](#installing-on-windows))
 2. [What is implemented](#what-is-implemented)
 3. [What was written from scratch and what was remade](#what-was-written-from-scratch-and-what-was-remade)
 4. [Differences from the original game](#differences-from-the-original-game)
@@ -70,7 +70,8 @@ non-commercial fan project.</sub>
 
 ## Installing on Batocera
 
-For now: **Linux and Batocera**. A Windows importer will come later.
+For **Batocera** (importing from a Linux PC or from the Pi). For a Windows
+PC, see [Installing on Windows](#installing-on-windows).
 
 ### Requirements
 
@@ -198,6 +199,43 @@ Chinese.
 - **"Could not open the game files":** the game is running, the folder is
   not the Diablo II Resurrected one (it must have `.build.info` and the
   `Data` folder), or the copy is incomplete.
+
+---
+
+## Installing on Windows
+
+Windows 10 or 11 (64-bit), with **Diablo II: Resurrected installed** from
+Battle.net on the same PC.
+
+1. Download **`diablo2-port-windows.zip`** from the
+   [releases](https://github.com/rodrireddev/d2port/releases) and extract it
+   anywhere (for example `Documents\Diablo II port`). Everything stays in
+   that folder: the game files it imports, your saved games (`save`) and
+   the log (`d2port.log`).
+2. Double-click **`Import Diablo II (English).bat`** (or **`Importar
+   Diablo II (Español).bat`**, for the Latin American Spanish voices; any of
+   the 13 languages can be chosen later in the menu). It finds Diablo II:
+   Resurrected by itself in the usual Battle.net folders; if not, it asks
+   for the folder (you can drag it into the window). It copies only the
+   files the port uses (about 2.4 GB, a couple of minutes) into `data`.
+   Close the game and Battle.net first.
+   - The **cinematics** are converted with [ffmpeg](https://ffmpeg.org/) if it
+     is installed (`winget install ffmpeg` in a terminal, then import
+     again); without it the game works the same, without them.
+3. Double-click **`d2port.exe`**. Windows may warn that it is an
+   unrecognized app (it is not signed): **More info → Run anyway**.
+
+- It plays with a **gamepad** (any controller Windows recognizes; the first
+  one used is player 1), or with the **keyboard and mouse** (see
+  [Controls](#controls)). **F11** or **Alt+Enter** switch between window and
+  full screen; the window can be resized.
+- The **local network** works with the Pis, Linux PCs and other Windows
+  PCs that have this same version (see
+  [Local network](#local-network-up-to-8-players)). The first time a PC
+  creates a game, Windows asks whether `d2port.exe` may use the network:
+  allow it on **private networks**.
+- To update, extract the new version over the old one: `data` and `save`
+  are kept.
 
 ---
 
@@ -560,10 +598,12 @@ wave 8.</sub>
   and everybody's characters are saved.
 - As in the original, with more players the monsters have 50% more life and
   give 50% more experience per extra player, and drop more often.
-- Limits: all machines must have the same version of the port, and all
-  must be Pis (or all PCs: a PC and a Pi do not round the numbers the same
-  way). Everybody is in the same act, nobody can join a game that already
-  started, and in a network game the pause menu does not stop the game.
+- Pis, Linux PCs and Windows PCs can play together: they all compute the
+  same numbers, bit by bit.
+- Limits: all machines must have the same version of the port (the game
+  says so if one does not). Everybody is in the same act, nobody can join a
+  game that already started, and in a network game the pause menu does not
+  stop the game.
 
 ### Cinematics
 
@@ -815,9 +855,11 @@ if you can, the `d2port.log`.
 
 - What is listed under
   [Simplified or not done yet](#simplified-or-not-done-yet).
-- The **importer for the Pi** (written, not tested yet) and for **Windows**.
-- Local network play was tested with one real Pi, Pis emulated on a PC and
-  PCs, not yet between two real Pis with people playing.
+- The **importer for the Pi** (written, not tested yet).
+- Local network play was tested with one real Pi, Pis emulated on a PC,
+  Linux PCs and Windows, also all mixed (the real Pi hosting a Linux PC and
+  a Windows PC over Wi-Fi, 6 players), not yet between two real Pis or two
+  Windows PCs with people playing.
 
 ---
 
@@ -853,9 +895,14 @@ The importer from the release package works too, with
 ```bash
 cmake -S . -B build-pi -DCMAKE_TOOLCHAIN_FILE=cmake/aarch64-linux-gnu.cmake
 cmake --build build-pi -j
+# Windows (from Linux or WSL): sudo apt install mingw-w64, and SDL2-devel-2.30.x-mingw.tar.gz
+# from github.com/libsdl-org/SDL (releases) extracted in ~/sdl2-mingw
+cmake -S . -B build-win -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64.cmake \
+      -DSDL2_DIR=$HOME/sdl2-mingw/SDL2-2.30.12/x86_64-w64-mingw32/lib/cmake/SDL2
+cmake --build build-win -j --target d2port
 bash scripts/package-batocera.sh     # dist/ports, with the game files (for your own use)
-bash scripts/build-importador.sh     # the importer for Linux and the Pi
-bash scripts/package-release.sh      # publicar/: the package without Blizzard files
+bash scripts/build-importador.sh     # the importer for Linux, the Pi and Windows
+bash scripts/package-release.sh      # publicar/: the packages without Blizzard files
 ```
 
 How each part works, the tools, the tests and the debug variables are in

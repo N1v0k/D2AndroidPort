@@ -7,6 +7,7 @@
 
 #include <ctype.h>
 #include <math.h>
+#include "dmath.h" /* (sinf, atan2f... iguales en todas las máquinas: la red) */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1067,6 +1068,14 @@ static int maze_add(Maze *mz, int from, int d)
     return mz->count++;
 }
 
+/* La sala de entrada (x, y) al azar: de a un sorteo por línea, porque el orden de los argumentos de una
+   llamada no está definido en C (GCC los evalúa al revés en x86 y en ARM, y en red los mapas tienen
+   que salir iguales en la Pi, Linux y Windows) */
+static int rnd_below(int n)
+{
+    return (int)(rnd() % (uint32_t)n);
+}
+
 /* Un árbol de salas desde (sx, sy). La primera tiene exactamente las
    salidas `start_exits` (0 = una sola, la que salga) y el resto crece al
    azar hasta `rooms` salas. */
@@ -1667,8 +1676,8 @@ static void build_act2_maze(Map *m, int z)
             e[n++] = id == s_staff_tomb ? (MazeRoom){ "tomb%ctalrasha", "", 1, -1, 0 } : (MazeRoom){ "tomb%cconsol", "", 1, -1, 0 };
         if (id == s_boss_tomb)
             e[n++] = (MazeRoom){ "tomb%ckaa", "", 1, -1, 0 };
-        maze_build(m, z, st, zone->x0, zone->y0, g, g, rooms, 1 + (int)(rnd() % (uint32_t)(g - 2)),
-                   1 + (int)(rnd() % (uint32_t)(g - 2)), exits, &s, e, n);
+        int sx = 1 + rnd_below(g - 2), sy = 1 + rnd_below(g - 2);
+        maze_build(m, z, st, zone->x0, zone->y0, g, g, rooms, sx, sy, exits, &s, e, n);
         return;
     }
     MazeRoom s = { zone->kind == ZK_SEWER ? "sew%cup" : "mag%cwarpprev", "", 1, VIS_WARP, 0 };
@@ -1695,8 +1704,8 @@ static void build_act2_maze(Map *m, int z)
         e[n++] = (MazeRoom){ "magw", "", 1, -1, EX_W };
         break;
     }
-    maze_build(m, z, st, zone->x0, zone->y0, g, g, rooms, (int)(rnd() % (uint32_t)g), (int)(rnd() % (uint32_t)g), 0,
-               &s, e, n);
+    int sx = rnd_below(g), sy = rnd_below(g);
+    maze_build(m, z, st, zone->x0, zone->y0, g, g, rooms, sx, sy, 0, &s, e, n);
 }
 
 /* El harén y los sótanos del palacio (DRLGMAZE_InitBasicMazeLayout con 2):
@@ -2243,12 +2252,14 @@ static void build_maze(Map *m, int z)
         static const MazeRoom start = { "cave%cpre%s", "1", 2, -1, 0 }, end = { "cave%cspec", "", 1, -1, 0 };
         MazeRoom s = start;
         s.to = z_moor;
-        maze_build(m, z, &k_caves, x, y, 5, 5, 10, (int)(rnd() % 5), (int)(rnd() % 5), 0, &s, &end, 1);
+        int sx = rnd_below(5), sy = rnd_below(5);
+        maze_build(m, z, &k_caves, x, y, 5, 5, 10, sx, sy, 0, &s, &end, 1);
         break;
     }
     case ZK_PASSAGE: {
         MazeRoom s = { "cave%cpre%s", "1", 2, z_stony, 0 }, e = { "cave%cnext%s", "1", 2, z_dark, 0 };
-        maze_build(m, z, &k_caves, x, y, 4, 4, 6, (int)(rnd() % 4), (int)(rnd() % 4), 0, &s, &e, 1);
+        int sx = rnd_below(4), sy = rnd_below(4);
+        maze_build(m, z, &k_caves, x, y, 4, 4, 6, sx, sy, 0, &s, &e, 1);
         break;
     }
     case ZK_BARRACKS: { /* desde la sala de unión con el claustro; la forja con el Mazo y la escalera a la Cárcel */
@@ -2265,8 +2276,8 @@ static void build_maze(Map *m, int z)
         if (f == 1) e[1] = (MazeRoom){ "jail%cway", "", 1, -1, 0 };
         if (f == 2) e[1] = (MazeRoom){ "jail%cpitspawn", "", 1, -1, 0 };
         if (f == 3) e[0] = (MazeRoom){ "jail%cwarpcath", "", 1, z_cloister, 0 };
-        maze_build(m, z, &k_jail, x, y, g, g, 10 + 2 * f, (int)(rnd() % (uint32_t)g), (int)(rnd() % (uint32_t)g), 0,
-                   &s, e, e[1].pat ? 2 : 1);
+        int sx = rnd_below(g), sy = rnd_below(g);
+        maze_build(m, z, &k_jail, x, y, g, g, 10 + 2 * f, sx, sy, 0, &s, e, e[1].pat ? 2 : 1);
         break;
     }
     case ZK_CATACOMBS: { /* el primero empieza en la sala de la escalera a la catedral (cuatro salidas) */
@@ -2278,8 +2289,8 @@ static void build_maze(Map *m, int z)
             exits = EX_N | EX_S | EX_E | EX_W;
         }
         MazeRoom e[2] = { { "cat%cdown%s", "", 2, z_cat[f + 1], 0 }, { "cat%cway", "", 1, -1, 0 } };
-        maze_build(m, z, &k_cat, x, y, g, g, 10 + 2 * f, 1 + (int)(rnd() % (uint32_t)(g - 2)),
-                   1 + (int)(rnd() % (uint32_t)(g - 2)), exits, &s, e, f == 2 ? 2 : 1);
+        int sx = 1 + rnd_below(g - 2), sy = 1 + rnd_below(g - 2);
+        maze_build(m, z, &k_cat, x, y, g, g, 10 + 2 * f, sx, sy, exits, &s, e, f == 2 ? 2 : 1);
         break;
     }
     case ZK_UBERDEN: {
@@ -2288,15 +2299,16 @@ static void build_maze(Map *m, int z)
            (CryptConsol: ahí sale Lilith, uber.inc) en la punta más lejana */
         MazeRoom s = { "crypt%cwarpprev", "", 1, -1, 0 };
         MazeRoom e = { "crypt%cconsol", "", 1, -1, 0 };
-        maze_build(m, z, &k_crypt, x, y, MAZE_MAX, MAZE_MAX, 36, (int)(rnd() % MAZE_MAX), (int)(rnd() % MAZE_MAX), 0, &s,
-                   &e, 1);
+        int sx = rnd_below(MAZE_MAX), sy = rnd_below(MAZE_MAX);
+        maze_build(m, z, &k_crypt, x, y, MAZE_MAX, MAZE_MAX, 36, sx, sy, 0, &s, &e, 1);
         break;
     }
     case ZK_CELLAR: {
         int f = zone->floor;
         MazeRoom s = { "crypt%cwarpprev", "", 1, f == 1 ? z_tower : z_cellar[f - 1], 0 };
         MazeRoom e = { "crypt%cwarpnext", "", 1, z_cellar[f + 1], 0 };
-        maze_build(m, z, &k_crypt, x, y, 4, 4, 6, (int)(rnd() % 4), (int)(rnd() % 4), 0, &s, &e, 1);
+        int sx = rnd_below(4), sy = rnd_below(4);
+        maze_build(m, z, &k_crypt, x, y, 4, 4, 6, sx, sy, 0, &s, &e, 1);
         break;
     }
     }

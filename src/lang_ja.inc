@@ -920,3 +920,10 @@
 { "Historia (jugadores: %d)", "ストーリー（プレイヤー: %d）" },
 { "La dificultad la da el nivel de los personajes", "難易度はキャラクターのレベルで決まる" },
 { "A: empezar     B: cerrar", "A: 開始     B: 閉じる" },
+
+/* Los puntos que quedan para repartir (la página de atributos) */
+{ "restantes", "残り" },
+
+/* Por qué no entra una máquina a la partida en red (lo manda el anfitrión, net.c) */
+{ "Otra versión del juego: hace falta la misma en todas", "ゲームのバージョンが違います：全員同じものが必要です" },
+{ "La partida está llena o ya empezó", "ゲームは満員か、すでに始まっています" },

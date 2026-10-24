@@ -75,6 +75,8 @@ assets=(
     data/global/ui/menu/questbackground.dc6
     data/global/ui/menu/expquesttabs.dc6
     data/global/ui/menu/questsockets.dc6
+    data/global/ui/menu/questlast.dc6
+    data/global/ui/menu/expwaygatetabs.dc6
     data/global/ui/menu/a1q1.dc6
     data/global/ui/menu/a1q2.dc6
     data/global/ui/menu/a1q3.dc6

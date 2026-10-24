@@ -853,3 +853,6 @@
 852	Fabuła (gracze: %d)
 853	Poziom postaci wyznacza poziom trudności
 854	A: rozpocznij     B: zamknij
+855	pozostałe
+856	Inna wersja gry: wszyscy muszą mieć tę samą
+857	Gra jest pełna albo już się zaczęła

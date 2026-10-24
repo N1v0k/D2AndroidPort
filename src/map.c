@@ -48,7 +48,12 @@ static int cmp_tile_index(const void *a, const void *b)
     const Dt1Tile *tb = &s_sort_dt1->tiles[*(const uint32_t *)b & 0xFFFF];
     uint32_t ka = tile_key(ta->orientation, ta->main_index, ta->sub_index);
     uint32_t kb = tile_key(tb->orientation, tb->main_index, tb->sub_index);
-    return (ka > kb) - (ka < kb);
+    if (ka != kb)
+        return (ka > kb) - (ka < kb);
+    /* (las variantes de una baldosa, por su número: el qsort de cada sistema deja los empates en otro
+       orden, y el mapa tiene que salir igual en todas las máquinas de una partida en red) */
+    uint32_t ia = *(const uint32_t *)a & 0xFFFF, ib = *(const uint32_t *)b & 0xFFFF;
+    return (ia > ib) - (ia < ib);
 }
 
 static void mark_user(Map *m, int f)

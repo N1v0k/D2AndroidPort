@@ -50,8 +50,20 @@ int video_init(int headless, int fullscreen, int scale)
     neon_check(); /* en la Pi: probar NEON una vez (y dejarlo en el log) */
     if (headless)
         return 0;
-    if (scale < 1)
-        scale = 1;
+    /* Sin --scale: en Windows, la ventana más grande que entra en la pantalla (4:3, el 85 % del alto);
+       en Linux (la Pi, la PC de pruebas), 800x600 */
+    int win_w = SCREEN_W * (scale < 1 ? 1 : scale), win_h = SCREEN_H * (scale < 1 ? 1 : scale);
+#ifdef _WIN32
+    SDL_DisplayMode dm;
+    if (scale < 1 && SDL_GetDesktopDisplayMode(0, &dm) == 0) {
+        int h = dm.h * 85 / 100, w = dm.w * 85 / 100;
+        h = h * SCREEN_W / SCREEN_H > w ? w * SCREEN_H / SCREEN_W : h;
+        if (h > SCREEN_H) {
+            win_h = h;
+            win_w = h * SCREEN_W / SCREEN_H;
+        }
+    }
+#endif
 
     Uint32 flags = SDL_WINDOW_RESIZABLE;
     if (fullscreen)
@@ -60,8 +72,7 @@ int video_init(int headless, int fullscreen, int scale)
     s_hide_cursor = fullscreen && !getenv("D2_SHOW_CURSOR");
     if (s_hide_cursor)
         hide_cursor();
-    s_win = SDL_CreateWindow("Diablo II (port)", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                             SCREEN_W * scale, SCREEN_H * scale, flags);
+    s_win = SDL_CreateWindow("Diablo II (port)", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, win_w, win_h, flags);
     if (!s_win) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
         return -1;
@@ -69,7 +80,8 @@ int video_init(int headless, int fullscreen, int scale)
     if (s_hide_cursor)
         hide_cursor();
 
-    s_ren = SDL_CreateRenderer(s_win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    /* (D2_NO_VSYNC=1: sin esperar al monitor, para medir el dibujo) */
+    s_ren = SDL_CreateRenderer(s_win, -1, SDL_RENDERER_ACCELERATED | (getenv("D2_NO_VSYNC") ? 0 : SDL_RENDERER_PRESENTVSYNC));
     if (!s_ren)
         s_ren = SDL_CreateRenderer(s_win, -1, 0);
     if (!s_ren) {
@@ -388,6 +400,21 @@ double video_convert_bench(void)
     Uint64 t0 = SDL_GetPerformanceCounter();
     convert_to_argb(buf, SCREEN_W);
     return (double)(SDL_GetPerformanceCounter() - t0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
+}
+
+/* F11 o Alt+Enter: pantalla completa (la del escritorio) o ventana; con pantalla completa no se ve el
+   puntero, como al arrancar con --fullscreen */
+void video_toggle_fullscreen(void)
+{
+    if (!s_win)
+        return;
+    int full = (SDL_GetWindowFlags(s_win) & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
+    SDL_SetWindowFullscreen(s_win, full ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
+    s_hide_cursor = !full && !getenv("D2_SHOW_CURSOR");
+    if (s_hide_cursor)
+        hide_cursor();
+    else
+        SDL_ShowCursor(SDL_ENABLE);
 }
 
 /* El cuadro de ahora en ARGB (SCREEN_W x SCREEN_H, para grabar un video) */

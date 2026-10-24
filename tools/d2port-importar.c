@@ -639,8 +639,10 @@ int main(int argc, char **argv)
     else
         printf(T("Paquete: %s\n", "Package: %s\n"), pkg);
 
-    char list[1024];
+    char list[1024], win_exe[1024];
     join(list, sizeof list, pkg, s_list_name);
+    join(win_exe, sizeof win_exe, pkg, "d2port.exe");
+    int win_pkg = exists(win_exe); /* el paquete de Windows: d2port.exe al lado de archivos.txt */
     if (load_list(list) != 0 || s_num == 0) {
         printf(T("No pude leer %s\n", "Could not read %s\n"), list);
         pause_exit(pause);
@@ -753,6 +755,9 @@ int main(int argc, char **argv)
                        "  cmake -S . -B build && cmake --build build -j && ./build/d2port\n",
                        "Done. Now you can build and play from the source:\n"
                        "  cmake -S . -B build && cmake --build build -j && ./build/d2port\n"));
+    else if (!missing && !failed && win_pkg)
+        printf("%s", T("Listo. Para jugar, abrí d2port.exe (en esta carpeta).\n",
+                       "Done. To play, open d2port.exe (in this folder).\n"));
     else if (!missing && !failed)
         printf("%s", T("Listo. Si no importaste directo a la Pi, copiá el contenido de esta carpeta `ports` a la\n"
                        "de Batocera: /userdata/roms/ports (por la red, smb://batocera/share/roms/ports).\n",

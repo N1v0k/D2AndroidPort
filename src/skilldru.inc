@@ -756,7 +756,7 @@ static void dru_tick(Player *p)
         int ids[16], n = units_enemies_near(p->x + ax * range / 2.0f, p->y + ay * range / 2.0f, range / 2.0f + 0.8f, ids, 16);
         int elen = skill_elen_syn(s, lvl, &c);
         for (int k = 0; k < n; k++) {
-            int d = roll(lo, hi) / TICK_RATE + ((int)(rnd() % TICK_RATE) < roll(lo, hi) % TICK_RATE);
+            int full = roll(lo, hi), d = full / TICK_RATE + ((int)(rnd() % TICK_RATE) < full % TICK_RATE);
             dru_damage(p, ids[k], ELEM_COLD, d);
             if (units_alive_enemy(ids[k]) && elen > 0)
                 units_chill(ids[k], elen);

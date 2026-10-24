@@ -16,6 +16,7 @@
 #include <SDL.h>
 #include <ctype.h>
 #include <math.h>
+#include "dmath.h" /* (sinf, atan2f... iguales en todas las máquinas: la red) */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1913,8 +1914,10 @@ static int mod_hit(Unit *u, UnitTarget *t, int dmg)
         extra += half * (100 - t->res[1]) / 100;
     if (u->col_enchant) /* el encantamiento de un Anciano colosal: su elemento */
         extra += half * (100 - t->res[u->col_enchant - 1]) / 100;
-    if (HAS_MOD(u, MOD_SPECTRAL)) /* un elemento al azar */
-        extra += (half + (int)(rnd(u) % (uint32_t)half)) * (100 - t->res[rnd(u) % 3]) / 100;
+    if (HAS_MOD(u, MOD_SPECTRAL)) { /* un elemento al azar (de a un sorteo: el orden de una cuenta no está definido) */
+        int amount = half + (int)(rnd(u) % (uint32_t)half);
+        extra += amount * (100 - t->res[rnd(u) % 3]) / 100;
+    }
     if (HAS_MOD(u, MOD_MANAHIT))
         t->mana_burn += dmg * 2;
     if (HAS_MOD(u, MOD_CURSE))
