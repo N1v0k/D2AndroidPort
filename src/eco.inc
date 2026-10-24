@@ -22,6 +22,19 @@
      de cada cinco, uno con nombre propio de ese acto.
    - El desborde: con la arena llena (s_er.cap vivos) diez segundos, se
      termina. También al morir (los dos, con dos jugadores).
+   - El ritmo según el nivel de los personajes (eco_pace): un personaje
+     recién hecho mata despacio, así que en los niveles bajos las manadas
+     salen más espaciadas, el desborde aguanta más y el respiro es más
+     largo (de 5 en 5 niveles hasta el 20 y de 10 en 10 hasta el 40); del
+     41 al 60 es lo de siempre y después se aprieta de 20 en 20 (para que
+     alguien pueda jugar solo el Eco, sin la historia). En los niveles
+     bajos, además, los monstruos suben más despacio (uno cada tres
+     oleadas hasta el 15, cada dos hasta el 30; nunca más de uno por
+     debajo de los personajes), los jefes tienen menos niveles de más y
+     salen menos manadas de campeones.
+   - Lo que cae (eco_loot y el cofre): de la clase de tesoro de su grupo
+     que le toca al nivel de los personajes + 2, y de ese nivel como mucho
+     (los monstruos del Acto 5 de una oleada baja no sueltan lo del 5).
    - Al final: el cofre del Eco (más objetos cuanto más lejos se llegó) y un
      portal que vuelve al menú; el récord de cada personaje se guarda. */
 
@@ -32,6 +45,12 @@
 #define ECO_NOSTEP  0xffff
 #define ECO_KINDS   4
 #define ECO_BOSS_LEVELS 3 /* los jefes, sobre la oleada (como los del original sobre su área: UNIQUE_LEVELS) */
+/* El ritmo por escalones de nivel (en % de los tiempos: 100 = lo de siempre): de 5 en 5 hasta el 20,
+   de 10 en 10 hasta el 40 y de 20 en 20 después */
+static const struct { int upto, pace; } k_eco_pace[] = {
+    { 5, 250 }, { 10, 220 }, { 15, 190 }, { 20, 165 }, { 30, 140 }, { 40, 120 }, { 60, 100 }, { 80, 85 }, { 99, 70 },
+};
+#define ECO_PACE_BIG  85  /* con el ritmo en 85 o menos (desde el nivel 61), manadas de uno más */
 
 /* Las arenas (Id de levels.txt): el Trono de la Destrucción, la Cumbre del Arreat, Uber Tristram y la Colossal Summit */
 static const int k_eco_arenas[ECO_ARENAS] = { 131, 120, 136, 137 };
@@ -74,6 +93,8 @@ typedef struct {
     int          boss_kind;      /* 0 ninguno, 1 de acto, 2 con nombre propio */
     int          boss_due;       /* el tick de la oleada en que salen (-1 = ya salieron) */
     int          spawn_cd, alive, cap;
+    int          pace;           /* el ritmo según el nivel de los personajes (eco_set_pace), en % de los tiempos */
+    int          grow6;          /* lo que subió el nivel de los monstruos desde el primero, en sextos de nivel */
     int          over;           /* ticks con la arena llena */
     int          dead_ticks;     /* ticks con todos muertos */
     int          end;            /* EE_*: por qué terminó */
@@ -85,6 +106,67 @@ typedef struct {
 } EcoRun;
 
 static EcoRun s_er = { .zone = -1, .chest = -1, .shrines = { -1, -1 }, .well = -1 };
+
+/* El ritmo de un nivel: los tiempos (entre manadas, el desborde y el respiro) en % de los de siempre;
+   abajo más espaciado (un personaje de nivel bajo mata despacio), arriba más desafío */
+static int eco_pace_for(int lvl)
+{
+    int n = (int)(sizeof k_eco_pace / sizeof k_eco_pace[0]), k = 0;
+    while (k < n - 1 && lvl > k_eco_pace[k].upto)
+        k++;
+    return k_eco_pace[k].pace;
+}
+
+/* El nivel de los personajes ahora (el promedio: suben jugando) */
+static int eco_party_level(void)
+{
+    int sum = 0, n = s_num_players > 0 ? s_num_players : 1;
+    for (int i = 0; i < n; i++)
+        sum += s_pl[i].level_num;
+    return sum / n > 0 ? sum / n : 1;
+}
+
+/* El de ahora, según el nivel de los personajes (se mira en cada oleada). D2_ECO_PACE=N (pruebas) lo fija */
+static void eco_set_pace(void)
+{
+    int lvl = getenv("D2_ECO_LEVEL") ? atoi(getenv("D2_ECO_LEVEL")) : eco_party_level();
+    s_er.pace = getenv("D2_ECO_PACE") ? atoi(getenv("D2_ECO_PACE")) : eco_pace_for(lvl);
+    s_er.pace = s_er.pace < 10 ? 10 : s_er.pace;
+}
+
+/* Con personajes de nivel bajo los monstruos tienen menos vida y daño: -40 % con el ritmo en 250 (nivel 1
+   a 5), menos de a poco hasta nada en el 100 (nivel 41) */
+static int eco_soft_pct(void)
+{
+    return s_er.pace > 100 ? -(s_er.pace - 100) * 4 / 15 : 0;
+}
+
+/* Los niveles de más de los jefes: menos en los niveles bajos */
+static int eco_boss_levels(void)
+{
+    return s_er.pace >= 190 ? 0 : s_er.pace >= 140 ? 1 : s_er.pace > 100 ? 2 : ECO_BOSS_LEVELS;
+}
+
+/* Lo que cae, acorde a los personajes: hasta su nivel + 2, y la clase de tesoro de su grupo de ese nivel
+   (como el original sube la de un monstruo por su nivel, pero desde la primera del grupo) */
+static int eco_loot_level(void)
+{
+    int l = eco_party_level() + 2;
+    return l > 99 ? 99 : l;
+}
+
+static void eco_loot(const char **tc, int *lvl)
+{
+    int want = eco_loot_level();
+    *tc = items_tc_at_level(*tc, want);
+    *lvl = *lvl < want ? *lvl : want;
+}
+
+/* Lo que aguanta la arena llena (como mucho dos veces y media lo de siempre) */
+static int eco_overrun_ticks(void)
+{
+    return ECO_OVERRUN * (s_er.pace < 250 ? s_er.pace : 250) / 100;
+}
 
 static int eco_debug(void)
 {
@@ -516,7 +598,7 @@ static void eco_spawn_bosses(void)
             float bx = x + (float)k * 3.0f - (float)(n - 1) * 1.5f, by = y;
             if (!eco_walk(bx, by))
                 bx = x, by = y;
-            int u = units_spawn_boss_at(ids[k], bx, by, s_er.mlvl + ECO_BOSS_LEVELS, s_er.mlvl);
+            int u = units_spawn_boss_at(ids[k], bx, by, s_er.mlvl + eco_boss_levels(), s_er.mlvl);
             if (u < 0)
                 continue;
             if (tcs[k])
@@ -529,7 +611,7 @@ static void eco_spawn_bosses(void)
         while (n < 16 && list[n])
             n++;
         const char *name = n ? list[rnd() % (uint32_t)n] : "Bishibosh";
-        int u = name[0] == '=' ? units_spawn_boss_at(name + 1, x, y, s_er.mlvl + ECO_BOSS_LEVELS, s_er.mlvl)
+        int u = name[0] == '=' ? units_spawn_boss_at(name + 1, x, y, s_er.mlvl + eco_boss_levels(), s_er.mlvl)
                                : units_spawn_superunique(name, x, y, s_er.mlvl);
         if (u >= 0)
             s_er.boss[s_er.nboss++] = u;
@@ -577,12 +659,12 @@ static void eco_spawn_pack(void)
         return;
     int k = (int)(rnd() % (uint32_t)s_er.nkinds), made = 0;
     const char *id = s_er.kinds[k];
-    int boss_pct = 4 + s_er.wave * 3 / 2;
+    int boss_pct = (4 + s_er.wave * 3 / 2) * 100 / (s_er.pace > 100 ? s_er.pace : 100); /* (menos en niveles bajos) */
     units_zone_begin(s_er.zone);
     if ((int)(rnd() % 100) < (boss_pct < 40 ? boss_pct : 40)) {
         made = units_spawn_level_boss(id, x, y, s_er.mlvl);
     } else {
-        int n = 3 + (int)(rnd() % 3) + (s_er.wave >= 15);
+        int n = 3 + (int)(rnd() % 3) + (s_er.wave >= 15) + (s_er.pace <= ECO_PACE_BIG);
         for (int i = 0; i < n; i++) {
             float mx = x, my = y;
             if (i > 0 && !eco_near(x, y, 2, 1, &mx, &my))
@@ -628,9 +710,17 @@ static void eco_merc_back(Player *p)
 
 static void eco_wave_begin(void)
 {
-    int w = ++s_er.wave, raw = s_er.base + w - 1, over = raw > 99 ? raw - 99 : 0;
+    int w = ++s_er.wave;
+    eco_set_pace();
+    /* Los monstruos, un nivel más por oleada; en los niveles bajos más despacio (uno cada tres oleadas
+       hasta el 15, cada dos hasta el 30), pero nunca más de uno por debajo de los personajes */
+    if (w > 1)
+        s_er.grow6 += s_er.pace >= 190 ? 2 : s_er.pace >= 140 ? 3 : 6;
+    int raw = s_er.base + s_er.grow6 / 6, floor = eco_party_level() - 1;
+    raw = raw < floor ? floor : raw;
+    int over = raw > 99 ? raw - 99 : 0;
     s_er.mlvl = raw > 99 ? 99 : raw < 1 ? 1 : raw;
-    units_set_hunt(s_er.zone, over * 10, over * 5);
+    units_set_hunt(s_er.zone, over * 10 + eco_soft_pct(), over * 5 + eco_soft_pct());
     s_er.act = (w - 1) / 5 % 5 + 1;
     s_er.quota = (20 + 3 * w) * (s_num_players > 1 ? 3 : 2) / 2;
     s_er.deaths0 = units_hunt_deaths();
@@ -652,11 +742,13 @@ static void eco_wave_begin(void)
     snprintf(msg, sizeof msg, tr("Oleada %d"), w);
     eco_say(msg);
     if (eco_debug()) {
-        printf("ECO: oleada %d (acto %d, nivel %d, cuota %d, vida +%d%%, daño +%d%%):", w, s_er.act, s_er.mlvl, s_er.quota,
-               over * 10, over * 5);
+        printf("ECO: oleada %d (acto %d, nivel %d, cuota %d, vida %+d%%, daño %+d%%, ritmo %d%%):", w, s_er.act, s_er.mlvl,
+               s_er.quota, over * 10 + eco_soft_pct(), over * 5 + eco_soft_pct(), s_er.pace);
         for (int k = 0; k < s_er.nkinds; k++)
             printf(" %s", s_er.kinds[k]);
         printf("%s\n", s_er.boss_kind == 1 ? " + jefe de acto" : s_er.boss_kind == 2 ? " + jefe con nombre" : "");
+        printf("ECO: botín de nivel %d (los del Acto 5 sueltan de \"%s\")\n", eco_loot_level(),
+               items_tc_at_level("Act 5 H2H C", eco_loot_level()));
     }
 }
 
@@ -664,6 +756,7 @@ static void eco_wave_clear(void)
 {
     s_er.phase = EP_BREAK;
     s_er.ticks = 0;
+    eco_set_pace(); /* (el respiro, con el nivel de después de la oleada) */
     eco_shrines_clear();
     char msg[64];
     snprintf(msg, sizeof msg, tr("¡Oleada %d superada!"), s_er.wave);
@@ -738,16 +831,16 @@ static void eco_loot_begin(void)
         save_character(&s_pl[i]);
 }
 
-/* El cofre del Eco: 2 + oleada / 2 tiradas (hasta 16) del cofre del Acto 5 de la dificultad, con el
-   nivel de la última oleada, más hallazgo mágico por oleada y las primeras mágicas; y el oro */
+/* El cofre del Eco: 2 + oleada / 2 tiradas (hasta 16) del cofre que le toca al nivel de los personajes
+   (eco_loot_level: de los cofres de los actos y las dificultades, el de ese nivel), más hallazgo mágico
+   por oleada y las primeras mágicas; y el oro */
 static int eco_chest_open(Player *p, int u)
 {
     if (!s_eco || u != s_er.chest || u < 0)
         return 0;
-    static const char *const k_diff[3] = { "", " (N)", " (H)" };
-    char tc[32];
-    snprintf(tc, sizeof tc, "Act 5%s Chest C", k_diff[s_diff]);
-    int best = s_er.best, n = 2 + best / 2, ilvl = s_er.mlvl > 0 ? s_er.mlvl : s_er.base;
+    int ilvl = eco_loot_level();
+    const char *tc = items_tc_at_level("Act 1 Chest A", ilvl);
+    int best = s_er.best, n = 2 + best / 2;
     n = n > 16 ? 16 : n;
     int mf = (p ? p->bonus[STAT_MAGIC_FIND] : 0) + best * 5, got = 0;
     for (int k = 0; k < n; k++) {
@@ -804,6 +897,7 @@ static void eco_enter(void)
         s_er.base = atoi(getenv("D2_ECO_LEVEL"));
     s_er.base = s_er.base < 1 ? 1 : s_er.base;
     s_er.cap = getenv("D2_ECO_CAP") ? atoi(getenv("D2_ECO_CAP")) : s_num_players > 1 ? 50 : 40;
+    eco_set_pace();
     int first = getenv("D2_ECO_ARENA") ? atoi(getenv("D2_ECO_ARENA")) % ECO_ARENAS : (int)(rnd() % ECO_ARENAS);
     for (int k = 0; k < ECO_ARENAS && !s_er.lv; k++) {
         int a = (first + k) % ECO_ARENAS, z = world_level_zone(k_eco_arenas[a]);
@@ -846,6 +940,7 @@ static void eco_enter(void)
     units_set_hunt(s_er.zone, 0, 0);
     s_er.wave = getenv("D2_ECO_WAVE") ? atoi(getenv("D2_ECO_WAVE")) - 1 : 0;
     s_er.wave = s_er.wave < 0 ? 0 : s_er.wave;
+    s_er.grow6 = s_er.wave * 6; /* (empezando más adelante, como si hubieran subido de a uno) */
     s_er.phase = EP_START;
     s_er.ticks = 0;
     char msg[96];
@@ -887,8 +982,8 @@ static void eco_tick(void)
             printf("ECO: t%u oleada %d: %d vivos, %d de %d muertos, %d unidades\n", s_ticks, s_er.wave, s_er.alive, kills, s_er.quota,
                    units_count());
         if (s_er.alive < cap && --s_er.spawn_cd <= 0) { /* (siguen saliendo: si no se los mata, la arena se llena) */
-            int every = 120 - 3 * s_er.wave; /* (de casi 5 segundos a 1,6 desde la oleada 27) */
-            every = every < 40 ? 40 : every;
+            int every = 120 - 3 * s_er.wave; /* (de casi 5 segundos a 1,6 desde la oleada 27; por el ritmo) */
+            every = (every < 40 ? 40 : every) * s_er.pace / 100;
             s_er.spawn_cd = s_num_players > 1 ? every * 7 / 10 : every;
             eco_spawn_pack();
         }
@@ -899,7 +994,7 @@ static void eco_tick(void)
         break;
     }
     case EP_BREAK:
-        if (s_er.ticks >= ECO_BREAK)
+        if (s_er.ticks >= ECO_BREAK * s_er.pace / 100)
             eco_wave_begin();
         break;
     case EP_END:
@@ -933,7 +1028,7 @@ static void eco_tick(void)
     }
     /* El desborde */
     if (s_er.alive >= s_er.cap) {
-        if (++s_er.over >= ECO_OVERRUN)
+        if (++s_er.over >= eco_overrun_ticks())
             eco_finish(EE_OVERRUN);
     } else if (s_er.alive < s_er.cap * 9 / 10) {
         s_er.over = 0;
@@ -992,7 +1087,7 @@ static void eco_draw(void)
     fb_fill_rect(bx, by, bw, 5, COL(R_STONE, 5));
     fb_fill_rect(bx, by, fill, 5, blink ? COL(R_GOLD, 15) : COL(R_RED, 12));
     if (s_er.over > 0 && s_er.phase <= EP_BREAK) {
-        snprintf(t, sizeof t, tr("¡Desborde! %d"), (ECO_OVERRUN - s_er.over) / TICK_RATE + 1);
+        snprintf(t, sizeof t, tr("¡Desborde! %d"), (eco_overrun_ticks() - s_er.over) / TICK_RATE + 1);
         font_draw_centered(x + w / 2, y + h + 4, t, 2, COL(R_RED, 15));
     }
     if (s_er.phase == EP_LOOT)

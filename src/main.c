@@ -353,6 +353,57 @@ static int net_test_begin(int local)
     return net_started()->num_players;
 }
 
+/* D2_VIDEO=archivo.mp4 (con --autotest): un video de la prueba, pasando cada cuadro a ffmpeg (D2_FFMPEG:
+   cuál; si no, "ffmpeg"). D2_VIDEO_EVERY=N: un cuadro cada N ticks (el video va N veces más rápido) */
+static FILE     *s_video;
+static uint32_t *s_video_buf;
+static int       s_video_every = 1;
+static long      s_video_frames;
+
+static void video_rec_open(void)
+{
+#ifndef _WIN32
+    const char *out = getenv("D2_VIDEO");
+    if (!out)
+        return;
+    char cmd[1200];
+    snprintf(cmd, sizeof cmd,
+             "%s -y -loglevel error -f rawvideo -pixel_format bgra -video_size %dx%d -framerate %d -i - "
+             "-c:v libx264 -preset slow -crf %d -pix_fmt yuv420p -movflags +faststart \"%s\"",
+             getenv("D2_FFMPEG") ? getenv("D2_FFMPEG") : "ffmpeg", SCREEN_W, SCREEN_H, TICK_RATE,
+             getenv("D2_VIDEO_CRF") ? atoi(getenv("D2_VIDEO_CRF")) : 28, out); /* (D2_VIDEO_CRF: la calidad, más alto = más chico) */
+    s_video = popen(cmd, "w");
+    s_video_buf = malloc((size_t)SCREEN_W * SCREEN_H * 4);
+    s_video_every = getenv("D2_VIDEO_EVERY") && atoi(getenv("D2_VIDEO_EVERY")) > 0 ? atoi(getenv("D2_VIDEO_EVERY")) : 1;
+    if (!s_video || !s_video_buf)
+        fprintf(stderr, "no pude grabar el video %s\n", out);
+#endif
+}
+
+static void video_rec_frame(int t)
+{
+    if (!s_video || !s_video_buf || t % s_video_every)
+        return;
+    game_render(1.0f);
+    video_grab_argb(s_video_buf);
+    fwrite(s_video_buf, 4, (size_t)SCREEN_W * SCREEN_H, s_video);
+    s_video_frames++;
+}
+
+static void video_rec_close(void)
+{
+#ifndef _WIN32
+    if (s_video) {
+        pclose(s_video);
+        printf("video: %s (%ld cuadros, %.1f minutos)\n", getenv("D2_VIDEO"), s_video_frames,
+               s_video_frames / (double)TICK_RATE / 60.0);
+    }
+#endif
+    s_video = NULL;
+    free(s_video_buf);
+    s_video_buf = NULL;
+}
+
 static int save_screenshot(const char *path)
 {
     if (video_save_bmp(path) != 0) {
@@ -617,6 +668,7 @@ static int run_headless(const Options *o)
         }
         int r = 1;
         double last = 0.0;
+        video_rec_open();
         /* Tope de tiempo de juego: 3 horas (la demostración pelea de verdad: 6
            por acto, y la campaña son 15); con --frames N, a los N ticks (para
            perfilar un tramo y salir normal) */
@@ -639,6 +691,7 @@ static int run_headless(const Options *o)
             }
             last = (double)(SDL_GetPerformanceCounter() - t0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
             dump_tick(); /* el sonido avanza como en el juego (y se graba con D2_AUDIO_DUMP) */
+            video_rec_frame(t);
             /* D2_FX_SHOTS=prefijo: capturas de los efectos de los jefes y de
                las Piedras Cairn (a los 5, 30, 61 y 100 ticks de empezar; con
                D2_FX_EVERY=n, cada n ticks) */
@@ -687,6 +740,7 @@ static int run_headless(const Options *o)
                                           (double)SDL_GetPerformanceFrequency());
             }
         }
+        video_rec_close();
         game_autotest_report();
         if (net_role() != NET_OFF) {
             printf("red: %s\n", net_error() ? net_error() : "sin separarse");

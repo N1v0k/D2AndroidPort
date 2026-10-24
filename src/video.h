@@ -47,6 +47,7 @@ double video_upload_ms(void); /* cuánto tardó la última subida del cuadro a l
 void video_set_565(int on);    /* textura de 16 bits (más rápida en la Pi) o de 32 */
 int  video_is_565(void);
 int  video_save_bmp(const char *path);
+void video_grab_argb(uint32_t *dst); /* el cuadro de ahora en ARGB (para grabar un video) */
 
 /* Cinemáticas: una textura YUV 4:2:0 de w x h que se dibuja en toda la
    ventana sin deformarse (video_movie_frame con y en NULL redibuja el

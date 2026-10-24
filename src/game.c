@@ -827,6 +827,7 @@ static int  s_eco_world; /* el mundo armado es el de las arenas (world_set_arena
 static int  s_eco_exit;  /* se usó el portal del final: al menú */
 static void eco_zone_loaded(int z);
 static int  eco_chest_open(Player *p, int u);
+static void eco_loot(const char **tc, int *lvl);
 static void eco_enter(void);
 static void eco_leave(void);
 static int  eco_difficulty(void);
@@ -6550,7 +6551,11 @@ static void drop_loot(int monster, const Player *killer)
     party = party > 0 ? party : 1;
     int drop_players = (s_num_players - party) / 2 + party, cap = units_player_count_of(monster);
     items_set_drop_players(drop_players < cap ? drop_players : cap);
-    int n = items_roll_drop(units_treasure_class(monster), units_level(monster), killer ? killer->bonus[STAT_MAGIC_FIND] : 0, drops, 6);
+    const char *tc = units_treasure_class(monster);
+    int lvl = units_level(monster);
+    if (s_eco) /* el Eco: lo que cae es del nivel de los personajes */
+        eco_loot(&tc, &lvl);
+    int n = items_roll_drop(tc, lvl, killer ? killer->bonus[STAT_MAGIC_FIND] : 0, drops, 6);
     items_set_drop_players(1);
     items_drop_from_bovine(0);
     float x, y;
@@ -17606,10 +17611,10 @@ static void render_frame(float alpha)
         bossfx_draw();
         draw_hud();
         draw_banners();
-        if (s_demo)
+        if (s_demo && !s_eco)
             draw_demo_banner();
         skilltest_draw();
-        if (s_demo || s_show_pos || getenv("D2_SHOW_POS"))
+        if ((s_demo && !s_eco) || s_show_pos || getenv("D2_SHOW_POS"))
             draw_positions();
         if (s_paused)
             draw_pause();
@@ -17678,10 +17683,10 @@ static void render_frame(float alpha)
     bossfx_draw();
     draw_hud();
     draw_banners();
-    if (s_demo)
+    if (s_demo && !s_eco) /* (los bots en el Eco, D2_ECO_DEMO: sin el cartel ni las posiciones, que tapan las oleadas) */
         draw_demo_banner();
     skilltest_draw();
-    if (s_demo || s_show_pos || getenv("D2_SHOW_POS"))
+    if ((s_demo && !s_eco) || s_show_pos || getenv("D2_SHOW_POS"))
         draw_positions();
     if (s_show_perf)
         draw_perf();

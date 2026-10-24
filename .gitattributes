@@ -3,3 +3,4 @@
 * text=auto eol=lf
 *.bat text eol=crlf
 *.ps1 text eol=crlf
+*.mp4 binary

@@ -2149,6 +2149,21 @@ const char *items_tc_for_level(const char *name, int lvl)
     return txt_get(&s_tc, row, 0);
 }
 
+/* La de su grupo que le toca a ese nivel, desde la primera del grupo (no solo hacia arriba): el Eco del
+   Odio elige así lo que sueltan sus monstruos según el nivel de los personajes */
+const char *items_tc_at_level(const char *name, int lvl)
+{
+    int row = name && name[0] ? txt_find_row(&s_tc, 0, name) : -1;
+    int g = row >= 0 ? txt_get_int(&s_tc, row, "group", 0) : 0;
+    if (!g)
+        return name;
+    while (row > 0 && txt_get_int(&s_tc, row - 1, "group", 0) == g)
+        row--;
+    while (row + 1 < s_tc.rows && txt_get_int(&s_tc, row + 1, "group", 0) == g && txt_get_int(&s_tc, row + 1, "level", 0) <= lvl)
+        row++;
+    return txt_get(&s_tc, row, 0);
+}
+
 int items_roll_drop(const char *treasure_class, int monster_level, int mf, Item *out, int max)
 {
     int n = 0;

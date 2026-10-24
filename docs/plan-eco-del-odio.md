@@ -96,6 +96,39 @@ Pi pesa).
 40 con un jugador, 50 con dos). Llena, empieza una cuenta de 10 segundos;
 si no se baja del 90 % antes, se termina la corrida ("Te desbordaron").
 
+**El ritmo según el nivel** (pedido del usuario, 24/10/2026: "si alguien no
+quiere jugar la historia y quiere jugar el Eco, que pueda"). Un personaje
+de nivel bajo mata despacio, así que los tiempos van por escalones del
+nivel (el promedio de los personajes, mirado en cada oleada: suben
+jugando), de 5 en 5 hasta el 20, de 10 en 10 hasta el 40 y de 20 en 20
+después (lo pidió así): el tiempo entre manadas, la cuenta del desborde y
+el respiro entre oleadas son el 250 % de lo de siempre del 1 al 5, el 220 %
+del 6 al 10, el 190 % del 11 al 15, el 165 % del 16 al 20, el 140 % del 21
+al 30, el 120 % del 31 al 40, lo de siempre del 41 al 60, el 85 % del 61 al
+80 y el 70 % del 81 en adelante; desde el 61, además, las manadas traen uno
+más (`k_eco_pace` y `eco_set_pace` en `src/eco.inc`).
+
+**Más fácil en niveles bajos** (24/10/2026: "así llegan a oleadas más
+lejos"): con el ritmo de más (hasta el nivel 40) los monstruos tienen menos
+vida y daño (`eco_soft_pct`: -40 % con 250, nada con 100; `hunt_power`
+acepta porcentajes negativos), su nivel sube uno cada tres oleadas hasta el
+15 y cada dos hasta el 30 (`grow6`, en sextos de nivel), nunca más de uno
+por debajo de los personajes, los jefes tienen 0, 1 o 2 niveles de más en
+lugar de 3 y salen menos manadas de campeones. Con los bots de la
+demostración (`D2_ECO_DEMO=1`, que reparten puntos, aprenden y usan
+habilidades y toman pociones), dos personajes de nivel 1 llegan a la
+oleada 9 (Bárbaro y Hechicera) o 12 (Amazona y Paladín); antes, los bots de
+la prueba caían en la 2 y los de la demostración en la 6.
+
+**El botín, acorde al nivel** ("que los items que caigan sean acordes al
+nivel del personaje"): lo que sueltan los monstruos y el cofre sale de la
+clase de tesoro de su grupo que le toca al nivel de los personajes + 2
+(`items_tc_at_level`: los grupos de TreasureClassEx van de "Act 1 ... A",
+nivel 0, a "Act 5 (H) ... C", nivel 85, por todos los actos y dificultades)
+y el nivel de los objetos no pasa de ese. Así un monstruo del Acto 5 en una
+oleada baja suelta lo del Acto 1, y el cofre de un personaje de nivel 15 es
+"Act 2 Chest B".
+
 **Los santuarios.** Cada 4 oleadas aparecen dos santuarios cerca de los
 jugadores (de los que duran del original: armadura, combate, habilidad,
 recarga de maná, o el explosivo), y se van al terminar la oleada si nadie los

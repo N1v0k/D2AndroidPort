@@ -281,6 +281,7 @@ int             items_level_req(const Item *it); /* nivel que pide (el del objet
    calidad de cada uno se tira como en el original (ItemRatio.txt y lo que
    suma la clase de tesoro), con la búsqueda de magia `mf` (%). */
 int items_roll_drop(const char *treasure_class, int monster_level, int mf, Item *out, int max);
+const char *items_tc_at_level(const char *name, int lvl); /* la de su grupo para ese nivel (el Eco del Odio) */
 /* La clase de su grupo que va con ese nivel ("Act 1 (H) H2H A" -> "... C"); la misma si no tiene grupo */
 const char *items_tc_for_level(const char *name, int lvl);
 /* Lo mismo con la calidad pedida (QUALITY_MAGIC, QUALITY_SUPERIOR...) en lo

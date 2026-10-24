@@ -1713,6 +1713,11 @@ int game_autotest_start(const char *name, int players)
            2: los golpes de verdad pero sin recibir daño (para las capturas: la arena se llena) */
         s_one_hit = getenv("D2_ECO_REAL") ? 0 : 1;
         s_god = !getenv("D2_ECO_REAL") || atoi(getenv("D2_ECO_REAL")) == 2;
+        /* D2_ECO_DEMO=1 (con D2_ECO_REAL): los bots de la demostración, que juegan como jugadores (reparten
+           los puntos, aprenden y usan las habilidades, se equipan y toman pociones); para ver hasta dónde
+           llega un personaje nuevo */
+        if (getenv("D2_ECO_DEMO"))
+            s_demo = 1;
         s_at.trace = getenv("D2_AT_TRACE") ? atoi(getenv("D2_AT_TRACE")) : 0;
         if (getenv("D2_AUTOTEST_SHOTS")) /* una captura por paso */
             snprintf(s_at.shots, sizeof s_at.shots, "%s", getenv("D2_AUTOTEST_SHOTS"));

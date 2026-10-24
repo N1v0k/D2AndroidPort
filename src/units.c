@@ -1162,7 +1162,7 @@ int units_herald_tier(int i)
 
 /* ---- El Eco del Odio (eco.inc): los monstruos de la arena cazan ---- */
 static int             s_hunt_zone = -1;              /* los que salen en esta zona cazan */
-static int             s_hunt_hp_pct, s_hunt_dmg_pct; /* lo de más (pasado el nivel 99) */
+static int             s_hunt_hp_pct, s_hunt_dmg_pct; /* lo de más (pasado el nivel 99) o de menos (personajes de nivel bajo) */
 static int             s_hunt_deaths;                 /* los cazadores que murieron (los mate quien los mate) */
 static const uint16_t *s_flow;                        /* los pasos (en subtiles) hasta un jugador; 0xffff = no se llega */
 static int             s_flow_x0, s_flow_y0, s_flow_w, s_flow_h;
@@ -1209,15 +1209,15 @@ static int hunt_spawning(void)
     return s_hunt_zone >= 0 && s_spawn_zone == s_hunt_zone;
 }
 
-/* La vida y el daño de más de la oleada (como los de un Heraldo) */
+/* La vida y el daño de más (o de menos) de la oleada (como los de un Heraldo) */
 static void hunt_power(Unit *b)
 {
     b->hunt = 1;
-    if (s_hunt_hp_pct > 0) {
+    if (s_hunt_hp_pct != 0) {
         int64_t hp = (int64_t)b->max_hp * (100 + s_hunt_hp_pct) / 100;
-        b->max_hp = b->hp = hp > (1 << 30) ? 1 << 30 : (int)hp;
+        b->max_hp = b->hp = hp > (1 << 30) ? 1 << 30 : hp < 1 ? 1 : (int)hp;
     }
-    if (s_hunt_dmg_pct <= 0)
+    if (s_hunt_dmg_pct == 0)
         return;
     int pct = 100 + s_hunt_dmg_pct;
     b->dmg_min = b->dmg_min * pct / 100;

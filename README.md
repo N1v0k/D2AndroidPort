@@ -45,6 +45,10 @@ original game's 2D files.
 </tr>
 </table>
 
+**Video:** [two bots from level 1 in the Echo of Hatred](docs/videos/echo-from-level-1.mp4)
+(3 minutes at 3x speed: an Amazon and a Paladin who learn their skills as
+they level up, until wave 8).
+
 <sub>Screenshots of the port with the art of Diablo II: Resurrected's 2D mode. Diablo
 II and its art are © Blizzard Entertainment; shown only to illustrate this
 non-commercial fan project.</sub>
@@ -349,10 +353,31 @@ can also be played over the local network:
 - **Overrun:** if the arena fills up (40 monsters alive, 50 with two
   players) for ten seconds, the run is over. Dying also ends it (with two
   players, the one who died comes back on the next wave).
+- **The pace follows your level**, so a new character can play the Echo
+  instead of the story. The time between packs, the overrun countdown and
+  the break between waves are 2.5 times longer up to level 5, then 2.2
+  (6-10), 1.9 (11-15), 1.65 (16-20), 1.4 (21-30) and 1.2 times (31-40);
+  from 41 to 60 it is the normal pace; from 61 to 80 it is 15% faster and
+  from 81, 30% faster, with one more monster in each pack (with two or more
+  players, their average level).
+- **Easier at low levels**, so a new character can go further: up to level
+  40 the monsters have less life and damage (40% less at level 1), their
+  level rises one every three waves up to level 15 and one every two up to
+  30 (never more than one below yours), the bosses have fewer extra levels
+  and champion packs are rarer. Two bots starting at level 1 reach waves 9
+  to 12 (before, wave 2).
+- **The loot matches your level:** monsters and the Echo chest drop from
+  the treasure class of your level (+2), and items are no higher than that
+  (Act 5 monsters in an early wave drop Act 1 items).
 - Every four waves two shrines appear, there is a well next to the start,
   and the dead mercenary comes back after each act boss.
 - At the end, the **Echo chest** (more and better items the further you
   got) and a portal back to the menu. Each character keeps its best wave.
+
+<a href="docs/videos/echo-from-level-1.mp4"><img src="docs/screenshots/echo-video.jpg" width="400" alt="Video: two bots from level 1 in the Echo of Hatred"></a><br>
+<sub>Video: two bots that start at level 1 (an Amazon and a Paladin, playing
+by themselves with their skills and potions), 3x speed, until they fall on
+wave 8.</sub>
 
 ### Classes and skills
 

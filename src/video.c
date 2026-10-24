@@ -390,6 +390,12 @@ double video_convert_bench(void)
     return (double)(SDL_GetPerformanceCounter() - t0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
 }
 
+/* El cuadro de ahora en ARGB (SCREEN_W x SCREEN_H, para grabar un video) */
+void video_grab_argb(uint32_t *dst)
+{
+    convert_to_argb(dst, SCREEN_W);
+}
+
 int video_save_bmp(const char *path)
 {
     SDL_Surface *s = SDL_CreateRGBSurfaceWithFormat(0, SCREEN_W, SCREEN_H, 32, SDL_PIXELFORMAT_ARGB8888);
