@@ -782,3 +782,31 @@
 781	SPRACHE
 782	Die Stimmen bleiben auf %s (die importierte Sprache)
 783	A: wählen (das Spiel startet neu)     B: zurück
+784	ECHO DES HASSES
+785	Das Echo des Hasses wird mit einem bestehenden Charakter gespielt
+786	Beste Welle: %d
+787	Noch keine Läufe im Echo
+788	Endlose Wellen in einer zufälligen Arena, jede schwerer.
+789	Alle fünf Wellen ein Boss aus der Geschichte. Der Tod beendet den Lauf.
+790	Erfahrung, Gold und Gegenstände gehen an deinen Charakter.
+791	A: wählen     B: zurück
+792	Im Echo des Hasses gibt es keine Portale
+793	ECHO BEENDEN
+794	%s und seine Brüder!
+795	%s!
+796	Welle %d
+797	Welle %d geschafft!
+798	Überrannt! Welle %d
+799	Das Echo ist vorbei: Welle %d
+800	Neuer Rekord!
+801	Echo des Hasses: %s
+802	Echo des Hasses: Welle %d (Rekord %d)
+803	Echo des Hasses: Welle %d
+804	Welle %d - Stufe %d
+805	Mach dich bereit
+806	Du hast Welle %d erreicht
+807	Welle geschafft!
+808	Boss: %s
+809	Getötet: %d / %d
+810	Überrannt! %d
+811	Öffne die Truhe; das Portal führt zurück zum Menü

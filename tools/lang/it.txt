@@ -782,3 +782,31 @@
 781	LINGUA
 782	Le voci restano in %s (la lingua importata)
 783	A: scegli (il gioco riparte)     B: indietro
+784	ECO DELL'ODIO
+785	L'Eco dell'odio si gioca con un personaggio già esistente
+786	Ondata migliore: %d
+787	Nessuna partita nell'Eco
+788	Ondate infinite in un'arena a caso, ognuna più difficile.
+789	Ogni cinque ondate, un boss della storia. Morire termina la partita.
+790	Esperienza, oro e oggetti tornano al tuo personaggio.
+791	A: scegli     B: indietro
+792	Nell'Eco dell'odio non ci sono portali
+793	TERMINA L'ECO
+794	%s e i suoi fratelli!
+795	%s!
+796	Ondata %d
+797	Ondata %d superata!
+798	Sopraffatto! Ondata %d
+799	Fine dell'Eco: ondata %d
+800	Nuovo record!
+801	Eco dell'odio: %s
+802	Eco dell'odio: ondata %d (record %d)
+803	Eco dell'odio: ondata %d
+804	Ondata %d - livello %d
+805	Preparati
+806	Hai raggiunto l'ondata %d
+807	Ondata superata!
+808	Boss: %s
+809	Uccisi: %d / %d
+810	Sopraffatto! %d
+811	Apri lo scrigno; il portale torna al menu

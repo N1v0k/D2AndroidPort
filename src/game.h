@@ -19,6 +19,7 @@ void game_start_slots(int num_players, const int *slots, const int *classes);
    antes de game_start_slots */
 void game_set_difficulty(int diff);
 void game_set_terror_zones(int on); /* las zonas de terror (con Baal muerto en esa dificultad) */
+void game_set_mode(int mode); /* lo que se juega con game_start_slots: 0 la historia, 1 el Eco del Odio */
 void game_set_language(const char *code); /* el idioma elegido en el menú (opciones.txt; se usa al arrancar) */
 int  game_difficulty(void);
 int  game_tick(const InputState *in);
@@ -67,6 +68,7 @@ typedef struct {
     int gold;
     int den_done;
     int diff_max; /* la dificultad más alta abierta (0 Normal, 1 Pesadilla, 2 Infierno) */
+    int eco_best; /* la mejor oleada en el Eco del Odio (0 = nunca jugó) */
 } SlotInfo;
 
 void        game_set_save_dir(const char *dir);

@@ -23,5 +23,6 @@ int        menu_terror_zones(void); /* las zonas de terror: 1 sí (se abren al v
 int        menu_is_main(void);   /* en la pantalla principal (para la demostración) */
 const char *menu_movie(void);    /* la cinemática elegida (MENU_MOVIE) */
 const char *menu_language(void); /* el idioma elegido (MENU_RESTART): "deDE"... */
+int        menu_mode(void);      /* lo que se eligió jugar (MENU_START): 0 la historia, 1 el Eco del Odio */
 
 #endif

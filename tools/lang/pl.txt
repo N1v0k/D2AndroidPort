@@ -782,3 +782,31 @@
 781	JĘZYK
 782	Głosy pozostają w języku: %s (zaimportowanym)
 783	A: wybierz (gra uruchomi się ponownie)     B: wróć
+784	ECHO NIENAWIŚCI
+785	W Echo Nienawiści gra się istniejącą postacią
+786	Najlepsza fala: %d
+787	Brak podejść do Echa
+788	Niekończące się fale na losowej arenie, każda trudniejsza.
+789	Co pięć fal boss z fabuły. Śmierć kończy podejście.
+790	Doświadczenie, złoto i przedmioty wracają do twojej postaci.
+791	A: wybierz     B: wróć
+792	W Echu Nienawiści nie ma portali
+793	ZAKOŃCZ ECHO
+794	%s i jego bracia!
+795	%s!
+796	Fala %d
+797	Fala %d pokonana!
+798	Przytłoczenie! Fala %d
+799	Koniec Echa: fala %d
+800	Nowy rekord!
+801	Echo Nienawiści: %s
+802	Echo Nienawiści: fala %d (rekord %d)
+803	Echo Nienawiści: fala %d
+804	Fala %d - poziom %d
+805	Przygotuj się
+806	Osiągnięta fala: %d
+807	Fala pokonana!
+808	Boss: %s
+809	Zabici: %d / %d
+810	Przytłoczenie! %d
+811	Otwórz skrzynię; portal wraca do menu

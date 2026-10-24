@@ -143,6 +143,7 @@ static TxtTable  s_lvlwarp_txt; /* lvlwarp.txt: qué saltos son trampillas */
 static uint32_t  s_seed;
 static int       s_act = 1; /* el acto armado (un mundo por acto) */
 static int       s_world_diff; /* la dificultad (world_set_difficulty): los monstruos de los niveles */
+static int       s_world_arena; /* el Eco del Odio (world_set_arena): Uber Tristram y la Colossal Summit en cualquier dificultad */
 
 /* Lo que decide world_layout y usan las zonas al armarse */
 static int s_moor_row, s_plains_row, s_dark_row, s_marsh_row, s_tamoe_col, s_grave_c0;
@@ -1934,6 +1935,34 @@ static int layout_act2(Map *m)
 #include "world3.inc"
 #include "world4.inc"
 #include "world5.inc"
+
+void world_set_arena(int on)
+{
+    s_world_arena = on != 0;
+}
+
+/* Los monstruos de los niveles de un acto (mon1..mon5 de levels.txt, sin
+   repetir), para las oleadas del Eco del Odio */
+int world_act_monsters(int act, const char **out, int max)
+{
+    const TxtTable *t = &s_levels_txt;
+    int n = 0, cact = txt_col(t, "Act");
+    for (int r = 0; r < t->rows && n < max; r++) {
+        if (txt_get_int(t, r, "Act", -1) != act - 1 || cact < 0)
+            continue;
+        for (int k = 0; k < 5 && n < max; k++) {
+            char col[8];
+            snprintf(col, sizeof col, "mon%d", k + 1);
+            const char *id = txt_get(t, r, txt_col(t, col));
+            int dup = !id || !id[0];
+            for (int j = 0; j < n && !dup; j++)
+                dup = strcmp(out[j], id) == 0;
+            if (!dup)
+                out[n++] = id;
+        }
+    }
+    return n;
+}
 
 int world_layout(Map *m, uint32_t seed, int act)
 {

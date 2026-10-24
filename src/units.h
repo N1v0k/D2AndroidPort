@@ -266,6 +266,18 @@ typedef struct {
     int tc_boost;                      /* niveles de más para su clase de tesoro */
 } UnitsHerald;
 int  units_spawn_herald(const char *id, float x, float y, int level, const UnitsHerald *h);
+/* El Eco del Odio (eco.inc): los monstruos que salen en la zona `zone` (-1 = ninguna) cazan a los
+   jugadores (los buscan aunque no los vean, por el mapa de pasos `steps` de w x h subtiles desde
+   (x0, y0): 0 donde hay un jugador, 0xffff donde no se llega), tienen el nivel que se les da (también
+   los jefes de misión) y hp_pct / dmg_pct de vida y daño de más. units_hunt_deaths: cuántos murieron. */
+void units_set_hunt(int zone, int hp_pct, int dmg_pct);
+void units_set_flow(const uint16_t *steps, int x0, int y0, int w, int h);
+int  units_hunt_deaths(void);
+int  units_is_hunter(int i);
+int  units_hunters_alive(void);
+int  units_hunt_corpses(int keep_ticks, int max_keep); /* sus cadáveres se van (los que tienen más de keep_ticks; tope max_keep) */
+void units_hunters_kill(void); /* caen muertos sin dar nada (se terminó la corrida) */
+void units_set_tc_of(int i, const char *id); /* la clase de tesoro de otro monstruo de monstats.txt */
 /* El Diablo clon: con 1, el próximo superunique que se arme es él; el número del último que salió (-1 = ninguno) */
 void units_clone_next_superunique(int on);
 int  units_clone_unit(void);

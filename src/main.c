@@ -406,6 +406,7 @@ static int run_headless(const Options *o)
             if (r == MENU_START) {
                 game_set_difficulty(menu_difficulty());
                 game_set_terror_zones(menu_terror_zones());
+                game_set_mode(menu_mode());
                 game_start_slots(menu_players(), menu_slots(), menu_classes());
                 game_render(1.0f);
                 dump_close();
@@ -604,6 +605,7 @@ static int run_window(const Options *o)
                 } else if (r == MENU_START) {
                     game_set_difficulty(menu_difficulty());
                     game_set_terror_zones(menu_terror_zones());
+                    game_set_mode(menu_mode());
                     game_start_slots(menu_players(), menu_slots(), menu_classes());
                     state = ST_GAME;
                 } else if (r == MENU_MOVIE) {

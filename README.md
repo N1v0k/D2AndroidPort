@@ -308,6 +308,36 @@ mercenaries and the resistance penalty (-40 and -100).
     name and under each monster's name, the zone and its minutes in the
     pause menu, and its waypoints in purple.
 
+### Echo of Hatred (a new game mode)
+
+A mode of its own, apart from the story, with the idea of Diablo IV's
+"Echoing Hatred": endless waves in an arena. **ECHO OF HATRED** in the main
+menu, for one or two players:
+
+- You play with a character you already have, with its equipment. The
+  experience, gold and items you get go back to its saved game; its story
+  (quests, acts and waypoints of the three difficulties) is not touched.
+- The arena is chosen at random: the Throne of Destruction, the Arreat
+  Summit, Uber Tristram or the Colossal Summit, without their monsters or
+  their exits (no town portals either).
+- Wave 1 has monsters of your level, and each wave is one level higher
+  (past 99, they get more life and damage). They come in packs from every
+  side and hunt you down; a wave is cleared by killing its quota. Every five
+  waves the monsters come from another act, like the campaign.
+- **The bosses:** every five waves an act boss of the story at the wave's
+  level (Andariel, Duriel, Mephisto, Diablo and Baal; from wave 30 the
+  Pandemonium ones: Lilith, Uber Duriel, Uber Izual, Uber Diablo and the
+  three of Uber Tristram together), and on the third wave of each five a
+  named boss of that act (Blood Raven, the Countess, the Summoner, Izual,
+  Nihlathak...).
+- **Overrun:** if the arena fills up (40 monsters alive, 50 with two
+  players) for ten seconds, the run is over. Dying also ends it (with two
+  players, the one who died comes back on the next wave).
+- Every four waves two shrines appear, there is a well next to the start,
+  and the dead mercenary comes back after each act boss.
+- At the end, the **Echo chest** (more and better items the further you
+  got) and a portal back to the menu. Each character keeps its best wave.
+
 ### Classes and skills
 
 - **The seven original classes** (Barbarian, Amazon, Sorceress, Paladin,
@@ -515,7 +545,9 @@ mercenaries and the resistance penalty (-40 and -100).
   with the same two characters and all their skills (`D2_DEMO_ACT=1` to `5`
   plays only that act).
 - **Automated tests** (`--autotest act1` to `act5`): two bots play each
-  act from start to end, every quest step, with 1 and 2 players. Today all
+  act from start to end, every quest step, with 1 and 2 players. With
+  `D2_ECO=1`, `--autotest eco` plays the Echo of Hatred: the waves with each
+  boss, ending the run, the chest and the portal back. Today all
   five pass (68, 63, 74, 36 and 62 steps), as does the skills test (24 of
   24); the first three were also checked in English.
 
@@ -657,6 +689,10 @@ purpose, to play comfortably on a Raspberry Pi with a gamepad.
   guides, because that code is not public.
 - **Sunder charms** break the immunity for everyone's damage in the game
   (both players, their pets and the mercenaries).
+- **Echo of Hatred** is not in Diablo II: it is this port's own mode, with
+  the idea of a Diablo IV mode (its exact rules are that game's). The waves,
+  bosses and rewards follow the port's own rules, made with Diablo II's
+  monsters, bosses, shrines and chests.
 
 ### Simplified or not done yet
 

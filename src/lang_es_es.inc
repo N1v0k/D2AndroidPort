@@ -97,3 +97,6 @@
 /* Acto 5: lo que dicen las misiones y los objetos de Harrogath */
 { "Hablá con Larzuk.", "Habla con Larzuk." },
 { "Matá a Shenk el Capataz en el Bloody Foothills.", "Mata a Shenk, el que todo lo ve, en las Estribaciones Sangrientas." },
+
+/* El Eco del Odio (eco.inc y menu.c) */
+{ "Abrí el cofre; el portal vuelve al menú", "Abre el cofre; el portal vuelve al menú" },

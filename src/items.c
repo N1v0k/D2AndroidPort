@@ -30,6 +30,7 @@ typedef struct {
     int      anim_acc;
     int      used;
     uint32_t born; /* cuándo cayó (lleno, se pisa el más viejo) */
+    uint32_t since; /* el tick de items_ground_tick en que cayó (items_ground_age) */
 } GroundItem;
 
 /* Gráficos de objetos (animación de caída e inventario), cargados al usarlos */
@@ -158,6 +159,7 @@ static int         s_num_gems;
 static Ratio       s_ratio[2][2]; /* [uber][de clase] */
 static TxtTable    s_tc;
 static GroundItem  s_ground[MAX_GROUND];
+static uint32_t    s_ground_now; /* los ticks de items_ground_tick */
 static int         s_ground_top; /* uno más que el último lugar usado: los recorridos llegan hasta acá */
 static ItemGfx     s_gfx[MAX_GFX];
 static int         s_num_gfx;
@@ -2433,6 +2435,12 @@ void items_draw_item(const Item *it, int x, int y)
 
 /* ---- Suelo ---- */
 
+/* Hace cuántos ticks está en el piso (el Eco del Odio borra el equipo común viejo) */
+int items_ground_age(int i)
+{
+    return i >= 0 && i < s_ground_top && s_ground[i].used ? (int)(s_ground_now - s_ground[i].since) : -1;
+}
+
 int items_ground_add(const Item *it, float x, float y)
 {
     static uint32_t s_born;
@@ -2455,6 +2463,7 @@ int items_ground_add(const Item *it, float x, float y)
     g->anim_acc = 0;
     g->used = 1;
     g->born = ++s_born;
+    g->since = s_ground_now;
     if (slot >= s_ground_top)
         s_ground_top = slot + 1;
     return slot;
@@ -2462,6 +2471,7 @@ int items_ground_add(const Item *it, float x, float y)
 
 void items_ground_tick(void)
 {
+    s_ground_now++;
     for (int i = 0; i < s_ground_top; i++) {
         GroundItem *g = &s_ground[i];
         if (!g->used)

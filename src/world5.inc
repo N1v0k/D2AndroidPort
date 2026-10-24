@@ -660,7 +660,7 @@ static int layout_act5(Map *m)
     z_barr[BARR_TUNDRA] = add_zone(ZK_BARRICADE, BARR_TUNDRA, t->x, t->y, t->x + t->w, t->y + t->h);
     add_level(k_barr_names[BARR_TUNDRA], z_barr[BARR_TUNDRA], t->x, t->y, t->x + t->w, t->y + t->h, 25, 0);
     a3_add_dungeons(5);
-    if (s_world_diff == 2)
+    if (s_world_diff == 2 || s_world_arena) /* (y en el Eco del Odio: dos de sus arenas) */
         uber_add_zones();
     for (int i = 0; i < s_num_levels; i++) /* los saltos de las Vis de levels.txt (para buscar caminos) */
         for (int k = 0; k < 8; k++)

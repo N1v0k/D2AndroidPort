@@ -1687,6 +1687,10 @@ static int obj_operate(Player *p, int u)
         stash_show(p);
         return 1;
     case OP_CHEST: { /* OBJECTS_OperateFunction04_Chest */
+        if (eco_chest_open(p, u)) { /* el cofre del final del Eco del Odio (eco.inc) */
+            obj_open(u, p, 0);
+            break;
+        }
         int drops = 1, spark = (st & OBJ_SPARK) != 0;
         if (st & OBJ_LOCKED) {
             if (p->cls != 5 && !obj_use_key(p)) { /* la Asesina los abre sin llave */

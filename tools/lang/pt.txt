@@ -782,3 +782,31 @@
 781	IDIOMA
 782	As vozes continuam em %s (o idioma importado)
 783	A: escolher (o jogo reinicia)     B: voltar
+784	ECO DO ÓDIO
+785	O Eco do Ódio é jogado com um personagem que já existe
+786	Melhor onda: %d
+787	Nenhuma partida no Eco
+788	Ondas sem fim numa arena aleatória, cada uma mais difícil.
+789	A cada cinco ondas, um chefe da história. Morrer termina a partida.
+790	A experiência, o ouro e os itens voltam para o seu personagem.
+791	A: escolher     B: voltar
+792	No Eco do Ódio não há portais
+793	ENCERRAR O ECO
+794	%s e seus irmãos!
+795	%s!
+796	Onda %d
+797	Onda %d vencida!
+798	Sobrepujado! Onda %d
+799	Fim do Eco: onda %d
+800	Novo recorde!
+801	Eco do Ódio: %s
+802	Eco do Ódio: onda %d (recorde %d)
+803	Eco do Ódio: onda %d
+804	Onda %d - nível %d
+805	Prepare-se
+806	Você chegou à onda %d
+807	Onda vencida!
+808	Chefe: %s
+809	Mortos: %d / %d
+810	Sobrepujado! %d
+811	Abra o baú; o portal volta ao menu

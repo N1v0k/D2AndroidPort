@@ -782,3 +782,31 @@
 781	LANGUE
 782	Les voix restent en %s (la langue importée)
 783	A : choisir (le jeu redémarre)     B : retour
+784	ÉCHO DE LA HAINE
+785	L'Écho de la haine se joue avec un personnage existant
+786	Meilleure vague : %d
+787	Aucune partie dans l'Écho
+788	Des vagues sans fin dans une arène au hasard, chacune plus difficile.
+789	Toutes les cinq vagues, un boss de l'histoire. Mourir met fin à la partie.
+790	L'expérience, l'or et les objets reviennent à votre personnage.
+791	A : choisir     B : retour
+792	Il n'y a pas de portails dans l'Écho de la haine
+793	TERMINER L'ÉCHO
+794	%s et ses frères !
+795	%s !
+796	Vague %d
+797	Vague %d terminée !
+798	Submergé ! Vague %d
+799	Fin de l'Écho : vague %d
+800	Nouveau record !
+801	Écho de la haine : %s
+802	Écho de la haine : vague %d (record %d)
+803	Écho de la haine : vague %d
+804	Vague %d - niveau %d
+805	Préparez-vous
+806	Vous avez atteint la vague %d
+807	Vague terminée !
+808	Boss : %s
+809	Tués : %d / %d
+810	Submergé ! %d
+811	Ouvrez le coffre ; le portail ramène au menu

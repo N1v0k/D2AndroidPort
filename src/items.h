@@ -370,6 +370,7 @@ void        items_ground_tick(void);
 int         items_ground_count(void);
 const Item *items_ground_item(int i, float *x, float *y); /* NULL si la casilla está libre */
 void        items_ground_remove(int i);
+int         items_ground_age(int i); /* ticks que lleva en el piso (-1 = casilla libre) */
 int         items_ground_nearest(float x, float y, float range, int gold_only); /* -1 si no hay */
 void        items_ground_draw(int i, int sx, int sy);
 /* Texto y color del cartel con el nombre; 0 si todavía está cayendo */

@@ -63,3 +63,4 @@
 771	El portal a Tristán ya se ha abierto en esta partida
 775	Habla con Larzuk.
 776	Mata a Shenk, el que todo lo ve, en las Estribaciones Sangrientas.
+811	Abre el cofre; el portal vuelve al menú

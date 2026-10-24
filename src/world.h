@@ -71,6 +71,8 @@ int          world_level_zone(int id); /* la zona del nivel con ese Id de levels
 int          world_act2_spot(int what, float *x, float *y); /* 0 portal del sótano 3, 1 portal del Santuario, 2 llegada al Canyon */
 int          world_cow_arrival(float *x, float *y); /* donde llega el portal a la Granja Muu Muu (-1 = no es el Acto 1) */
 void         world_set_difficulty(int diff); /* los monstruos de los niveles (0 Normal, 1 Pesadilla, 2 Infierno) */
+void         world_set_arena(int on); /* el Eco del Odio: el Acto 5 con Uber Tristram y la Colossal Summit (se arma de nuevo) */
+int          world_act_monsters(int act, const char **out, int max); /* los de mon1..mon5 de los niveles de ese acto */
 int          world_zone_count(void);
 int          world_zone_build(Map *m, int zone); /* deja en m->objects lo que traen sus DS1 */
 /* Lo mismo de a partes: estampa las piezas que entren en budget_ms (0 =

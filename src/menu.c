@@ -21,11 +21,12 @@
    - Elegir personaje: la pantalla de selección con las seis partidas.
    - Clase del personaje nuevo, y confirmar el borrado. */
 
-enum { MS_MAIN, MS_SLOTS, MS_CLASS, MS_DELETE, MS_CINEMA, MS_DIFF, MS_CONTROLS, MS_LANG };
+enum { MS_MAIN, MS_SLOTS, MS_CLASS, MS_DELETE, MS_CINEMA, MS_DIFF, MS_CONTROLS, MS_LANG, MS_ECO };
 
-/* Como el original: las cinemáticas entre jugar y salir (y los controles y el idioma) */
-enum { ITEM_ONE, ITEM_TWO, ITEM_CINEMA, ITEM_CONTROLS, ITEM_LANG, ITEM_QUIT };
-static const char *const k_items[] = { "UN JUGADOR", "DOS JUGADORES", "CINEMÁTICAS", "CONTROLES", "IDIOMA", "SALIR" };
+/* Como el original: las cinemáticas entre jugar y salir (y los controles y el idioma); el
+   Eco del Odio (docs/plan-eco-del-odio.md), después de la historia */
+enum { ITEM_ONE, ITEM_TWO, ITEM_ECO, ITEM_CINEMA, ITEM_CONTROLS, ITEM_LANG, ITEM_QUIT };
+static const char *const k_items[] = { "UN JUGADOR", "DOS JUGADORES", "ECO DEL ODIO", "CINEMÁTICAS", "CONTROLES", "IDIOMA", "SALIR" };
 #define NUM_ITEMS ((int)(sizeof k_items / sizeof k_items[0]))
 
 static int      s_state;
@@ -45,6 +46,8 @@ static int      s_diff_sel;     /* la dificultad elegida (0 Normal, 1 Pesadilla,
 static int      s_diff_max;     /* la más alta que tienen abierta todos los elegidos */
 static int      s_terror = 1;   /* las zonas de terror (como la casilla de crear partida del Resurrected) */
 static int      s_lang_sel;     /* en la lista de idiomas */
+static int      s_mode;         /* 0 la historia, 1 el Eco del Odio */
+static int      s_eco_sel;      /* en el panel del Eco: 0 un jugador, 1 dos */
 static const char *const k_diffs[3] = { "NORMAL", "PESADILLA", "INFIERNO" };
 
 static void read_slots(void)
@@ -130,6 +133,11 @@ const char *menu_language(void)
     return lang_code(s_lang_sel);
 }
 
+int menu_mode(void)
+{
+    return s_mode;
+}
+
 static void note(const char *text)
 {
     snprintf(s_note, sizeof s_note, "%s", tr(text));
@@ -146,6 +154,8 @@ static MenuResult picked(int slot, int cls)
         s_state = MS_SLOTS;
         return MENU_NONE;
     }
+    if (s_mode) /* el Eco del Odio: la dificultad la da el nivel de los personajes */
+        return MENU_START;
     /* La dificultad, si todos tienen abierta otra además de Normal (como el
        original: Pesadilla al vencer a Baal en Normal, Infierno en Pesadilla).
        Arranca en la más alta */
@@ -204,6 +214,12 @@ MenuResult menu_tick(const InputState *in)
                 s_state = MS_LANG;
                 return MENU_NONE;
             }
+            if (s_sel == ITEM_ECO) {
+                s_eco_sel = 0;
+                s_state = MS_ECO;
+                return MENU_NONE;
+            }
+            s_mode = 0;
             s_players = s_sel + 1;
             s_picking = 0;
             s_state = MS_SLOTS;
@@ -225,7 +241,7 @@ MenuResult menu_tick(const InputState *in)
             if (s_picking > 0)
                 s_picking--;
             else
-                s_state = MS_MAIN;
+                s_state = s_mode ? MS_ECO : MS_MAIN;
             return MENU_NONE;
         }
         if (in->menu_delete && info->used && !taken_by_other(s_slot_sel + 1)) {
@@ -237,6 +253,10 @@ MenuResult menu_tick(const InputState *in)
         if (in->confirm || in->start) {
             if (taken_by_other(s_slot_sel + 1)) {
                 note("Ese personaje ya lo eligió el jugador 1");
+                return MENU_NONE;
+            }
+            if (!info->used && s_mode) {
+                note("En el Eco del Odio se juega con un personaje que ya existe");
                 return MENU_NONE;
             }
             if (!info->used) {
@@ -297,6 +317,24 @@ MenuResult menu_tick(const InputState *in)
     case MS_CONTROLS:
         if (!controls_tick(in))
             s_state = MS_MAIN;
+        return MENU_NONE;
+
+    case MS_ECO: /* el Eco del Odio: uno o dos jugadores */
+        if (in->menu_up || in->menu_down)
+            s_eco_sel ^= 1;
+        if (back) {
+            click();
+            s_state = MS_MAIN;
+            return MENU_NONE;
+        }
+        if (in->confirm || in->start) {
+            click();
+            s_mode = 1;
+            s_players = s_eco_sel + 1;
+            s_picking = 0;
+            s_state = MS_SLOTS;
+            read_slots();
+        }
         return MENU_NONE;
 
     case MS_LANG: /* otro idioma: el juego vuelve a arrancar en ese (main.c) */
@@ -397,13 +435,13 @@ static void draw_main(void)
     ui_grid("frontend/gameselectscreenexp", 0, 12, 4, 0, 0);
     draw_logo();
     for (int i = 0; i < NUM_ITEMS; i++)
-        draw_wide_button(264, 285 + i * 41, k_items[i], i == s_sel);
+        draw_wide_button(264, 268 + i * 38, k_items[i], i == s_sel);
 
     char buf[64];
     snprintf(buf, sizeof buf, tr("Joysticks conectados: %d"), input_num_pads());
-    font_draw_centered(SCREEN_W / 2, SCREEN_H - 60, buf, 2, COL(R_GRAY, 13));
+    font_draw_centered(SCREEN_W / 2, SCREEN_H - 50, buf, 2, COL(R_GRAY, 13));
     if (s_sel == 1) {
-        font_draw_centered(SCREEN_W / 2, SCREEN_H - 40, "Jugador 1: el primer joystick que se use o WASD   -   Jugador 2: el segundo o flechas",
+        font_draw_centered(SCREEN_W / 2, SCREEN_H - 30, "Jugador 1: el primer joystick que se use o WASD   -   Jugador 2: el segundo o flechas",
                            1, COL(R_STONE, 12));
     }
 }
@@ -424,6 +462,8 @@ static void draw_slots(void)
     else
         snprintf(text, sizeof text, "%s", tr("ELEGÍ TU PERSONAJE"));
     font_draw_centered(317, 34, text, FONT_EXOCET, COL(R_GOLD, 15));
+    if (s_mode) /* (en rojo, el del odio) */
+        font_draw_centered(317, 90, "ECO DEL ODIO", FONT_EXOCET, COL(R_RED, 14));
 
     for (int i = 0; i < SAVE_SLOTS; i++) {
         int x, y;
@@ -441,6 +481,13 @@ static void draw_slots(void)
             font_draw(x + 92, y + 36, text, 2, dim ? COL(R_STONE, 9) : COL(R_GRAY, 15));
             snprintf(text, sizeof text, dim ? tr("Lo eligió el jugador 1") : tr("Partida %d"), i + 1);
             font_draw(x + 92, y + 56, text, 2, dim ? COL(R_STONE, 9) : COL(R_GRASS, 13));
+            if (s_mode) {
+                if (info->eco_best > 0)
+                    snprintf(text, sizeof text, tr("Mejor oleada: %d"), info->eco_best);
+                else
+                    snprintf(text, sizeof text, "%s", tr("Sin corridas en el Eco"));
+                font_draw(x + 92, y + 74, text, 1, dim ? COL(R_STONE, 9) : COL(R_RED, 13));
+            }
         } else {
             snprintf(text, sizeof text, tr("Partida %d vacía"), i + 1);
             font_draw(x + 92, y + 26, text, 2, COL(R_STONE, 13));
@@ -449,7 +496,7 @@ static void draw_slots(void)
     }
     font_draw_centered(317, 530, "A: jugar     X: borrar     B: volver", 2, COL(R_GRAY, 14));
     if (s_note_ticks > 0)
-        font_draw_centered(317, 100, s_note, 2, COL(R_RED, 13));
+        font_draw_centered(317, 112, s_note, 2, COL(R_RED, 13));
 }
 
 /* Contorno del personaje elegido: doble línea dorada con las esquinas
@@ -604,6 +651,30 @@ static void draw_difficulty(void)
     font_draw_centered(317, 362, "A: jugar     B: volver", 1, COL(R_GRAY, 14));
 }
 
+/* El Eco del Odio: qué es, y uno o dos jugadores */
+static void draw_eco(void)
+{
+    ui_grid("frontend/gameselectscreenexp", 0, 12, 4, 0, 0);
+    draw_logo();
+    ui_dark_box(170, 250, 460, 230);
+    font_draw_centered(SCREEN_W / 2, 266, "ECO DEL ODIO", FONT_EXOCET, COL(R_RED, 14));
+    static const char *const k_lines[3] = {
+        "Oleadas sin fin en una arena al azar, cada una más difícil.",
+        "Cada cinco oleadas, un jefe de la historia. Morir termina la corrida.",
+        "La experiencia, el oro y los objetos vuelven a tu personaje.",
+    };
+    for (int k = 0; k < 3; k++)
+        font_draw_centered(SCREEN_W / 2, 302 + k * 18, k_lines[k], 1, COL(R_GRAY, 14));
+    static const char *const k_opts[2] = { "UN JUGADOR", "DOS JUGADORES" };
+    for (int i = 0; i < 2; i++) {
+        int y = 372 + i * 34;
+        font_draw_centered(SCREEN_W / 2, y, k_opts[i], FONT_EXOCET, i == s_eco_sel ? COL(R_GOLD, 15) : COL(R_GRAY, 13));
+        if (i == s_eco_sel)
+            draw_pentagrams(SCREEN_W / 2, y + font_height(FONT_EXOCET) / 2, font_width(k_opts[i], FONT_EXOCET), 22);
+    }
+    font_draw_centered(SCREEN_W / 2, 458, "A: elegir     B: volver", 1, COL(R_GRAY, 14));
+}
+
 void menu_render(void)
 {
     clip_reset();
@@ -616,6 +687,7 @@ void menu_render(void)
     case MS_CINEMA: draw_cinema(); break;
     case MS_DIFF:   draw_difficulty(); break;
     case MS_LANG:   draw_languages(); break;
+    case MS_ECO:    draw_eco(); break;
     case MS_CONTROLS:
         ui_grid("frontend/gameselectscreenexp", 0, 12, 4, 0, 0);
         controls_draw();

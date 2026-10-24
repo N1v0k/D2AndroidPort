@@ -198,6 +198,8 @@ typedef struct {
     int8_t tc_fixed; /* jefe o noRatio: su clase de tesoro no sube con el nivel (sub_6FC52110) */
     int8_t herald;   /* un Heraldo de las zonas de terror: su grado (1..5) */
     int8_t tc_boost; /* niveles de más al elegir su clase de tesoro (los Heraldos) */
+    int8_t hunt;     /* el Eco del Odio (eco.inc): va a buscar a los jugadores aunque no los vea */
+    uint32_t died_at; /* el cazador: cuándo murió (s_unit_ticks; sus cadáveres se van: units_hunt_corpses) */
     int unique;   /* jefe con nombre propio (superuniques.txt) */
     int attack_delay; /* ticks entre ataques (aidel de monstats.txt) */
     int cooldown;
@@ -1142,6 +1144,125 @@ int units_herald_tier(int i)
     return i >= 0 && i < s_num_units ? s_units[i].herald : 0;
 }
 
+/* ---- El Eco del Odio (eco.inc): los monstruos de la arena cazan ---- */
+static int             s_hunt_zone = -1;              /* los que salen en esta zona cazan */
+static int             s_hunt_hp_pct, s_hunt_dmg_pct; /* lo de más (pasado el nivel 99) */
+static int             s_hunt_deaths;                 /* los cazadores que murieron (los mate quien los mate) */
+static const uint16_t *s_flow;                        /* los pasos (en subtiles) hasta un jugador; 0xffff = no se llega */
+static int             s_flow_x0, s_flow_y0, s_flow_w, s_flow_h;
+
+void units_set_hunt(int zone, int hp_pct, int dmg_pct)
+{
+    s_hunt_zone = zone;
+    s_hunt_hp_pct = hp_pct;
+    s_hunt_dmg_pct = dmg_pct;
+}
+
+int units_hunt_deaths(void)
+{
+    return s_hunt_deaths;
+}
+
+void units_set_flow(const uint16_t *steps, int x0, int y0, int w, int h)
+{
+    s_flow = steps;
+    s_flow_x0 = x0;
+    s_flow_y0 = y0;
+    s_flow_w = w;
+    s_flow_h = h;
+}
+
+/* ¿Lo que sale ahora es de la arena? (su nivel es el de la oleada, también el de los jefes de misión) */
+static int hunt_spawning(void)
+{
+    return s_hunt_zone >= 0 && s_spawn_zone == s_hunt_zone;
+}
+
+/* La vida y el daño de más de la oleada (como los de un Heraldo) */
+static void hunt_power(Unit *b)
+{
+    b->hunt = 1;
+    if (s_hunt_hp_pct > 0) {
+        int64_t hp = (int64_t)b->max_hp * (100 + s_hunt_hp_pct) / 100;
+        b->max_hp = b->hp = hp > (1 << 30) ? 1 << 30 : (int)hp;
+    }
+    if (s_hunt_dmg_pct <= 0)
+        return;
+    int pct = 100 + s_hunt_dmg_pct;
+    b->dmg_min = b->dmg_min * pct / 100;
+    b->dmg_max = b->dmg_max * pct / 100;
+    b->a2_min = b->a2_min * pct / 100;
+    b->a2_max = b->a2_max * pct / 100;
+    b->s1_min = b->s1_min * pct / 100;
+    b->s1_max = b->s1_max * pct / 100;
+    for (int k = 0; k < 3; k++) {
+        b->el[k].min = (int16_t)(b->el[k].min * pct / 100 < 32000 ? b->el[k].min * pct / 100 : 32000);
+        b->el[k].max = (int16_t)(b->el[k].max * pct / 100 < 32000 ? b->el[k].max * pct / 100 : 32000);
+    }
+}
+
+int units_is_hunter(int i)
+{
+    return i >= 0 && i < s_num_units && s_units[i].hunt;
+}
+
+/* Los cazadores vivos (para el desborde) */
+int units_hunters_alive(void)
+{
+    int n = 0;
+    for (int i = 0; i < s_num_units; i++)
+        n += s_units[i].hunt && s_units[i].state < ST_DYING && !s_units[i].hidden;
+    return n;
+}
+
+/* Los cadáveres de los cazadores: se van a los keep_ticks, y si quedan más de max_keep, los más
+   viejos (en la arena caen miles y no se rearma nunca: llenaban las MAX_UNITS). Devuelve cuántos. */
+int units_hunt_corpses(int keep_ticks, int max_keep)
+{
+    int n = 0, removed = 0;
+    for (int i = 0; i < s_num_units; i++) {
+        Unit *u = &s_units[i];
+        if (!u->hunt || u->zone == ZONE_FREE || u->state != ST_DEAD)
+            continue;
+        if ((int)(s_unit_ticks - u->died_at) > keep_ticks) {
+            units_remove(i);
+            removed++;
+        } else {
+            n++;
+        }
+    }
+    while (n > max_keep) { /* (los más viejos) */
+        int old = -1;
+        for (int i = 0; i < s_num_units; i++) {
+            const Unit *u = &s_units[i];
+            if (u->hunt && u->zone != ZONE_FREE && u->state == ST_DEAD && (old < 0 || u->died_at < s_units[old].died_at))
+                old = i;
+        }
+        if (old < 0)
+            break;
+        units_remove(old);
+        removed++;
+        n--;
+    }
+    return removed;
+}
+
+/* Se terminó la corrida: caen muertos sin dar nada */
+void units_hunters_kill(void)
+{
+    for (int i = 0; i < s_num_units; i++)
+        if (s_units[i].hunt && s_units[i].state < ST_DYING)
+            units_play_death(i);
+}
+
+/* La clase de tesoro de otro monstruo (los uber del Eco sueltan la del jefe de su acto) */
+void units_set_tc_of(int i, const char *id)
+{
+    int ms = mon_row(&s_monstats, id);
+    if (i >= 0 && i < s_num_units && ms >= 0)
+        snprintf(s_units[i].tc, sizeof s_units[i].tc, "%s", txt_get(&s_monstats, ms, txt_col(&s_monstats, dcol(&s_monstats, "TreasureClass"))));
+}
+
 /* Su clase de tesoro de monstats.txt (col: "TreasureClass", "TreasureClassChamp", "TreasureClassUnique"), la
    de la dificultad; aterrorizado, la "Desecrated" si la tiene */
 static const char *mon_tc(int ms, const char *col, int terror)
@@ -1168,7 +1289,7 @@ static void monster_stats(Unit *u, int ms, int level)
     /* En una zona aterrorizada, por lo menos el nivel del terror (los jefes de misión, el de los
        únicos: +5 sobre el jugador en vez de +2) */
     int tz = u->enemy && !no_ratio && s_terror_at && txt_get_int(t, ms, "CannotDesecrate", 0) != 1 ? s_terror_at(u->x, u->y) : 0;
-    if (level <= 0 || (s_diff > 0 && (no_ratio || boss)))
+    if (level <= 0 || (s_diff > 0 && (no_ratio || boss) && !hunt_spawning()))
         level = txt_get_int(t, ms, dcol(t, "Level"), 1);
     if (tz > 0)
         level = boss ? (level > tz + UNIQUE_LEVELS ? level : tz + UNIQUE_LEVELS) : level > tz ? level : tz;
@@ -1474,7 +1595,7 @@ static void monster_parts(Unit *u, int ms, int ms2, const CharLook *look, const 
     gfx_ref(u->gfx_parts, 1);
 }
 
-static Unit *create_monster(const char *id, float x, float y, int level, int enemy)
+static Unit *create_monster_raw(const char *id, float x, float y, int level, int enemy)
 {
     int merc = enemy == 2;
     if (merc)
@@ -1682,6 +1803,14 @@ static Unit *create_monster(const char *id, float x, float y, int level, int ene
         u->wander = 6.0f;
     else if (strcmp(ai, "Idle") == 0 && !npc)
         u->wander = 3.0f;
+    return u;
+}
+
+static Unit *create_monster(const char *id, float x, float y, int level, int enemy)
+{
+    Unit *u = create_monster_raw(id, x, y, level, enemy);
+    if (u && enemy == 1 && hunt_spawning())
+        hunt_power(u);
     return u;
 }
 
@@ -2831,6 +2960,10 @@ static int current_anim(const Unit *u)
 
 static void set_state(Unit *u, int state)
 {
+    if (state == ST_DYING && u->state < ST_DYING && u->hunt) {
+        s_hunt_deaths++;
+        u->died_at = s_unit_ticks;
+    }
     u->state = state;
     u->anim_acc = 0;
     u->walking = 0;
@@ -2948,8 +3081,46 @@ static int unit_step_ok(const Map *m, const Unit *u, float x, float y)
     return from > 0 && to <= from && !(map_coll(m, (int)floorf(x), (int)floorf(y)) & u->move_mask);
 }
 
+/* El Eco del Odio: el que caza y va hacia un jugador sigue el mapa de pasos
+   mientras está lejos (así rodea las casas de Tristram y las columnas del
+   Trono en vez de quedarse contra la pared); apunta tres pasos adelante */
+static void flow_steer(const Unit *u, float *tx, float *ty)
+{
+    int w = s_flow_w, cx = (int)floorf(u->x) - s_flow_x0, cy = (int)floorf(u->y) - s_flow_y0;
+    int gx = (int)floorf(*tx) - s_flow_x0, gy = (int)floorf(*ty) - s_flow_y0;
+    if (cx < 1 || cy < 1 || cx >= w - 1 || cy >= s_flow_h - 1 || gx < 0 || gy < 0 || gx >= w || gy >= s_flow_h)
+        return;
+    unsigned here = s_flow[cy * w + cx];
+    if (s_flow[gy * w + gx] > 2 || here <= 4 || here == 0xffff) /* va a otro lado (huye), o ya está cerca */
+        return;
+    for (int step = 0; step < 3; step++) {
+        int bx = cx, by = cy;
+        unsigned best = s_flow[cy * w + cx];
+        for (int k = 0; k < 8; k++) {
+            static const int8_t k_d[8][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 }, { -1, 1 }, { 1, -1 }, { -1, -1 } };
+            int nx = cx + k_d[k][0], ny = cy + k_d[k][1];
+            if (nx < 0 || ny < 0 || nx >= w || ny >= s_flow_h)
+                continue;
+            unsigned v = s_flow[ny * w + nx];
+            if (v < best) {
+                best = v;
+                bx = nx;
+                by = ny;
+            }
+        }
+        if (bx == cx && by == cy)
+            break;
+        cx = bx;
+        cy = by;
+    }
+    *tx = (float)(s_flow_x0 + cx) + 0.5f;
+    *ty = (float)(s_flow_y0 + cy) + 0.5f;
+}
+
 static void move_towards(Unit *u, const Map *m, float tx, float ty)
 {
+    if (u->hunt && s_flow)
+        flow_steer(u, &tx, &ty);
     float dx = tx - u->x, dy = ty - u->y, d = sqrtf(dx * dx + dy * dy);
     if (d < 0.01f)
         return;
@@ -3785,8 +3956,8 @@ static void enemy_tick(Unit *u, const Map *m, UnitTarget *pl, int n)
     if ((u->nc_ticks > 0 && u->nc_kind == NC_DIM) || (u->cloak_ticks > 0 && u->cloak_blind))
         t = nearest_player(u, pl, n, 1.5f, &d); /* Visión reducida y Manto de sombras: solo ve al que tiene al lado */
     else if ((t = nearest_player_seen(u, pl, n, u->state == ST_CHASE ? CHASE_SCREEN : 1.0f, &d)) < 0 &&
-             u->state == ST_CHASE)
-        t = nearest_player(u, pl, n, CHASE_RANGE, &d);
+             (u->state == ST_CHASE || u->hunt))
+        t = nearest_player(u, pl, n, u->hunt ? 1e9f : CHASE_RANGE, &d);
     if (t < 0) {
         u->state = ST_IDLE;
         if (u->ai && ai_tick(u, m, pl, -1, 1e9f)) /* el gusano se entierra, el huevo espera */

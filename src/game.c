@@ -319,6 +319,7 @@ typedef struct {
        leyó (las misiones de arriba son las de s_diff: save_diff) */
     int     diff_max;
     char    diff_raw[3][DIFF_RAW];
+    int     eco_best, eco_runs; /* el Eco del Odio: la mejor oleada y cuántas corridas (la línea "eco") */
     int     imbue_mode; /* la lista de Charsi: 0 imbuir, 1 engarzar (Larzuk), 2 personalizar (Anya) */
     int     act;      /* el acto en el que está (se guarda: al volver a jugar se sigue ahí) */
     uint32_t quest_seen; /* misiones cumplidas que ya vio en el registro (bit (acto - 1) * 6 + misión): arden una vez */
@@ -800,6 +801,19 @@ static int  tz_level_on(const Level *lv);
 static int  tz_waypoint_marked(const char *level_name);
 static void tz_pause_line(char *out, size_t cap, int max_w);
 static int  s_tz_menu;
+static int  s_eco;       /* eco.inc: el modo (game_set_mode): una corrida del Eco del Odio */
+static int  s_eco_world; /* el mundo armado es el de las arenas (world_set_arena) */
+static int  s_eco_exit;  /* se usó el portal del final: al menú */
+static void eco_zone_loaded(int z);
+static int  eco_chest_open(Player *p, int u);
+static void eco_enter(void);
+static void eco_leave(void);
+static int  eco_difficulty(void);
+static void eco_tick(void);
+static void eco_draw(void);
+static int  eco_pause_quit(void);
+static void eco_pause_line(char *out, size_t cap);
+static int  eco_running(void);
 static int  is_quest_item(const ItemType *t);
 static int  bag_index_of(const Player *p, const char *code);
 static int  war_kind(int kind);              /* skillwar.inc: las del Brujo */
@@ -1081,6 +1095,8 @@ static int zone_monsters_step(int z, int begin, int cap, double ms)
         next = 0;
         s_zm.lv = NULL;
     }
+    if (s_eco) /* (en el Eco, los monstruos son los de las oleadas) */
+        return 1;
     double until = ms > 0 ? wall_ms() + ms : 0;
     for (int done = 0;;) {
         if (!s_zm.lv) {
@@ -2053,6 +2069,7 @@ void game_start(int num_players)
     static const int slots[MAX_PLAYERS] = { 1, 2 };
     int classes[MAX_PLAYERS] = { 0, 1 };
     const char *env = getenv("D2_CLASSES"); /* pruebas: "2,1" = Hechicera y Amazona */
+    s_eco = getenv("D2_ECO") != NULL; /* pruebas: una corrida del Eco del Odio */
     if (env)
         sscanf(env, "%d,%d", &classes[0], &classes[1]);
     game_start_slots(num_players, slots, classes);
@@ -2061,6 +2078,11 @@ void game_start(int num_players)
 void game_set_terror_zones(int on)
 {
     s_tz_menu = on != 0;
+}
+
+void game_set_mode(int mode)
+{
+    s_eco = mode == 1;
 }
 
 void game_set_difficulty(int diff)
@@ -2263,7 +2285,19 @@ void game_start_slots(int num_players, const int *slots, const int *classes)
         if (s_pl[i].act > act)
             act = s_pl[i].act;
     act = act >= 1 && act <= 5 ? act : 1;
-    if (act != s_act) {
+    if (!s_eco) /* (la historia: nada de la arena de antes) */
+        eco_leave();
+    if (s_eco) { /* el Eco del Odio: la dificultad del nivel de los personajes, en el Acto 5 con las arenas */
+        game_set_difficulty(eco_difficulty());
+        world_set_arena(1);
+        s_eco_world = 1;
+        act_switch(5);
+        eco_enter();
+    } else if (act != s_act || s_eco_world) {
+        if (s_eco_world) { /* (la partida de antes fue del Eco: el mundo sin las arenas) */
+            world_set_arena(0);
+            s_eco_world = 0;
+        }
         act_switch(act);
         if (getenv("D2_ZONETEST")) /* las del otro acto */
             zone_test();
@@ -2506,12 +2540,12 @@ static void set_player_state(Player *p, int state, int mode)
            que lleva en el cadáver; acá (pedido del usuario) solo se pierde
            esa parte del que lleva: el equipo y el cofre no se tocan */
         int pct = p->level_num < 20 ? p->level_num : 20;
-        p->gold_lost = (int)((int64_t)p->gold * pct / 100);
+        p->gold_lost = s_eco ? 0 : (int)((int64_t)p->gold * pct / 100); /* (en el Eco no se pierde) */
         p->gold -= p->gold_lost;
     }
     p->state = state;
     p->mode = mode;
-    if (died && s_act == 5)
+    if (died && s_act == 5 && !s_eco)
         a5_player_died(p); /* (en la cumbre: los Antiguos) */
     p->anim_acc = 0;
     p->charge_ticks = 0;
@@ -7955,9 +7989,9 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
     p->held_mask = 0;
     for (int b = 0; b < 4; b++)
         p->held_mask |= (pi->held[b] ? 1 : 0) << b;
-    if (p->act > p->act_max) /* llegó a otro acto: una pestaña más del cofre */
+    if (p->act > p->act_max && !s_eco) /* llegó a otro acto: una pestaña más del cofre (la arena no cuenta) */
         p->act_max = p->act;
-    if (p->act > p->act_top)
+    if (p->act > p->act_top && !s_eco)
         p->act_top = p->act;
     tick_potions(p);
     skills_tick(p);
@@ -8050,6 +8084,10 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
     const CharAnim *a = player_anim(p, p->mode);
     switch (p->state) {
     case PS_DEAD:
+        if (s_eco) { /* (en el Eco no se reaparece en el pueblo: eco.inc) */
+            p->dead_ticks++;
+            return;
+        }
         if (++p->dead_ticks >= RESPAWN_SECONDS * TICK_RATE) {
             /* Reaparece en el pueblo con la vida llena */
             place_at(p, (int)(p - s_pl), s_town_x, s_town_y);
@@ -8577,12 +8615,14 @@ static void save_character_to(FILE *f, const Player *p)
                                         : p->buttons[b] == BTN_EMPTY ? "*empty"
                                         : p->buttons[b] == BTN_THROW ? "*throw"
                                                                      : skills_get(p->cls, p->buttons[b])->key);
-    for (int d = 0; d < 3; d++) /* lo de cada dificultad: la que se juega, de los campos; las otras, como se leyeron */
-        if (d == s_diff)
+    for (int d = 0; d < 3; d++) /* lo de cada dificultad: la que se juega, de los campos; las otras (y todas en el Eco), como se leyeron */
+        if (d == s_diff && !s_eco)
             save_diff(f, p, d);
         else
             fputs(p->diff_raw[d], f);
     fprintf(f, "diffmax %d\n", p->diff_max);
+    if (p->eco_best > 0 || p->eco_runs > 0)
+        fprintf(f, "eco %d %d\n", p->eco_best, p->eco_runs);
     if (p->merc_name) {
         int hp = p->merc_hp, max_hp;
         if (units_merc_alive(p->merc_unit))
@@ -8678,7 +8718,7 @@ static int load_character_from(FILE *f, Player *p, const char *path)
         int ld = save_line_diff(line, &rest);
         if (ld >= 0 && sscanf(rest, "act5 %d %d %d %d %d %d", &q[0], &q[1], &q[2], &q[3], &q[4], &q[5]) == 6)
             baal_done[ld] = q[5] >= 4; /* (las de antes de las dificultades no dicen cuál está abierta) */
-        if (ld >= 0 && ld != s_diff) {
+        if (ld >= 0 && (ld != s_diff || s_eco)) {
             size_t n = strlen(p->diff_raw[ld]), len = strlen(line);
             if (n + len + 2 <= sizeof p->diff_raw[ld])
                 snprintf(p->diff_raw[ld] + n, sizeof p->diff_raw[ld] - n, "%s\n", line);
@@ -8690,6 +8730,11 @@ static int load_character_from(FILE *f, Player *p, const char *path)
             memmove(line, rest, strlen(rest) + 1);
         if (sscanf(line, "diffmax %d", &a) == 1) {
             p->diff_max = a < 0 ? 0 : a > 2 ? 2 : a;
+            continue;
+        }
+        if (sscanf(line, "eco %d %d", &a, &b) == 2) {
+            p->eco_best = a > 0 ? a : 0;
+            p->eco_runs = b > 0 ? b : 0;
             continue;
         }
         if (sscanf(line, "acttop %d", &a) == 1) {
@@ -8940,6 +8985,8 @@ int game_slot_info(int slot, SlotInfo *info)
                 info->den_done = a;
             } else if (sscanf(line, "diffmax %d", &a) == 1) {
                 info->diff_max = a < 0 ? 0 : a > 2 ? 2 : a > info->diff_max ? a : info->diff_max;
+            } else if (sscanf(line, "eco %d", &a) == 1) {
+                info->eco_best = a;
             } else {
                 /* (las de antes de las dificultades: Baal muerto en Normal abre Pesadilla) */
                 int q[6], d = line[0] == 'd' && line[1] == '1' ? 1 : 0;
@@ -9290,6 +9337,10 @@ static int tp_cast(Player *p, int bag_index)
     if (bag_index < 0 || bag_index >= p->bag_count)
         return 0;
     Item *it = &p->bag[bag_index];
+    if (s_eco) {
+        show_message(p, "En el Eco del Odio no hay portales");
+        return 0;
+    }
     if (!p->level || p->level->town) {
         show_message(p, "En el pueblo no hace falta");
         return 0;
@@ -9310,7 +9361,7 @@ static int tp_open(Player *p)
 {
     int i = (int)(p - s_pl);
     int town = world_zone_at(&s_map, s_town_x, s_town_y), zone = world_zone_at(&s_map, p->x, p->y);
-    if (town < 0 || zone < 0 || !p->level || p->level->town)
+    if (s_eco || town < 0 || zone < 0 || !p->level || p->level->town)
         return 0;
     tp_close(i);
     /* El de afuera, al lado (en la misma zona); el del pueblo, cerca de donde
@@ -9717,6 +9768,10 @@ static int hratli_moved(void)
 
 static void quest_zone_loaded(int z)
 {
+    if (s_eco) { /* el Eco del Odio: ni misiones ni portales; la arena, sin sus monstruos */
+        eco_zone_loaded(z);
+        return;
+    }
     if (s_act == 3)
         a3_zone_loaded(z);
     if (s_act == 4)
@@ -9808,6 +9863,7 @@ static int bots_playing(void); /* la demostración o una prueba automática (aut
 #include "objects.inc" /* los cofres, barriles, santuarios y pozos */
 #include "cows.inc"    /* el nivel de las vacas */
 #include "endgame.inc" /* el evento Pandemonium */
+#include "eco.inc"     /* el modo Eco del Odio */
 
 /* El objeto de misión más cercano al jugador (o -1) y qué se puede hacer
    con él; NULL si nada (ya está hecho o todavía no toca) */
@@ -12089,6 +12145,7 @@ void game_demo_start_pair(int cls, int cls2)
     /* D2_DEMO_PLAYERS=1: uno solo (por defecto juegan los dos, cada uno con su bot) */
     int players = getenv("D2_DEMO_PLAYERS") && atoi(getenv("D2_DEMO_PLAYERS")) == 1 ? 1 : MAX_PLAYERS;
     s_demo = 1;
+    s_eco = 0; /* (la demostración es la historia) */
     game_set_difficulty(0); /* (en Normal, aunque la última partida fuera en otra; D2_DIFF la cambia) */
     game_start_slots(players, slots, classes);
     /* Por defecto, la campaña: los Actos 1 a 5 en Normal, Pesadilla e
@@ -12467,6 +12524,12 @@ static void inv_show_setup(int mode)
 
 int game_tick(const InputState *in)
 {
+    if (s_eco_exit) { /* el portal del final del Eco: guardar y al menú */
+        s_eco_exit = 0;
+        s_paused = 0;
+        game_save();
+        return GAME_EXIT;
+    }
     if (s_ticks == 3 && getenv("D2_INVSHOW"))
         inv_show_setup(atoi(getenv("D2_INVSHOW")));
     /* D2_A2STATE="rada,bastón,sol,santuario,invocador,tumbas" (pruebas): cómo van las misiones del Acto 2 */
@@ -12571,6 +12634,10 @@ int game_tick(const InputState *in)
                 s_guide_open = 1;
                 s_guide_sel = s_guide_top = 0;
             } else if (s_pause_sel == PAUSE_QUIT) {
+                if (eco_pause_quit()) { /* TERMINAR EL ECO: el cofre y el portal */
+                    s_paused = 0;
+                    return GAME_CONTINUE;
+                }
                 game_save();
                 s_paused = 0;
                 return GAME_EXIT;
@@ -12873,7 +12940,7 @@ int game_tick(const InputState *in)
 
     /* Cementerio de las Hermanas: se cumple cuando muere Blood Raven */
     int raven;
-    if (!s_raven_dead && units_find_all("bloodraven", &raven, 1) == 1 && units_is_corpse(raven)) {
+    if (!s_eco && !s_raven_dead && units_find_all("bloodraven", &raven, 1) == 1 && units_is_corpse(raven)) {
         s_raven_dead = 1;
         float rx, ry;
         units_position(raven, 1.0f, &rx, &ry);
@@ -12889,11 +12956,15 @@ int game_tick(const InputState *in)
         }
     }
 
-    quest_tick();
-    cow_tick();
-    uber_tick();
-    dclone_tick();
-    tz_tick();
+    if (s_eco) {
+        eco_tick();
+    } else {
+        quest_tick();
+        cow_tick();
+        uber_tick();
+        dclone_tick();
+        tz_tick();
+    }
     level_palette();
     obj_tick();
     bossfx_tick();
@@ -13935,6 +14006,7 @@ static void draw_player_banners(const Player *p, int cx, int y, int max_w)
    cámara es compartida, o dentro de su mitad si la pantalla está partida */
 static void draw_banners(void)
 {
+    eco_draw(); /* (arriba a la derecha) */
     int y = 36;
     if (s_quest_ticks > 0) {
         font_draw_centered(SCREEN_W / 2, y, s_quest_banner, 3, COL(R_GOLD, 15));
@@ -16281,6 +16353,8 @@ static void draw_item_labels(float cam_x, float cam_y)
 /* Salta a la otra zona por el salto o el portal (si no estaba armada, se arma) */
 static void use_warp(Player *p, const Warp *warp)
 {
+    if (s_eco) /* (la arena no tiene salidas) */
+        return;
     Warp w = *warp; /* armar la otra zona puede mover la lista de saltos */
     float ax, ay;
     /* La puerta del palacio: Kaelan no deja pasar hasta que se abre (ACT2Q4: bPalaceOpen) */
@@ -16874,19 +16948,23 @@ static void draw_pause(void)
     font_draw_centered(ox + ow / 2, oy + 12, "PAUSA", 6, COL(R_GOLD, 15));
     char diff[48], tz[192];
     snprintf(diff, sizeof diff, tr("Dificultad: %s"), tr(k_diff_names[s_diff]));
-    tz_pause_line(tz, sizeof tz, ow - 16); /* y la zona de terror, abajo, en violeta */
+    tz_pause_line(tz, sizeof tz, ow - 16); /* y la zona de terror, abajo, en violeta (en el Eco, la oleada, en rojo) */
+    if (s_eco)
+        eco_pause_line(tz, sizeof tz);
     font_draw_centered(ox + ow / 2, oy + (tz[0] ? 44 : 52), diff, 2, s_diff ? COL(R_RED, 14) : COL(R_GRAY, 13));
     if (tz[0])
-        font_draw_centered(ox + ow / 2, oy + 61, tz, 1, g_text_shift[11][COL(R_GRAY, 15)]);
+        font_draw_centered(ox + ow / 2, oy + 61, tz, 1, s_eco ? COL(R_RED, 14) : g_text_shift[11][COL(R_GRAY, 15)]);
+    const char *quit_label = eco_running() ? "TERMINAR EL ECO" : k_labels[PAUSE_QUIT];
     for (int i = 0; i < PAUSE_COUNT; i++) {
         int y = oy + 76 + i * 33, chosen = i == s_pause_sel;
         uint8_t c = chosen ? COL(R_GOLD, 15) : COL(R_GRAY, 13);
         /* (en los idiomas de palabras largas, si no entra antes del valor, más chico) */
         int room = ow - 18 - 52 - (values[i][0] ? font_width(values[i], 3) + 10 : 0);
-        if (font_width(k_labels[i], 3) > room)
-            font_draw(ox + 52, y + 4, k_labels[i], 2, c);
+        const char *label = i == PAUSE_QUIT ? quit_label : k_labels[i];
+        if (font_width(label, 3) > room)
+            font_draw(ox + 52, y + 4, label, 2, c);
         else
-            font_draw(ox + 52, y, k_labels[i], 3, c);
+            font_draw(ox + 52, y, label, 3, c);
         if (values[i][0])
             font_draw(ox + ow - 18 - font_width(values[i], 3), y, values[i], 3, c);
         if (chosen)

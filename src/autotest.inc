@@ -26,6 +26,9 @@ typedef enum {
     AT_USE,         /* usar un objeto de la mochila (arg = código); si está en el piso, levantarlo antes */
     AT_CUBE,        /* armar el Báculo Horádrico en el cubo */
     AT_WAVES,       /* las oleadas del Trono: matar lo que salga en el nivel (arg) hasta que se cumpla la verificación */
+    AT_ECO,         /* el Eco del Odio (eco.inc): pelear con lo que salga en la arena hasta que se cumpla la verificación */
+    AT_ECO_QUIT,    /* TERMINAR EL ECO, en la pausa */
+    AT_ECO_PORTAL,  /* entrar al portal de vuelta del final */
 } AtKind;
 
 typedef struct {
@@ -365,6 +368,27 @@ static const AtStep k_act5_steps[] = {
     { AT_TALK, "tyrael3", OPT_TALK, "baal=5", "Hablar con Tyrael: abre el portal", 0 },
     { AT_TOUCH, "NotKiddingLastPortal", 0, "end5", "Entrar al portal de Tyrael: el final", 0 },
     { AT_SAVE, NULL, 0, "saved", "Guardar y revisar la partida", 0 },
+};
+/* --autotest eco (con D2_ECO): las oleadas con sus jefes, el final, el cofre y el portal (D2_ECO_WAVE=26
+   empieza en la segunda vuelta: los del evento Pandemonium) */
+static const AtStep k_eco_steps[] = {
+    { AT_ECO, NULL, 0, "eco=3", "Oleadas 1 y 2", 0 },
+    { AT_ECO, NULL, 0, "eco=4", "Oleada 3: un jefe con nombre propio", 0 },
+    { AT_ECO, NULL, 0, "eco=6", "Oleada 5: el jefe del Acto 1", 0 },
+    { AT_ECO, NULL, 0, "eco=9", "Oleada 8: un jefe con nombre del Acto 2", 0 },
+    { AT_ECO, NULL, 0, "eco=11", "Oleada 10: el jefe del Acto 2", 0 },
+    { AT_ECO, NULL, 0, "eco=16", "Oleada 15: el jefe del Acto 3", 0 },
+    { AT_ECO, NULL, 0, "eco=21", "Oleada 20: el jefe del Acto 4", 0 },
+    { AT_ECO, NULL, 0, "eco=26", "Oleada 25: el jefe del Acto 5", 0 },
+    /* (la segunda vuelta, solo si se empieza en ella: D2_ECO_WAVE=26 o más) */
+    { AT_ECO, NULL, 0, "eco2=31", "Oleada 30: Lilith", 0 },
+    { AT_ECO, NULL, 0, "eco2=36", "Oleada 35: Duriel uber", 0 },
+    { AT_ECO, NULL, 0, "eco2=41", "Oleada 40: Izual uber", 0 },
+    { AT_ECO, NULL, 0, "eco2=46", "Oleada 45: el Diablo uber", 0 },
+    { AT_ECO, NULL, 0, "eco2=51", "Oleada 50: los tres de Uber Tristram", 0 },
+    { AT_ECO_QUIT, NULL, 0, "ecoend", "Terminar el Eco desde la pausa", 0 },
+    { AT_TOUCH, "ConsolationChest", 0, "ecochest", "Abrir el cofre del Eco", 0 },
+    { AT_ECO_PORTAL, NULL, 0, "ecoexit", "Volver por el portal", 0 },
 };
 #define AT_MAX_STEPS 96 /* el más largo */
 
@@ -816,6 +840,18 @@ static int at_check(const char *check, char *why, size_t cap)
         val = eq + 1;
         *eq = '\0';
     }
+    if (strcmp(name, "eco") == 0 || strcmp(name, "eco2") == 0 || strcmp(name, "ecoend") == 0 || strcmp(name, "ecochest") == 0 ||
+        strcmp(name, "ecoexit") == 0) {
+        int second = getenv("D2_ECO_WAVE") && atoi(getenv("D2_ECO_WAVE")) >= 26;
+        int ok = name[3] == 0 ? s_er.wave >= want
+               : name[3] == '2' ? !second || s_er.wave >= want
+               : name[3] == 'e' ? s_er.phase == EP_LOOT
+               : name[3] == 'c' ? s_er.phase == EP_LOOT && s_er.chest < 0
+                                : s_er.exited;
+        if (!ok)
+            snprintf(why, cap, "%s no se cumple (oleada %d, fase %d)", check, s_er.wave, s_er.phase);
+        return ok;
+    }
     for (int i = 0; i < s_num_players; i++) {
         const Player *p = &s_pl[i];
         int ok = 1, have = 0;
@@ -944,6 +980,7 @@ static int at_step_timeout(const AtStep *st)
     case AT_GOTO_LEVEL: return 60 * 60 * TICK_RATE; /* hasta una hora de juego caminando */
     case AT_CLEAR:      return 30 * 60 * TICK_RATE;
     case AT_WAYPOINT:   return 10 * 60 * TICK_RATE;
+    case AT_ECO:        return 40 * 60 * TICK_RATE; /* (hasta cinco oleadas) */
     default:            return 8 * 60 * TICK_RATE;
     }
 }
@@ -1556,6 +1593,61 @@ static int at_lead_step(const AtStep *st, PlayerInput *in)
     case AT_SAVE:
         game_save();
         return 1;
+    case AT_ECO: { /* el cazador vivo más cercano; sin ninguno, al medio de la arena */
+        char why[160];
+        if (at_check(st->check, why, sizeof why))
+            return 1;
+        if (s_er.phase >= EP_END)
+            return -1;
+        int target = -1;
+        float best = 1e9f, x, y;
+        for (int u = 0; u < units_count(); u++) {
+            if (!units_alive_enemy(u) || !units_is_hunter(u))
+                continue;
+            units_position(u, 1.0f, &x, &y);
+            float d = (x - p->x) * (x - p->x) + (y - p->y) * (y - p->y);
+            if (d < best) {
+                best = d;
+                target = u;
+            }
+        }
+        if (target < 0)
+            return at_travel(b, p, in, s_er.zone, s_er.cx, s_er.cy, 3.0f) < 0 ? -1 : 0;
+        units_position(target, 1.0f, &x, &y);
+        /* Sin D2_ECO_REAL, cada golpe es en área (a 7: como una Nova; los arqueros se quedan lejos): la prueba es de las oleadas, no
+           de lo que tarda el bot en ir de uno en uno */
+        if (!getenv("D2_ECO_REAL") && best < 49.0f && b->pulse % 4 == 0) {
+            int ids[32], n = units_enemies_near(p->x, p->y, 7.0f, ids, 32);
+            for (int k = 0; k < n; k++)
+                if (units_is_hunter(ids[k]) && units_alive_enemy(ids[k])) {
+                    int exp = units_damage(ids[k], 1 << 20);
+                    if (exp > 0)
+                        award_kill(p, ids[k], exp);
+                }
+        }
+        if (best < MELEE_RANGE * MELEE_RANGE * 0.8f) {
+            if (b->pulse++ % 4 == 0)
+                at_swing(p, in);
+            return 0;
+        }
+        if (at_fight(p, in, b, 1.4f))
+            return 0;
+        if (at_goto(b, p, in, s_er.zone, x, y, 1.2f) < 0) { /* (no llega: como en el Trono) */
+            units_damage(target, 1 << 20);
+            s_at.unreachable++;
+        }
+        return 0;
+    }
+    case AT_ECO_QUIT:
+        if (s_er.phase >= EP_LOOT)
+            return 1;
+        if (eco_running())
+            eco_pause_quit();
+        return 0;
+    case AT_ECO_PORTAL:
+        if (s_er.exited)
+            return 1;
+        return at_travel(b, p, in, s_er.zone, s_er.px, s_er.py, 0.3f) < 0 ? -1 : 0;
     default:
         return at_player_step(0, st, in);
     }
@@ -1575,13 +1667,29 @@ int game_autotest_start(const char *name, int players)
         s_god = 1;
         return skilltest_start();
     }
+    int eco = strcmp(name, "eco") == 0;
     if (strcmp(name, "act1") != 0 && strcmp(name, "act2") != 0 && strcmp(name, "act3") != 0 && strcmp(name, "act4") != 0 &&
-        strcmp(name, "act5") != 0)
+        strcmp(name, "act5") != 0 && !eco)
         return -1;
+    if (eco && !s_eco) {
+        fprintf(stderr, "la prueba eco va con D2_ECO=1\n");
+        return -1;
+    }
     memset(&s_at, 0, sizeof s_at);
     s_at.active = 1;
     s_at.players = players;
-    s_at.act = name[3] - '0';
+    s_at.act = eco ? 5 : name[3] - '0';
+    if (eco) {
+        s_at.steps = k_eco_steps;
+        s_at.nsteps = (int)(sizeof k_eco_steps / sizeof k_eco_steps[0]);
+        /* D2_ECO_REAL=1: se pelea de verdad (si no, sin daño y de un golpe, para ver la mecánica) */
+        s_one_hit = s_god = getenv("D2_ECO_REAL") ? 0 : 1;
+        s_at.trace = getenv("D2_AT_TRACE") ? atoi(getenv("D2_AT_TRACE")) : 0;
+        if (getenv("D2_AUTOTEST_SHOTS")) /* una captura por paso */
+            snprintf(s_at.shots, sizeof s_at.shots, "%s", getenv("D2_AUTOTEST_SHOTS"));
+        printf("prueba automática del Eco del Odio con %d jugador%s, %d pasos\n", players, players > 1 ? "es" : "", AT_STEPS);
+        return 0;
+    }
     s_at.steps = s_at.act == 5   ? k_act5_steps
                  : s_at.act == 4 ? k_act4_steps
                  : s_at.act == 3 ? k_act3_steps
