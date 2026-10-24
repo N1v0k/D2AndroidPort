@@ -21,11 +21,11 @@
    - Elegir personaje: la pantalla de selección con las seis partidas.
    - Clase del personaje nuevo, y confirmar el borrado. */
 
-enum { MS_MAIN, MS_SLOTS, MS_CLASS, MS_DELETE, MS_CINEMA, MS_DIFF, MS_CONTROLS };
+enum { MS_MAIN, MS_SLOTS, MS_CLASS, MS_DELETE, MS_CINEMA, MS_DIFF, MS_CONTROLS, MS_LANG };
 
-/* Como el original: las cinemáticas entre jugar y salir (y los controles) */
-enum { ITEM_ONE, ITEM_TWO, ITEM_CINEMA, ITEM_CONTROLS, ITEM_QUIT };
-static const char *const k_items[] = { "UN JUGADOR", "DOS JUGADORES", "CINEMÁTICAS", "CONTROLES", "SALIR" };
+/* Como el original: las cinemáticas entre jugar y salir (y los controles y el idioma) */
+enum { ITEM_ONE, ITEM_TWO, ITEM_CINEMA, ITEM_CONTROLS, ITEM_LANG, ITEM_QUIT };
+static const char *const k_items[] = { "UN JUGADOR", "DOS JUGADORES", "CINEMÁTICAS", "CONTROLES", "IDIOMA", "SALIR" };
 #define NUM_ITEMS ((int)(sizeof k_items / sizeof k_items[0]))
 
 static int      s_state;
@@ -44,6 +44,7 @@ static int      s_movie_sel;    /* en el panel de cinemáticas (la última fila 
 static int      s_diff_sel;     /* la dificultad elegida (0 Normal, 1 Pesadilla, 2 Infierno) */
 static int      s_diff_max;     /* la más alta que tienen abierta todos los elegidos */
 static int      s_terror = 1;   /* las zonas de terror (como la casilla de crear partida del Resurrected) */
+static int      s_lang_sel;     /* en la lista de idiomas */
 static const char *const k_diffs[3] = { "NORMAL", "PESADILLA", "INFIERNO" };
 
 static void read_slots(void)
@@ -124,6 +125,11 @@ int menu_terror_zones(void)
     return s_terror;
 }
 
+const char *menu_language(void)
+{
+    return lang_code(s_lang_sel);
+}
+
 static void note(const char *text)
 {
     snprintf(s_note, sizeof s_note, "%s", tr(text));
@@ -191,6 +197,11 @@ MenuResult menu_tick(const InputState *in)
             if (s_sel == ITEM_CONTROLS) {
                 controls_open();
                 s_state = MS_CONTROLS;
+                return MENU_NONE;
+            }
+            if (s_sel == ITEM_LANG) {
+                s_lang_sel = lang_current();
+                s_state = MS_LANG;
                 return MENU_NONE;
             }
             s_players = s_sel + 1;
@@ -288,6 +299,23 @@ MenuResult menu_tick(const InputState *in)
             s_state = MS_MAIN;
         return MENU_NONE;
 
+    case MS_LANG: /* otro idioma: el juego vuelve a arrancar en ese (main.c) */
+        if (in->menu_up)
+            s_lang_sel = (s_lang_sel + LANG_COUNT - 1) % LANG_COUNT;
+        if (in->menu_down)
+            s_lang_sel = (s_lang_sel + 1) % LANG_COUNT;
+        if (back) {
+            click();
+            s_state = MS_MAIN;
+            return MENU_NONE;
+        }
+        if (in->confirm || in->start) {
+            click();
+            s_state = MS_MAIN;
+            return s_lang_sel == lang_current() ? MENU_NONE : MENU_RESTART;
+        }
+        return MENU_NONE;
+
     case MS_DIFF:
         if (in->menu_up)
             s_diff_sel = (s_diff_sel + s_diff_max) % (s_diff_max + 1);
@@ -369,7 +397,7 @@ static void draw_main(void)
     ui_grid("frontend/gameselectscreenexp", 0, 12, 4, 0, 0);
     draw_logo();
     for (int i = 0; i < NUM_ITEMS; i++)
-        draw_wide_button(264, 290 + i * 45, k_items[i], i == s_sel);
+        draw_wide_button(264, 285 + i * 41, k_items[i], i == s_sel);
 
     char buf[64];
     snprintf(buf, sizeof buf, tr("Joysticks conectados: %d"), input_num_pads());
@@ -529,6 +557,32 @@ static void draw_delete(void)
     }
 }
 
+/* Los idiomas, cada uno con su nombre en su idioma (las letras que no están
+   en las fuentes del original salen de la .ttf del Resurrected) */
+static void draw_languages(void)
+{
+    ui_grid("frontend/gameselectscreenexp", 0, 12, 4, 0, 0);
+    int h = 70 + LANG_COUNT * 24 + 40, y0 = (SCREEN_H - h) / 2;
+    ui_dark_box(220, y0, 360, h);
+    font_draw_centered(SCREEN_W / 2, y0 + 16, "IDIOMA", FONT_EXOCET, COL(R_GOLD, 15));
+    for (int i = 0; i < LANG_COUNT; i++) {
+        int y = y0 + 56 + i * 24;
+        uint8_t c = i == s_lang_sel ? COL(R_GOLD, 15) : i == lang_current() ? COL(R_GRAY, 15) : COL(R_GRAY, 12);
+        font_draw_centered(SCREEN_W / 2, y, lang_name(i), FONT_FORMAL, c);
+        if (i == s_lang_sel)
+            draw_pentagrams(SCREEN_W / 2, y + font_height(FONT_FORMAL) / 2, font_width(lang_name(i), FONT_FORMAL), 20);
+    }
+    /* Las voces y las cinemáticas son las del idioma que se importó */
+    const char *inst = lang_installed();
+    int ly = y0 + h - 34;
+    if (inst[0] && strcmp(inst, lang_code(s_lang_sel)) != 0) {
+        char buf[128];
+        snprintf(buf, sizeof buf, tr("Las voces siguen en %s (el idioma que se importó)"), lang_name(lang_find(inst)));
+        font_draw_centered(SCREEN_W / 2, ly, buf, 1, COL(R_STONE, 13));
+    }
+    font_draw_centered(SCREEN_W / 2, ly + 16, "A: elegir (el juego vuelve a arrancar)     B: volver", 1, COL(R_GRAY, 14));
+}
+
 /* La dificultad: las tres, con las cerradas apagadas */
 static void draw_difficulty(void)
 {
@@ -561,6 +615,7 @@ void menu_render(void)
     case MS_DELETE: draw_delete(); break;
     case MS_CINEMA: draw_cinema(); break;
     case MS_DIFF:   draw_difficulty(); break;
+    case MS_LANG:   draw_languages(); break;
     case MS_CONTROLS:
         ui_grid("frontend/gameselectscreenexp", 0, 12, 4, 0, 0);
         controls_draw();

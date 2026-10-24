@@ -1,0 +1,65 @@
+# Español de España: solo lo que cambia (tú en vez de vos, y los nombres del Resurrected en esES).
+# Lo que no está acá sale como en el español del motor. Número<TAB>texto
+10	No llevas oro
+17	A o X: soltar aquí   B: guardar en la mochila
+26	Una por cada acto al que llegas
+33	Guardar todo el oro que llevas
+35	Al morir se pierde parte del oro que llevas,
+55	Izual ha muerto: habla con su espíritu
+56	La Piedra de alma de Mefisto se ha roto: cuéntaselo a Caín
+59	El Consejo ha muerto: vuelve con Ormus
+152	Suéltalo en la mochila
+159	Primero tienes que aprenderla
+187	No tienes suficiente oro
+197	Necesitas un arco o una ballesta
+198	No tienes nada para lanzar
+202	Necesitas un escudo
+204	No tienes suficiente maná
+207	Necesitas un arma arrojadiza
+209	Necesitas la forma de oso
+210	Necesitas la forma de lobo
+211	Necesitas dos armas
+212	Necesitas un arma arrojadiza en cada mano
+213	Necesitas un arco con flechas
+220	Necesitas un demonio
+221	Necesitas un arma
+235	Ha vuelto el sol: cuéntaselo a la gente de Lut Gholein
+237	Se ha abierto un portal a Tristán
+241	Solo se abre en el Campamento de las Arpías
+250	ELIGE LA DIFICULTAD
+263	Radament ha muerto: vuelve con Atma
+264	El Invocador ha muerto: lee el diario de Horazón
+265	Duriel ha muerto: habla con Tyrael
+266	Baal ha muerto: habla con Tyrael
+282	No tienes armas ni armaduras normales
+292	PULSA START PARA COMENZAR
+322	A o X: soltar aquí   RB o Y: tirar al suelo   B: guardar
+344	El ataque normal con el arma que tienes:
+345	Lanza el arma que tienes en la mano
+358	Elige un botón y pulsa A
+373	Sustituye al que tienes
+379	No tienes nada para vender
+384	La arpía no usa escudo
+385	Está muerta: resucítala con Kashya
+386	No tienes nada que ponerle ahí
+396	Muerta: resucítala con Kashya
+398	Escudo (la arpía no lo usa)
+399	Elige qué ponerle
+406	1. El Cubo horádrico está en un cofre de las Salas de la Muerte (Acto 2).
+407	2. Abre el inventario y pulsa X sobre el cubo: se abre en el lugar del equipo.
+410	4. Pon justo lo que pide una receta (ni más ni menos cosas).
+411	5. Baja hasta TRANSMUTAR y pulsa A o X: el resultado se queda en el cubo.
+416	Pon en el cubo:
+449	ELIGE UNA CINEMÁTICA
+460	Mandos conectados: %d
+461	Jugador 1: el primer mando que se use o WASD   -   Jugador 2: el segundo o las flechas
+462	JUGADOR %d: ELIGE TU PERSONAJE
+463	ELIGE TU PERSONAJE
+470	ELIGE LA CLASE DEL PERSONAJE
+678	El %d%% del daño que recibes va a tu demonio; él: +%d%% de resistencias
+681	Sacrificas un demonio: +%d%% de vida máxima y +%d%% de velocidad durante %d s
+690	Lanzas un arma astral y apareces donde golpea: %d-%d mágico
+749	Jugador 1: el primer mando que se use   -   Jugador 2: el segundo
+771	El portal a Tristán ya se ha abierto en esta partida
+775	Habla con Larzuk.
+776	Mata a Shenk, el que todo lo ve, en las Estribaciones Sangrientas.

@@ -1,0 +1,784 @@
+# Polski. Numer<TAB>tłumaczenie (numery z tools/lang_tables.py lista)
+1	Akt %d
+2	Strefa grozy: %s
+3	Strefa grozy: %s (%d min)
+4	W lewo / w prawo: strefy grozy TAK
+5	W lewo / w prawo: strefy grozy NIE
+6	X: opanuj grozą akt %d
+7	X: rozdziel punkty od nowa
+8	Skrytka
+9	A: podnieś   X: przenieś   LB: sortuj   B: zamknij
+10	Nie masz przy sobie złota
+11	W skrytce nie ma złota
+12	Za mało złota: kosztuje %d
+13	Zakładka skrytki %d
+14	Nie mieści się w tej zakładce
+15	A: podnieś   X: do skrytki   LB: sortuj   B: zamknij
+16	A: podnieś   X: do plecaka   B: zamknij
+17	A lub X: odłóż tutaj   B: schowaj do plecaka
+18	A: podnieś i odłóż, gdzie chcesz
+19	X: przenoś między plecakiem a skrytką
+20	LB: posortuj tę zakładkę
+21	Zakładki: jedna na akt; + kupuje kolejną
+22	Złoto ze skrytki nie przepada po śmierci
+23	Wpłać złoto
+24	Wypłać złoto
+25	X na przedmiocie w plecaku przenosi go do skrytki
+26	Jedna za każdy osiągnięty akt
+27	Kup kolejną zakładkę
+28	Kosztuje %d sztuk złota
+29	Każda kosztuje trzy razy więcej niż poprzednia
+30	Można kupić jeszcze %d
+31	A: kup ją
+32	Znów A: kup ją
+33	Wpłać całe złoto, które masz przy sobie
+34	Wypłać całe złoto ze skrytki
+35	Po śmierci tracisz część złota, które masz przy sobie,
+36	ale nie złoto ze skrytki
+37	Straciłeś %d sztuk złota
+38	A: %s
+39	A: %s (zużywa klucz)
+40	%s: potrzebny klucz
+41	Potrzebny klucz
+42	A: Weź Księgę Lama Esena
+43	A: Weź Gidbinn
+44	A: Otwórz skrzynię
+45	A: Pociągnij dźwignię
+46	A: Uderz w Kulę Zniewolenia (%d z 2)
+47	Musisz trzymać w ręku Wolę Khalima
+48	A: Wejdź do portalu
+49	Aktu 5 jeszcze nie ma
+50	A: Otwórz pieczęć
+51	A: Połóż Kamień Duszy Mefista na kuźni
+52	Potrzebny Kamień Duszy Mefista
+53	A: Uderz w kamień (%d z 3)
+54	Musisz trzymać w ręku Młot z Piekielnej Kuźni
+55	Izual nie żyje: porozmawiaj z jego duchem
+56	Kamień Duszy Mefista rozbity: powiedz o tym Cainowi
+57	Schody są zamknięte: zniszcz Kulę Zniewolenia
+58	Krata jest zamknięta
+59	Rada nie żyje: wróć do Ormusa
+60	Ten eliksir już wypiłeś
+61	Zyskałeś 20 punktów zdrowia
+62	Jak używać
+63	Klejnoty
+64	Runy
+65	Słowa runiczne
+66	Mikstury
+67	Gniazda
+68	Magiczne
+69	Rzemiosło
+70	Ulepszenia
+71	Różne
+72	Dowolny przedmiot
+73	Mikstura leczenia (dowolna)
+74	Mikstura many (dowolna)
+75	Wyszczerbiony klejnot (dowolny)
+76	Skazany klejnot (dowolny)
+77	Klejnot (dowolny)
+78	Nieskazitelny klejnot (dowolny)
+79	Doskonały klejnot (dowolny)
+80	Rubin (dowolny)
+81	Diament (dowolny)
+82	Czaszka (dowolna)
+83	Broń
+84	Część zbroi
+85	Pancerz
+86	Hełm
+87	Tarcza
+88	Topór (dowolny)
+89	Sztylet (dowolny)
+90	Włócznia (dowolna)
+91	Miecz
+92	Kostur
+93	Pas
+94	Broń drzewcowa
+95	Broń obuchowa
+96	Różdżka
+97	Pierścień
+98	Amulet
+99	 (magiczny)
+100	 (rzadki)
+101	 (z zestawu)
+102	 (unikatowy)
+103	 (rzemieślniczy)
+104	 (zwykły, biały)
+105	 (niskiej jakości)
+106	 (dobrej jakości)
+107	 (wersja zwykła)
+108	 (wersja wyjątkowa)
+109	 (wersja elitarna)
+110	, bez gniazd
+111	, z gniazdami
+112	Ten sam przedmiot
+113	Drugi taki sam
+114	 (zwykły)
+115	 (wersja wyjątkowa)
+116	 (wersja elitarna)
+117	 z opróżnionymi gniazdami
+118	 naprawiony i naładowany
+119	 z dodatkowymi gniazdami: %d
+120	 z dodatkowymi gniazdami: %d
+121	 z gniazdami
+122	: uderzenia (Nova Mrozu po otrzymaniu ciosu)
+123	: krwi (kradzież życia)
+124	: rzucającego (regeneracja many)
+125	: bezpieczeństwa (redukcja obrażeń)
+126	Barbarzyńca
+127	Amazonka
+128	Czarodziejka
+129	Paladyn
+130	Nekromanta
+131	Zabójczyni
+132	Druid
+133	Czarnoksiężnik
+134	Ekwipunek pełny
+135	To dla innej klasy
+136	Za mało siły
+137	Za mało zręczności
+138	Masz za niski poziom
+139	Odporność na trucizny
+140	Odporność na zimno
+141	Z bronią dwuręczną nie można nosić tarczy
+142	Kostka jest pusta
+143	To nie jest żaden przepis
+144	Przetransmutowano!
+145	Już się nauczyłeś tego, czego uczy ta księga
+146	Zyskałeś punkt umiejętności
+147	Nie mieści się w kostce
+148	To tam nie pasuje
+149	Nie ma miejsca na tarczę
+150	Tam się nie zmieści
+151	Do pasa wkłada się tylko mikstury
+152	Odłóż to do plecaka
+153	Nie trzeba się jej uczyć
+154	Jeszcze nie ma tego w tym porcie
+155	Już na maksimum
+156	Wymaga poziomu %d
+157	Wymaga: %s
+158	Nie masz już punktów umiejętności
+159	Najpierw musisz się jej nauczyć
+160	Umiejętności pasywnych nie przypisuje się do przycisku
+161	Atak
+162	Rzut
+163	(puste)
+164	Obrażenia %d-%d, przy rzucie %d-%d, zostało %d
+165	Obrażenia %d-%d%s, siła %d
+166	 (dwuręczna)
+167	Liczba: %d (dla: %s)
+168	Obrona %d, siła %d
+169	Leczy %d zdrowia
+170	Odnawia %d many
+171	Odnawia %d%% zdrowia i many
+172	Odnawia wytrzymałość
+173	Rozmowa
+174	Handel
+175	Najmij
+176	Wskrzeszenie
+177	Nasycenie
+178	Podróż na wschód
+179	Podróż na zachód
+180	Hazard
+181	Wyjdź
+182	Najemniczka
+183	Najemnik
+184	Za mało siły
+185	Za mało zręczności
+186	Ma za niski poziom
+187	Masz za mało złota
+188	Wynająłeś: %s
+189	Jeszcze go nie aktywowałeś
+190	Zbroja
+191	Broń
+192	Sprzedaj
+193	Otrzymano: %s
+194	Wziąłeś więcej z plecaka
+195	Nie masz już czym rzucać
+196	Skończyła się amunicja
+197	Potrzebujesz łuku albo kuszy
+198	Nie masz czym rzucać
+199	Brakuje bełtów (kołczan w drugiej ręce)
+200	Brakuje strzał (kołczan w drugiej ręce)
+201	%s ginie
+202	Potrzebujesz tarczy
+203	Nie z tą bronią
+204	Masz za mało many
+205	W pobliżu nie ma zwłok
+206	W mieście się nie walczy
+207	Potrzebujesz broni do rzucania
+208	Nie ma celu
+209	Musisz być w postaci niedźwiedzia
+210	Musisz być w postaci wilka
+211	Potrzebujesz dwóch broni
+212	Potrzebujesz broni do rzucania w każdej ręce
+213	Potrzebujesz łuku i strzał
+214	Nie ma czego ożywić
+215	Potrzebna broń lub zbroja na ziemi
+216	Tego nie da się ożywić
+217	Demon się oddalił
+218	Tego demona nie da się związać
+219	Jeszcze nie
+220	Potrzebujesz demona
+221	Potrzebujesz broni
+222	W pobliżu nie ma demona
+223	Tego nie da się związać
+224	Na bossa potrzeba poziomu 15
+225	Pomocy!
+226	Idź za mną
+227	To dla ciebie
+228	Dzięki
+229	Wybacz
+230	Na razie!
+231	Giń!
+232	Uciekaj!
+233	Zwroty
+234	A: powiedz   B: zamknij
+235	Słońce wróciło: powiedz o tym mieszkańcom Lut Gholein
+236	%s: zadanie wykonane!
+237	Otworzył się portal do Tristram
+238	Portal został już otwarty w tej grze
+239	Zabiłeś Krowiego Króla: portal już się nie otworzy
+240	Najpierw trzeba pokonać Baala
+241	Otwiera się tylko w Obozowisku Łotrzyc
+242	Otworzył się portal do: %s
+243	Portal na krowi poziom (w obozowisku, po pokonaniu Baala)
+244	Koszmar
+245	Piekło
+246	KOSZMAR
+247	PIEKŁO
+248	Poziom trudności: %s
+249	Do rytuału potrzeba poziomu %d
+250	WYBIERZ POZIOM TRUDNOŚCI
+251	Otwiera się po pokonaniu Baala na poprzednim
+252	A: graj     B: wróć
+253	A: Weź: %s
+254	A: Dotknij kamienia (%d z 5)
+255	A: Uwolnij Deckarda Caina
+256	Młot
+257	A: Przeczytaj księgę
+258	A: Zniszcz ołtarz
+259	A: Przeczytaj Dziennik Horazona
+260	A: Umieść Kostur Horadrimów
+261	Potrzebny Kostur Horadrimów
+262	Uratowałeś Deckarda Caina: czeka na ciebie w obozowisku
+263	Radament nie żyje: wróć do Atmy
+264	Demonolog nie żyje: przeczytaj Dziennik Horazona
+265	Duriel nie żyje: porozmawiaj z Tyraelem
+266	Baal nie żyje: porozmawiaj z Tyraelem
+267	Słońce pociemniało
+268	%s: oczyszczono!
+269	Oczekuje
+270	W toku
+271	Wykonane
+272	Zadania
+273	Krzyżak: wybierz   Y: ekwipunek   B: zamknij
+274	Krzyżak: wybierz zadanie
+275	LB / RB: inny akt
+276	LB / RB: inne zadanie
+277	X: drugi gracz
+278	Zadania G%d: %s
+279	Zadania: %s
+280	A: Użyj: %s
+281	A: Porozmawiaj: %s
+282	Nie masz zwykłej broni ani zbroi
+283	Nie udało się nasycić
+284	Charsi czyni go rzadkim: od 3 do 6 właściwości
+285	A: nasyć   B: wróć
+286	(założone)
+287	B: zamknij
+288	magiczny
+289	rzadki
+290	z zestawu
+291	unikatowy
+292	NACIŚNIJ START, ABY ZACZĄĆ
+293	Demonstracja: bot gra sam
+294	Demonstracja: bot gra sam (akt %d, %s)
+295	pozycja %d, %d
+296	%.0f kl/s   logika %.1f ms (najgorzej %.0f)   rysowanie %.1f   wysyłanie %.1f   wyświetlanie %.1f
+297	OSIĄGNĄŁEŚ POZIOM %d
+298	Obrażenia (%s): %d-%d
+299	dwurącz
+300	jednorącz
+301	Obrażenia przy rzucie: %d-%d
+302	Liczba: %d
+303	Obrona: %d
+304	Szansa na blok: %d%%
+305	Do łuków
+306	Do kusz
+307	Łyki: %d z %d
+308	Wymagana zręczność: %d
+309	Wymagana siła: %d
+310	Wymagany poziom: %d
+311	Złoto: %d
+312	 (nie: %s)
+313	łuki i kusze
+314	broń do walki wręcz
+315	broń drzewcowa
+316	tarcze paladyna
+317	głowy nekromanty
+318	Ekwipunek
+319	Sortuj
+320	Przepisy: Opcje, Przewodnik po kostce
+321	Kostka Horadrimów
+322	A/X: odłóż tutaj   RB/Y: na ziemię   B: schowaj
+323	A: podnieś   X: przenieś   RB: rzuć na ziemię   B: zamknij
+324	A: podnieś  X: użyj  RB: wyrzuć  LB: sortuj  Y: więcej
+325	Rękawice
+326	Buty
+327	Łączy to, co jest w kostce,
+328	jeśli to któryś z przepisów (Opcje, Przewodnik po kostce)
+329	X na przedmiocie w plecaku przenosi go do kostki
+330	Porządkuje plecak (także LB)
+331	Postać
+332	A: rozdziel punkty atrybutów
+333	Punkty do rozdzielenia: %d%.0s
+334	A: dodaj punkt   Y: ekwipunek   B: zamknij
+335	Y: ekwipunek   B: zamknij
+336	Punkty
+337	Obrażenia
+338	Skuteczność ataku
+339	Odp. na ogień
+340	Odp. na zimno
+341	Odp. na błyskawice
+342	Odp. na trucizny
+343	Nie masz już punktów atrybutów
+344	Zwykły atak bronią, którą trzymasz:
+345	Rzuca bronią, którą trzymasz w ręku
+346	(oszczepy, noże, topory do rzucania)
+347	wręcz albo strzał z łuku
+348	Obecny poziom: %d
+349	Następny poziom:
+350	Pierwszy poziom:
+351	Koszt many: %d
+352	Przypisz %s do:
+353	Krzyżak: wybierz   A: przypisz   B: anuluj
+354	Przyciski
+355	Krzyżak: wybierz   A: przypisz ją   B: wróć
+356	A: zmień   Y: postać   B: zamknij
+357	Co robi każdy przycisk
+358	Wybierz przycisk i naciśnij A,
+359	aby zmienić, co robi.
+360	Także z drzewa
+361	umiejętności: X na umiejętności.
+362	Umiejętności
+363	Krzyżak: wybierz przycisk   A: przypisz   B: anuluj
+364	A: naucz się   X: przypisz do przycisku   Y: przyciski   B: zamknij
+365	Punkty
+366	umiejętności
+367	A: wybierz   B: wyjdź
+368	Poz. %d
+369	Za darmo
+370	Zdrowie %d   Obrona %d   Obrażenia %d-%d
+371	Twoje złoto: %d
+372	Pierwsza za darmo: twoja nagroda
+373	Zastępuje tego, którego masz
+374	A: najmij   B: wróć
+375	A: zagraj   B: wróć
+376	Lewo/Prawo: zakładki   A: kup/sprzedaj   B: wróć
+377	Złoto
+378	Nic nie zostało
+379	Nie masz nic do sprzedania
+380	Nie ma już towaru
+381	Hazard: %d
+382	Otrzymasz
+383	Koszt
+384	Łotrzyca nie używa tarczy
+385	Nie żyje: wskrześ ją u Kashyi
+386	Nie masz nic, co można tam założyć
+387	A: załóż jej   B: wróć
+388	A: wybierz z plecaka   X: zdejmij   Y: ekwipunek
+389	Zdrowie: %d / %d
+390	Poziom %d
+391	Skuteczność ataku %d
+392	Odp. ogień
+393	Odp. zimno
+394	Odp. błyskawice
+395	Odp. trucizny
+396	Nie żyje: wskrześ ją u Kashyi
+397	Łuk
+398	Tarcza (łotrzyca nie używa)
+399	Wybierz, co jej założyć
+400	A: podróżuj   B: zamknij   <>: akt
+401	A: podróżuj   B: zamknij
+402	Gniazda (%d): %s
+403	%d z %d
+404	%s: co daje
+405	PRZEWODNIK PO KOSTCE HORADRIMÓW
+406	1. Kostka Horadrimów leży w skrzyni w Salach Umarłych (akt 2).
+407	2. Otwórz ekwipunek i naciśnij X na kostce: otworzy się w miejscu wyposażenia.
+408	3. Przy otwartej kostce X na przedmiocie w plecaku wkłada go do kostki,
+409	    a X na przedmiocie w kostce oddaje go do plecaka.
+410	4. Włóż dokładnie to, czego wymaga przepis (ani więcej, ani mniej).
+411	5. Zejdź do TRANSMUTUJ i naciśnij A lub X: wynik zostaje w kostce.
+412	Przyciskiem A możesz też coś podnieść i ułożyć ręcznie, jak w plecaku.
+413	Klejnot, runa lub klejnot magiczny w ręku, upuszczony na przedmiot z wolnymi gniazdami,
+414	zostaje osadzony. Runy w odpowiedniej kolejności tworzą słowo runiczne (osobna zakładka).
+415	Przepisy są w innych zakładkach: w lewo i w prawo (lub LB i RB).
+416	Włóż do kostki:
+417	Wynik: %s
+418	Lewo / prawo: kategoria    Góra / dół: przepis    B: wróć
+419	WRÓĆ DO GRY
+420	EFEKTY
+421	MUZYKA
+422	ZAWSZE BIEGAJ
+423	POKAŻ POZYCJĘ
+424	WYDAJNOŚĆ
+425	KOLOR 16-BITOWY
+426	PRZEWODNIK PO KOSTCE
+427	ZAPISZ I WYJDŹ
+428	TAK
+429	NIE
+430	PAUZA
+431	A: wybierz   Lewo / prawo: zmień   B: wróć
+432	lewa gałka
+433	krzyżak
+434	prawy spust
+435	przycisk R1
+436	JEDEN GRACZ
+437	DWÓCH GRACZY
+438	WYJDŹ
+439	FILMY
+440	Klucze otwierają zamknięte skrzynie
+441	Otwierają zamknięte skrzynie (%d)
+442	Otwiera portal do miasta
+443	Otwierają portal do miasta (%d)
+444	X: uzupełnij stos (%d za %d)
+445	X: otwórz portal
+446	To miejsce w pasie jest zajęte
+447	Tam już coś jest
+448	W mieście niepotrzebne
+449	WYBIERZ FILM
+450	Wstęp
+451	Akt II
+452	Akt III
+453	Akt IV
+454	Epilog
+455	Poszukiwanie Baala
+456	Koniec zniszczenia
+457	ANULUJ
+458	A: obejrzyj     B: wróć     (nieobejrzanych jeszcze nie można wybrać)
+459	Tę postać wybrał już gracz 1
+460	Podłączone pady: %d
+461	Gracz 1: pierwszy użyty pad lub WASD   -   Gracz 2: drugi pad lub strzałki
+462	GRACZ %d: WYBIERZ POSTAĆ
+463	WYBIERZ POSTAĆ
+464	Poziom %d  %s
+465	Wybrana przez gracza 1
+466	Gra %d
+467	Gra %d pusta
+468	A: stwórz postać
+469	A: graj     X: usuń     B: wróć
+470	WYBIERZ KLASĘ POSTACI
+471	Bije mocno
+472	i krzyczy
+473	Łuki
+474	i oszczepy
+475	Ogień, błyskawice
+476	i zimno
+477	Aury
+478	i tarcza
+479	Klątwy
+480	i umarli
+481	Szpony, pułapki
+482	i cienie
+483	Bestie, ogień
+484	i wiatr
+485	Demony, uroki
+486	i chaos
+487	A: stwórz     B: wróć
+488	Usunąć postać %s o poziomie %d?
+489	Wszystko przepada: poziom, wyposażenie i złoto
+490	TAK, USUŃ
+491	+%d%% obrażeń, +%d obrażeń, odrzuca
+492	+%d%% skuteczności ataku, +%d%% obrażeń, ogłusza na %.1f s
+493	+%d%% obrażeń, +%d%% skuteczności ataku, +%d%% obrony
+494	Potwory uciekają na %d s (promień %d)
+495	+%d%% obrony dla drużyny na %d s
+496	Potwory: %d%% obrony i %d%% obrażeń na %d s
+497	Jeden potwór: %d%% skuteczności ataku i %d%% obrażeń
+498	%d%% szansy na znalezienie mikstury w zwłokach
+499	%d%% szansy na znalezienie przedmiotu w zwłokach
+500	+%d%% obrażeń, +%d%% skuteczności ataku, %d%% trafienia krytycznego
+501	+%d%% wytrzymałości
+502	+%d%% obrony
+503	+%d%% szybkości chodu i biegu
+504	+%d%% do odporności na ogień, zimno i błyskawice
+505	Skacze na odległość do %d pól i odrzuca otoczenie
+506	Spada na potwora: +%d%% obrażeń, +%d%% skuteczności ataku
+507	Dwie bronie: cios każdą, +%d%% obrażeń, +%d%% skuteczności ataku
+508	Rzuca obiema broniami: +%d%% obrażeń, +%d%% skuteczności ataku
+509	Dwie bronie: +%d%% obrażeń; każde trafienie do +%d%% szybkości i +%d%% ataku
+510	Wiruje, trafiając wszystkich: +%d%% obrażeń, +%d%% skuteczności ataku
+511	+%d%% obrażeń magicznych, +%d%% skuteczności ataku; obrona 0 na %.1f s
+512	+%d%% zdrowia, many i wytrzymałości dla drużyny na %d s
+513	+%d do wszystkich umiejętności drużyny na %d s
+514	Totem na zwłokach: płoszy w promieniu %d pól przez %d s
+515	%d-%d obrażeń wokół, ogłusza na %.1f s
+516	Kolejne ciosy z %+d%% obrażeń, +%d%% skuteczności ataku
+517	+%d%% obrażeń, spowalnia potwora; wolny atak
+518	Trafia wszystkich wokół: +%d%% obrażeń, +%d%% skuteczności ataku
+519	Dodaje %d-%d obrażeń od błyskawic, +%d%% skuteczności ataku
+520	Wypuszcza %d wiązek po %d-%d obrażeń od błyskawic
+521	Seryjne błyskawice na %d potworów: %d-%d obrażeń od błyskawic
+522	-%d obrony potworów na %d s
+523	Pociski potworów lecą z prędkością %d%% przez %d s
+524	Kopia, która odciąga potwory przez %d s
+525	Przyzywa walkirię (+%d%% zdrowia, +%d%% skuteczności ataku)
+526	%d%% szansy na podwójne obrażenia
+527	%d%% szansy na uniknięcie ciosu w miejscu
+528	%d%% szansy na uniknięcie pocisku w miejscu
+529	%d%% szansy na uniknięcie ciosów i pocisków w ruchu
+530	+%d%% skuteczności ataku
+531	%d%% szansy, że pocisk przebije potwora
+532	Magiczna strzała: +%d obrażeń, +%d%% skuteczności ataku, nie zużywa strzał
+533	%s %d-%d obrażeń od ognia, +%d%% skuteczności ataku
+534	Wybucha:
+535	Dodaje
+536	Wybucha, zadając %d-%d obrażeń od ognia, i podpala ziemię
+537	Dodaje %d-%d obrażeń od zimna, %s %.1f s
+538	zamraża na
+539	schładza na
+540	Wybucha, zadając %d-%d obrażeń od zimna, i zamraża na %.1f s
+541	Wystrzeliwuje %d strzał z 75%% obrażeń
+542	Po strzale w każdego z %d potworów, +%d%% obrażeń
+543	Szuka potwora i nie chybia, +%d%% obrażeń
+544	%d-%d obrażeń od trucizny w ciągu %d s
+545	Przebijająca błyskawica: %d-%d obrażeń od błyskawic
+546	Przy trafieniu wypuszcza %d błyskawic po %d-%d obrażeń
+547	%s%d-%d obrażeń od ognia
+548	Wybucha:\
+549	%s%d-%d obrażeń od zimna, %s %.1f s
+550	Nova:\
+551	%d iskier po %d-%d obrażeń od błyskawic
+552	%s%d-%d obrażeń od błyskawic
+553	Przebijająca błyskawica:\
+554	%d-%d obrażeń od błyskawic, przeskakuje %d razy
+555	Pluje seriami po %d-%d obrażeń od zimna
+556	Odbiera %d%% zdrowia otoczeniu (promień %d)
+557	%d-%d obrażeń od błyskawic; czasem odrzuca i ogłusza
+558	Skacze tam, gdzie patrzysz
+559	Zostawia ogień tam, gdzie idzie: %d-%d na sekundę, %d s
+560	%s: %d-%d obrażeń od ognia na sekundę
+561	Płomienie
+562	Ściana
+563	Spada po 2,4 s: %d-%d obrażeń od ognia i zostawia ogień
+564	Odłamki lodu po %d-%d obrażeń od zimna
+565	Trzy głowy na %d s, które plują %d-%d ognia
+566	+%d%% obrony na %d s; zamraża atakującego na %.1f s
+567	+%d%% obrony na %d s; %d-%d zimna dla każdego, kto %s
+568	cię uderzy
+569	do ciebie strzela
+570	Mana pochłania %d%% obrażeń przez %d s
+571	Błyskawica %d-%d co 1,6 s przez %d s
+572	+%d-%d ognia do twoich ciosów przez %d s
+573	+%d%% regeneracji many
+574	+%d%% obrażeń: %s
+575	ogień
+576	błyskawice
+577	zimno
+578	-%d%% do odporności potworów na zimno
+579	+%d%% obrażeń, +%d%% skuteczności ataku; %d%% obrażeń rani ciebie
+580	Pchnięcie tarczą, które nie chybia: +%d%% obrażeń, ogłusza na %.1f s
+581	%d-%d obrażeń magicznych nieumarłym i demonom; leczy sojuszników o %d-%d
+582	%d ciosów z rzędu: +%d%% obrażeń, +%d%% skuteczności ataku
+583	Szarżuje na potwora: +%d%% obrażeń, +%d%% skuteczności ataku
+584	Z obrażeń broni: +%d%% ognia, +%d%% zimna, +%d%% błyskawic
+585	Wirujący młot: %d-%d obrażeń magicznych
+586	%d%% szansy, że potwór będzie walczył po twojej stronie przez %d s
+587	+%d%% obrony, +%d%% bloku, Pchnięcie +%d-%d, przez %d s
+588	Błyskawica %d-%d i do %d świętych pocisków
+589	Aura: +%d%% obrażeń
+590	Aura: %d-%d (%s) dla otoczenia; +%d-%d do twoich ciosów
+591	zimno (i spowalnia)
+592	Aura: kto cię uderzy, otrzymuje %d%% obrażeń
+593	Aura: +%d%% skuteczności ataku
+594	Aura: %d-%d obrażeń magicznych nieumarłym i odrzuca ich
+595	Aura: +%d%% szybkości ataku, +%d%% skuteczności ataku, +%d%% obrażeń
+596	Aura: %d%% obrony i -%d%% odporności potworów
+597	Aura: leczy %d zdrowia co 2 s
+598	Aura: +%d%% odporności (%s)
+599	Aura: +%d%% obrony
+600	Aura: trucizna i klątwy trwają %d%% czasu
+601	Aura: +%d%% szybkości, +%d%% wytrzymałości
+602	Aura: +%d%% regeneracji many
+603	Aura: %d%% szansy na zabranie zwłok za %d zdrowia i many
+604	Aura: +%d%% do wszystkich odporności
+605	Otrzymują +%d%% obrażeń fizycznych
+606	Widzą tylko tego, kto stoi obok (nie bossowie)
+607	Biją o %d%% słabiej
+608	%d%% zadawanych przez nich obrażeń wręcz wraca do nich
+609	Uciekają (nie bossowie)
+610	Atakują się nawzajem (nie bossowie)
+611	Kto ich uderza wręcz, leczy się o %d%% obrażeń
+612	Otoczenie atakuje przeklętego
+613	%d%% szybkości, obrażeń i odporności fizycznej
+614	-%d%% do odporności (odpornym: jedna piąta)
+615	%d zębów po %d-%d obrażeń magicznych
+616	Pochłania %d obrażeń wręcz
+617	%s%d-%d obrażeń od trucizny w ciągu %d s
+618	Ze sztyletem:\
+619	Od %d do %d%% zdrowia zwłok, w połowie ogień (promień %d)
+620	Kości z +%d%% zdrowia, które blokują przejście, %d s
+621	%d-%d obrażeń magicznych; %s
+622	przebija
+623	szuka potwora
+624	Szkielety: +%d zdrowia i +%d obrażeń; ożywieni: +%d%% zdrowia i +%d%% obrażeń
+625	Do %d na %d s, z +%d%% zdrowia (nie bossowie)
+626	Do %d (ze zwłok), z +%d%% zdrowia
+627	+%d%% zdrowia; spowalnia trafionego o %d%%
+628	+%d%% zdrowia; kradnie %d%% obrażeń i przekazuje ci %d%%
+629	Z broni lub zbroi z ziemi; odbija %d obrażeń
+630	%d-%d ognia w ciosach i Święty Ogień na poziomie %d
+631	Golemy: +%d%% zdrowia, +%d%% szybkości i +%d skuteczności ataku
+632	Słudzy: +%d%% do odporności
+633	Ładunek: +%d%% obrażeń za ładunek przy ciosie kończącym
+634	Ładunek: kradnie %d%% jako zdrowie (z 2 także manę; z 3 podwójnie)
+635	Ładunek: %d-%d (%s); z 2: %s; z 3: %s
+636	nova
+637	wybuch
+638	ogień na ziemi
+639	iskry
+640	Ładunek: z 1 meteor; z 2 krąg błyskawic; z 3 lód wokół
+641	Do %d kruków%.0s po %d-%d obrażeń, które trafiają %d razy
+642	Pnącze, które zatruwa: %d-%d w ciągu %d s; +%d%% zdrowia
+643	Zjada zwłoki: każde odnawia %d%%%s
+644	 twojego zdrowia
+645	 twojej many
+646	Do %d wilków%.0s z %d-%d zimna, +%d skuteczności ataku i +%d%% zdrowia
+647	Niedźwiedź z %d-%d obrażeń i +%d%% zdrowia
+648	Do %d wilków%.0s z %d-%d obrażeń i +%d%% zdrowia
+649	Duch, który daje otoczeniu +%d%% zdrowia
+650	Duch, który daje +%d%% obrażeń i +%d%% skuteczności ataku
+651	Duch: kto cię uderzy, otrzymuje %d obrażeń
+652	Wilk na %d s: +%d%% szybkości ataku, +%d%% skuteczności ataku, +%d%% zdrowia
+653	Niedźwiedź na %d s: +%d%% obrażeń, +%d%% obrony, +%d%% zdrowia
+654	Po przemianie: +%d%% zdrowia i %d s dłużej
+655	+%d%% obrażeń; każdy cios dodaje ładunek (do %d): większa szybkość i kradzież życia
+656	Każdy cios dodaje ładunek (do %d): po +%d%% obrażeń, i ogłusza
+657	Ugryzienie, które zatruwa (%d-%d w ciągu %d s) i zaraża
+658	+%d-%d ognia w ciosie
+659	Ugryzienie kradnące %d%% zdrowia i %d%% many (%d%% obrażeń)
+660	%d ciosów z rzędu z +%d%% obrażeń
+661	Fala %d-%d obrażeń, która ogłusza na %.1f s
+662	%d płomieni zostawiających ogień: %d-%d na sekundę
+663	Toczy się i odrzuca: %d-%d obrażeń i %d-%d ognia
+664	Pluje skałami: %d-%d obrażeń i %d-%d ognia
+665	Wokół spadają skały: %d-%d obrażeń i %d-%d ognia
+666	Szczeliny ognia: %d-%d obrażeń
+667	Strumień zimna: %d-%d na sekundę (zasięg %d)
+668	Pochłania %d obrażeń od ognia, zimna i błyskawic
+669	%d trąb powietrznych po %d-%d obrażeń, ogłuszają na %.1f s
+670	Tornado zadające %d-%d obrażeń
+671	Zimno wokół przez %d s: %d-%d
+672	Kozłolud walczący wręcz
+673	Splamiony, który ciska kule ognia
+674	Plugawiciel, który łączy dusze wrogów
+675	%s; +%d%% zdrowia (do %d demonów%.0s)
+676	Twoje demony: +%d%% szybkości, +%d skuteczności ataku, +%d%% obrażeń; do %d
+677	Twój demon skacze na wroga i obniża jego obronę o %d na %d s
+678	%d%% otrzymywanych obrażeń przejmuje twój demon; on: +%d%% do odporności
+679	Twój demon zjada zwłoki i leczy %d%% zdrowia
+680	Twoje demony wybuchają: %d-%d obrażeń i %d-%d ognia
+681	Poświęcasz demona: +%d%% maksymalnego zdrowia i +%d%% szybkości na %d s
+682	%d%% szansy na zatrzymanie rannego demona (+%d%% zdrowia i obrażeń)
+683	Z jedną bronią: +%d%% obrażeń, +%d%% skuteczności ataku i %d%% trafienia krytycznego
+684	Przez %d s: %d-%d magii zaklętym wokół; kradnie %d%%
+685	Broń: +%d-%d magii; trafieni mają -%d%% obrony
+686	Broń: +%d zdrowia i +%d many za zabicie; trafieni zadają -33%% obrażeń
+687	Broń: +%d%% szybkości; trafieni mogą wybuchnąć (%d-%d magii)
+688	Pochłania %d obrażeń; ogłusza tego, kto uderzy cię z bliska
+689	Echa broni, które przebijają wszystkich: +%d%% obrażeń
+690	Rzucasz astralną bronią i pojawiasz się tam, gdzie trafi: %d-%d magii
+691	Trafia wszystkich w łuku %d stopni: +%d%% obrażeń
+692	%d odbić broni z %d%% obrażeń
+693	Symbol na %d s: spowalnia o połowę i obniża obronę o %d%%
+694	Symbol na %d s: ci w środku walczą ze sobą
+695	Symbol na %d s: ci poniżej %d%% zdrowia giną i wybuchają
+696	%d płomieni wokół: %d-%d ognia; odrzucają
+697	%d-%d magii i chmura miazmatu
+698	Łańcuchy do %d wrogów: %d-%d magii i miazmat
+699	Miazmat: +%d%% obrażeń, +%d%% promienia i czasu; Otchłań: +%d%%
+700	Posuwająca się fala ognia: %d-%d, zostawia płonącą ziemię
+701	Piekielny ogień wokół: %d-%d; -%d%% odporności na ogień
+702	Szczelina, która przyciąga wrogów i wybucha: %d-%d magii
+703	Kopnięcia: %d%.0s z +%d%% obrażeń; ostatnie odrzuca
+704	Z dwoma szponami: +%d%% obrażeń
+705	Kopnięcie z +%d%% obrażeń, które wybucha ogniem (promień %d)
+706	Skacze obok potwora i kopie z +%d%% obrażeń
+707	Ze szponami: +%d%% skuteczności ataku, +%d%% obrażeń, %d%% trafienia krytycznego
+708	Z dwoma szponami: %d%% szansy na blok
+709	%d-%d obrażeń magicznych i odrzuca
+710	+%d%% szybkości i +%d%% szybkości ataku na %d s
+711	+%d%% do odporności na %d s
+712	Ciosy z %d-%d trucizny przez %d s
+713	Oślepia otoczenie i obniża jego obronę o %d%%, %d s
+714	Ogłusza otoczenie; %d%% szansy na nawrócenie (nie bossów)
+715	Mroczny klon z twoim wyposażeniem (+%d skuteczności ataku)
+716	Bomba z %d-%d ognia
+717	Błyskawice na ziemi: %d-%d na sekundę
+718	%d-%d obrażeń plus %d%% obrażeń broni%s
+719	, leci i wraca
+720	, trafia stojących obok
+721	Pułapka: %d strzałów po %d-%d (%s)%s
+722	; wysadza zwłoki
+723	 (promień %d)
+724	, %d s (promień %d)
+725	STEROWANIE
+726	PAD
+727	KLAWIATURA
+728	Mikstura many
+729	Mikstura leczenia
+730	Chodzenie i wybór w menu
+731	Mikstura wytrzymałości
+732	Mikstury z pasa (1 do 4)
+733	Ekwipunek i panele
+734	Bieg (przytrzymaj)
+735	Automapa
+736	Umiejętność 4 / następny panel
+737	Umiejętność 3 / przenieś przedmiot
+738	Umiejętność 2 / wróć
+739	Atak, podnoszenie i rozmowa
+740	Zwroty (Pomocy!, Dzięki...)
+741	Pauza (z Select: wyjście)
+742	W EKWIPUNKU, SKLEPACH I SKRYTCE
+743	Weź lub odłóż przedmiot
+744	Do plecaka, kostki lub skrytki
+745	Następny panel (umiejętności, przyciski, ...)
+746	Zamknij
+747	Na ziemię
+748	Krzyżak: poruszanie
+749	Gracz 1: pierwszy użyty pad   -   Gracz 2: drugi
+750	AKCJA
+751	GRACZ 1
+752	GRACZ 2
+753	Chodzenie
+754	Umiejętność 2
+755	Umiejętność 3
+756	Umiejętność 4
+757	Mikstury z pasa
+758	Drzewo umiejętności
+759	Wyrzuć przedmiot
+760	Wróć / zamknij
+761	Lewy Shift
+762	Prawy Shift
+763	Spacja
+764	Backspace
+765	Del
+766	Pauza (obaj)
+767	przytrzymaj przycisk: gracz 1 idzie
+768	Lewo / prawo (lub LB / RB): inna zakładka    B: wróć
+769	Otwiera się tylko w Harrogath, w Piekle
+770	Trzy portale zostały już otwarte w tej grze
+771	Portal do Tristram został już otwarty w tej grze
+772	Zresetuj punkty
+773	Punkty do rozdzielenia: %d atrybutów i %d umiejętności
+774	Otwiera się tylko w akcie 5, w Piekle
+775	Porozmawiaj z Larzukiem.
+776	Zabij Shenka Nadzorcę na Krwawych Wzgórzach.
+777	A: Użyj mikstury Malah
+778	Anya jest zamrożona: potrzebna mikstura Malah
+779	A: Dotknij ołtarza
+780	Drzwi są zamknięte: trzeba pokonać Pradawnych
+781	JĘZYK
+782	Głosy pozostają w języku: %s (zaimportowanym)
+783	A: wybierz (gra uruchomi się ponownie)     B: wróć

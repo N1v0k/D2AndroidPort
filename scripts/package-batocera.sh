@@ -309,6 +309,13 @@ assets+=(data/local/lng/strings/metadata/metadata-audio-vo.json) # qué grabaci�
 assets+=(data/global/monsters/randtransforms.dat) # los colores de los jefes (Utrans de 8 a 29)
 assets+=(data/global/tiles/garden) # la Colossal Summit (los Ancianos colosales, endgame.inc)
 assets+=(data/hd/global/excel/desecratedzones.json) # las zonas de terror (endgame.inc)
+# Los otros idiomas (src/lang.c, src/font.c): las fuentes del original para el
+# polaco (latin2) y las .ttf del Resurrected para lo que esas no tienen (ruso,
+# japonés, coreano y chino; la de Japón y la del chino tradicional, aparte)
+for f in font8 font16 font24 font30 font42 fontexocet10 fontexocet8 fontformal12 fontformal10 font6; do
+    assets+=("data/local/font/latin2/$f.dc6" "data/local/font/latin2/$f.tbl")
+done
+assets+=(data/hd/ui/fonts/blizzardglobal-v5_81.ttf data/hd/ui/fonts/bljap_v8_3.ttf data/hd/ui/fonts/blizzardglobaltcunicode.ttf)
 # Los archivos, sin repetidos: una carpeta que aparecía dos veces (un monstruo
 # de dos actos) se copiaba adentro de sí misma
 ( cd "$root" && for a in "${assets[@]}"; do

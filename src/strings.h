@@ -8,9 +8,10 @@
 
    El Resurrected marca el género gramatical: los sustantivos llevan su
    género adelante ("[fs]Hacha de mano") y los adjetivos traen las cuatro
-   formas ("[ms]roído[fs]roída[mp]roídos[fp]roídas"). */
+   formas ("[ms]roído[fs]roída[mp]roídos[fp]roídas"). El alemán y el ruso
+   suman el neutro ([ns]) y el plural ([pl]); el polaco, [nl] y [p]. */
 
-enum { GENDER_MS, GENDER_FS, GENDER_MP, GENDER_FP, GENDER_COUNT };
+enum { GENDER_MS, GENDER_FS, GENDER_MP, GENDER_FP, GENDER_NS, GENDER_PL, GENDER_NL, GENDER_P, GENDER_COUNT };
 
 int         strings_load(const char *lang); /* "esMX", "enUS", ...; 0 si cargó algo */
 const char *str_get(const char *key);       /* la traducción (sin marcas), o la clave si no hay */

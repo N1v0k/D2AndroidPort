@@ -1748,10 +1748,13 @@ port (unos 30.000, 1,6 GB de los cerca de 40 GB del juego). La lista la
 arma `scripts/package-batocera.sh` con los mismos assets que el paquete
 completo.
 
-- Pide el idioma: en español copia las voces de `locales/audio/esmx/` y en
-  inglés las de `data/local/sfx/` (si falta una, usa la otra), y lo anota
-  en `idioma.txt`, que el juego lee al arrancar (`D2_LANG=en` o `es` lo
-  cambia sin importar otra vez).
+- Pide el idioma (uno de los trece del Resurrected): copia las voces y el
+  sonido de las cinemáticas de `locales/audio/<código>/` (`esmx`, `dede`,
+  `jajp`...) y, en inglés, los de `data/local/sfx/`; si el del idioma no
+  está instalado (Battle.net solo baja las voces del idioma en que se juega),
+  quedan las inglesas. Lo anota en `idioma.txt` (`esMX`, `deDE`...), que el
+  juego lee al arrancar; el menú principal (IDIOMA) o `D2_LANG` lo cambian
+  sin importar otra vez, salvo las voces.
 - Busca solo el juego: en Linux en los prefijos de Wine, Lutris
   (`~/Games/*`), Bottles y Steam (Proton), y en WSL el de Windows; en
   Batocera en `/media` (los USB), `/userdata` y `roms/ports`, en una
@@ -1762,7 +1765,7 @@ completo.
   `tools/archivos-del-juego.txt`): ahí los archivos van a `data/` y el
   idioma a `idioma.txt`, los dos ignorados por git. Si no se le dice, el
   paquete en el que está, o el código si es el `build/d2port-importar`.
-- Opciones: `--idioma es|en`, `--juego <carpeta>`, `--destino <carpeta>`,
+- Opciones: `--idioma <código>` (también `es` y `en`), `--juego <carpeta>`, `--destino <carpeta>`,
   `--sin-pausa`. Lo que falte queda en `importar.log`, al lado de la lista.
 - **`tools/archivos-del-juego.txt` va en el repositorio** (son solo
   nombres): `package-batocera.sh` la actualiza cada vez que arma el paquete.
@@ -1781,18 +1784,36 @@ Para compilar el de la Pi hace falta `g++-aarch64-linux-gnu` (lo instala
 `scripts/setup-wsl.sh`, que también instala `mingw-w64` para el de Windows,
 que todavía no se publica: falta probarlo).
 
-### Los textos en inglés
+### Los idiomas
 
-Los textos del Resurrected salen de sus `.json` en el idioma elegido; los
-del motor están en español y `src/lang_en.inc` tiene su traducción. `tr()`
+Son los trece del Resurrected (`src/lang.c`). Los textos del Resurrected
+salen de sus `.json` en el idioma elegido; los del motor están en español y
+cada idioma tiene su tabla: `src/lang_en.inc` (la lista de todos, a mano) y
+`src/lang_<idioma>.inc`, que arma `tools/lang_tables.py armar` desde
+`tools/lang/<idioma>.txt` (una traducción por renglón, con el número del
+texto en la lista: `tools/lang_tables.py lista`; lo que falta en una tabla
+sale en inglés; la de España solo trae lo que cambia: tú en vez de vos y
+los nombres del Resurrected en esES). Un texto nuevo del motor: en
+`lang_en.inc`, y después su número en cada `tools/lang/*.txt`.
+
+Las letras: los idiomas latinos usan las fuentes del original
+(`data/local/font/latin`; el polaco suma `latin2` para sus letras, cuyas
+tablas tienen códigos Unicode). Lo que esas no tienen (ruso, japonés,
+coreano, chino, alguna comilla) sale de la `.ttf` del Resurrected del
+idioma (`data/hd/ui/fonts`: la de Japón, la del chino tradicional, y
+`blizzardglobal` para el resto), con `src/fmt/ttf.c` (contornos `glyf`,
+sin hinting) y un caché de letras en `font.c`, del tamaño de las del
+original. Los renglones se cortan con `font_break()`: en un espacio o
+entre dos letras de China, Japón o Corea. `tr()`
 traduce los que se arman con `snprintf` y los mensajes; lo que se dibuja
 pasa por `lang_screen()`, así los textos fijos de las tablas (menús,
 botones) salen traducidos sin tocar cada uso. Los nombres de los objetos
 mágicos, raros y de los campeones se arman con los formatos del juego
 (`MagicFormat`, `RareFormat`, `ChampionFormat`): cada idioma con su orden.
 
-- `python3 tools/check_lang.py`: revisa que cada traducción tenga los
-  mismos `%d`/`%s` que el original y que todo `tr("...")` esté en la tabla.
+- `python3 tools/check_lang.py`: revisa que cada traducción al inglés tenga
+  los mismos `%d`/`%s` que el original y que todo `tr("...")` esté en la
+  tabla; `tools/lang_tables.py armar` revisa lo mismo en los otros idiomas.
 - `D2_LANG=en D2_LANG_DUMP=archivo`: anota lo que se dibujó sin traducción
   (para encontrar textos que faltan).
 
@@ -1904,6 +1925,9 @@ Variables de depuración:
 | `D2_DIFF=1` o `2` | La partida en Pesadilla o Infierno (sin pasar por el menú): los monstruos, los tesoros, las tiendas, los mercenarios y las misiones de esa dificultad (`docs/plan-dificultades.md`). Con la demostración (`D2_AUTOTEST_DEMO`), los personajes tienen 25 o 50 niveles más, las habilidades 8 o 16 más y el equipo de esa dificultad (`demo_diff_gear`: bases excepcionales o de élite raras, con resistencias que compensan la penalidad, vida, defensa y daño aumentado en las armas) |
 | `D2_DIFFTEST=1` | En el Acto 1, muestra en cada dificultad el nivel de los monstruos de algunos niveles, cuáles salen y cuántos jefes, y los números (nivel, vida, daño, experiencia, defensa, puntería, resistencias, habilidad y tesoro) de algunos monstruos, un jefe de misión, uno de nombre, uno al azar con su escolta |
 | `D2_UBERTEST=1` | Con `D2_DIFF=2` y `D2_ACT=5`, el evento Pandemonium (`src/endgame.inc`): que caigan las llaves, los órganos y las esencias, la receta donde no va, los tres portales en Harrogath (y que no haya un cuarto), cada mapa con su jefe y su órgano, Uber Tristram con los tres y sus esbirros (mide un tick al lado) y la Antorcha y los Estandartes. Dice `UBER: BIEN` o `UBER: MAL` en cada cosa |
+| `D2_LANG=deDE` | El idioma (`esMX`, `enUS`, `esES`, `deDE`, `frFR`, `itIT`, `ptBR`, `plPL`, `ruRU`, `jaJP`, `koKR`, `zhCN`, `zhTW`; también `es` y `en`), antes que el del menú (`opciones.txt`) y el del importador (`idioma.txt`) |
+| `D2_LANG_DUMP=archivo` | Anota cada texto que se dibujó sin traducción en el idioma elegido |
+| `D2_RESTART_LANG=deDE` | Con ventana: a los pocos ticks en el menú, hace como si se eligiera ese idioma (lo guarda y el juego vuelve a arrancar) |
 | `D2_TZTEST=1` | Las zonas de terror (`src/endgame.inc`, `src/tztest.inc`), con `D2_DIFF=2 D2_ACT=1 D2_TZ=1 D2_TZ_ZONE=2 D2_TZ_HERALD=1`: lo que se leyó de `desecratedzones.json`, la rotación, las clases de tesoro por nivel, los monstruos de las Cold Plains aterrorizadas (y los del Blood Moor, que no), un Heraldo que sale, muere y sube el grado, una astilla y un amuleto Sunder. Dice `TERROR: BIEN` o `TERROR: MAL` en cada cosa |
 | `D2_TZ=1` o `0` | Zonas de terror sí o no, sin mirar si el jugador 1 mató a Baal en esa dificultad (sin la variable, en la demostración y las pruebas automáticas no hay) |
 | `D2_TZ_ZONE=n` | La zona aterrorizada es la número n de `desecratedzones.json` (0 = Burial Grounds, 2 = Cold Plains...), en vez de la del turno |
@@ -1962,6 +1986,7 @@ Variables de depuración:
 | `D2_INVSHOW=5..7` | El árbol de habilidades del J1 en la solapa 1, 2 o 3 (para las capturas) |
 | `D2_INVSHOW=8` | El registro de misiones del panel del J1 |
 | `D2_INV_PAGE=N` | Con `D2_INV_OPEN`, abre esa página del panel (1 = el árbol de habilidades) |
+| `D2_WP_OPEN=1` | Abre el panel de waypoints del jugador 1 al empezar (en el acto de `D2_ACT`) |
 | `D2_DEMO_MODE=nuevo` | La demostración del menú juega desde el nivel 1 (por defecto, con nivel 50 y todas las habilidades en 8 en el Acto 3, 40 y en 6 en el Acto 2, o 30 y en 1 en el Acto 1); `habilidades`: la prueba contra Andariel |
 | `D2_ST_ROUND=N` | En la prueba de habilidades, empieza en esa ronda |
 | `D2_ST_ROUNDS=N` | En la prueba de habilidades, hace solo N rondas |

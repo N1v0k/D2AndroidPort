@@ -725,6 +725,7 @@ static void draw_frame(int x, int y, int w, int h, uint8_t c);
 
 /* Partidas guardadas: un archivo por personaje en esta carpeta (NULL = no se guarda) */
 static char      s_save_dir[256];
+static char      s_lang_pref[8]; /* el idioma elegido en el menú ("" = el que se importó) */
 #define AUTOSAVE_SECONDS 30
 
 /* Último monstruo golpeado: su nombre y vida se muestran arriba */
@@ -1745,7 +1746,7 @@ int game_init(void)
         fprintf(stderr, "no encontré data/global/palette/act1: falta extraer los archivos del juego\n");
         return -1;
     }
-    lang_init();
+    lang_init(s_lang_pref);
     strings_load(lang_strings_code());
     ui_loading(1, 6);
     if (font_init_d2() != 0)
@@ -5343,14 +5344,44 @@ static int speaks_to_other_class(const Player *p, const char *text)
     static const char *const others_es[] = { "nigromante", "paladín", "hechicera", "druida", "asesina" };
     static const char *const others_en[] = { "necromancer", "paladin", "sorceress", "druid", "assassin",
                                              "Necromancer", "Paladin", "Sorceress", "Druid", "Assassin" };
-    const char *const *others = lang_en() ? others_en : others_es;
-    unsigned num = lang_en() ? sizeof others_en / sizeof others_en[0] : sizeof others_es / sizeof others_es[0];
+    /* En los otros idiomas, los nombres de las clases del juego (y con minúscula) */
+    static const char *const keys[] = { "partycharnec", "partycharpal", "partycharsor", "partychardru", "partycharass" };
+    static char lower[5][48];
+    const char *list[10];
+    unsigned num = 0;
+    int l = lang_current();
+    if (l == LANG_EN) {
+        for (unsigned i = 0; i < sizeof others_en / sizeof others_en[0]; i++)
+            list[num++] = others_en[i];
+    } else if (l == LANG_ES || l == LANG_ES_ES) {
+        for (unsigned i = 0; i < sizeof others_es / sizeof others_es[0]; i++)
+            list[num++] = others_es[i];
+    } else {
+        for (unsigned i = 0; i < 5; i++) {
+            list[num++] = str_get(keys[i]);
+            snprintf(lower[i], sizeof lower[i], "%s", str_get(keys[i]));
+            unsigned char *c = (unsigned char *)lower[i];
+            if (c[0] < 0x80)
+                c[0] = (unsigned char)tolower(c[0]);
+            else if (c[0] == 0xC3 && c[1] >= 0x80 && c[1] <= 0x9E) /* À..Þ */
+                c[1] += 0x20;
+            else if (c[0] == 0xD0 && c[1] >= 0x90 && c[1] <= 0x9F) /* А..П (ruso) */
+                c[1] += 0x20;
+            else if (c[0] == 0xD0 && c[1] >= 0xA0 && c[1] <= 0xAF) /* Р..Я */
+                c[0] = 0xD1, c[1] -= 0x20;
+            list[num++] = lower[i];
+        }
+    }
+    /* (en chino y japonés no hay espacios: alcanza con que esté) */
+    int loose = l == LANG_JA || l == LANG_ZH_CN || l == LANG_ZH_TW;
     (void)p;
     for (unsigned i = 0; i < num; i++) {
-        size_t n = strlen(others[i]);
-        for (const char *s = strstr(text, others[i]); s; s = strstr(s + 1, others[i])) {
+        size_t n = strlen(list[i]);
+        if (!n)
+            continue;
+        for (const char *s = strstr(text, list[i]); s; s = strstr(s + 1, list[i])) {
             unsigned char before = s > text ? (unsigned char)s[-1] : ' ', after = (unsigned char)s[n];
-            if (!isalpha(before) && before < 0x80 && !isalpha(after) && after < 0x80)
+            if (loose || (!isalpha(before) && before < 0x80 && !isalpha(after) && after < 0x80))
                 return 1;
         }
     }
@@ -8399,6 +8430,7 @@ static void load_options(void)
             s_show_perf = s_show_perf != 0;
         if (sscanf(line, "color16 %d", &s_color16) == 1)
             s_color16 = s_color16 != 0;
+        sscanf(line, "idioma %7s", s_lang_pref);
     }
     fclose(f);
     audio_set_volume(sfx, music);
@@ -8417,7 +8449,15 @@ static void save_options(void)
             s_show_perf);
     if (s_color16 >= 0)
         fprintf(f, "color16 %d\n", s_color16);
+    if (s_lang_pref[0])
+        fprintf(f, "idioma %s\n", s_lang_pref);
     fclose(f);
+}
+
+void game_set_language(const char *code)
+{
+    snprintf(s_lang_pref, sizeof s_lang_pref, "%s", code ? code : "");
+    save_options();
 }
 
 void game_set_save_dir(const char *dir)
@@ -10544,8 +10584,8 @@ static void draw_quest_log(const Player *p, int x, int y, int act, int sel, uint
     ui_grid("menu/questbackground", 0, 4, 2, x, y);
     for (int a = 1; a <= QUEST_ACTS; a++)
         if (quest_act_reached(p, a) && a != act)
-            ui_frame("menu/expquesttabs", (a - 1) * 2 + 1, x + 2 + (a - 1) * 63, y + 2);
-    ui_frame("menu/expquesttabs", (act - 1) * 2, x + 2 + (act - 1) * 63, y + 2); /* la elegida adelante */
+            ui_frame("menu/expquesttabs", (a - 1) * 2 + 1, x + 5 + (a - 1) * 62, y + 2);
+    ui_frame("menu/expquesttabs", (act - 1) * 2, x + 5 + (act - 1) * 62, y + 2); /* la elegida adelante */
     uint32_t t = s_anim_ticks - anim_start;
     for (int q = 0; q < quest_slots(act); q++) {
         int state, sx = x + 20 + (q % 3) * 100, sy = y + 36 + (q / 3) * 98;
@@ -10588,7 +10628,9 @@ static void draw_quest_log(const Player *p, int x, int y, int act, int sel, uint
     /* Las Siete Tumbas: debajo, el símbolo de la tumba verdadera */
     if (act == 2 && sel == 5 && goal && strcmp(goal, "qstsa2q61a") == 0)
         draw_tomb_symbol(x + PANEL_W / 2, y + 302 + n * 15 + 22);
-    ui_frame("panel/buysellbtn", 10, x + 272, y + 386); /* cerrar (B) */
+    /* Los botones de abajo, en sus huecos (questlogpaneloriginal.json: Speech y Cancel) */
+    ui_frame("menu/questlast", 0, x + 226, y + 392); /* (repetir lo último que se dijo) */
+    ui_frame("panel/buysellbtn", 10, x + 278, y + 390); /* cerrar (B) */
     /* Las ayudas, en la piedra de abajo */
     font_draw(x + 14, y + 394, help1, 1, COL(R_GOLD, 15));
     if (help2)
@@ -12550,6 +12592,10 @@ int game_tick(const InputState *in)
     cow_test();
     uber_test();
     tz_test();
+    if (s_ticks == 3 && getenv("D2_WP_OPEN")) { /* depuración: los waypoints abiertos, en el acto de ahora */
+        s_pl[0].wp_open = 1;
+        s_pl[0].wp_sel = wp_first(s_act);
+    }
     tp_test();
     stash_test();
     zones_tick();
@@ -14107,15 +14153,19 @@ static int stash_px(const Player *p)
 /* Cartel arriba del panel: nombre y botones */
 static void draw_panel_header_at(int px, const char *title, const char *help)
 {
-    ui_dark_box(px, PANEL_Y - 40, PANEL_W, 38);
-    font_draw_centered(px + PANEL_W / 2, PANEL_Y - 37, title, 2, COL(R_GOLD, 15));
     /* Si la ayuda (en el idioma de la pantalla) no entra en el panel, con
-       menos espacio entre los botones */
+       menos espacio entre los botones; y si tampoco, el cartel se estira
+       hacia el lado de la pantalla (los idiomas de palabras largas) */
     char fit[160];
     snprintf(fit, sizeof fit, "%s", lang_screen(help));
     for (char *d; font_width(fit, 1) > PANEL_W - 8 && (d = strstr(fit, "  ")) != NULL;)
         memmove(d, d + 1, strlen(d));
-    font_draw_centered(px + PANEL_W / 2, PANEL_Y - 17, fit, 1, COL(R_STONE, 12));
+    int w = font_width(fit, 1) + 12 > PANEL_W ? font_width(fit, 1) + 12 : PANEL_W;
+    int bx = px + PANEL_W / 2 < SCREEN_W / 2 ? px : px + PANEL_W - w;
+    bx = bx < 0 ? 0 : bx + w > SCREEN_W ? SCREEN_W - w : bx;
+    ui_dark_box(bx, PANEL_Y - 40, w, 38);
+    font_draw_centered(px + PANEL_W / 2, PANEL_Y - 37, title, 2, COL(R_GOLD, 15));
+    font_draw_centered(bx + w / 2, PANEL_Y - 17, fit, 1, COL(R_STONE, 12));
 }
 
 static void draw_panel_header(const Player *p, const char *title, const char *help)
@@ -14523,12 +14573,11 @@ static void draw_stash_side(const Player *p)
         uint8_t col = k <= 1 ? COL(R_GRAY, 15) : COL(R_STONE, 13);
         while (*s) {
             char line[160];
-            snprintf(line, sizeof line, "%s", s);
-            for (char *cut; font_width(line, 1) > room && (cut = strrchr(line, ' ')) != NULL;)
-                *cut = 0;
+            int len = font_break(s, 1, room);
+            snprintf(line, sizeof line, "%.*s", len < 159 ? len : 159, s);
             font_draw(sx + STASH_GX, y, line, 1, col);
             y += font_height(1) + 2;
-            for (s += strlen(line); *s == ' '; s++) {
+            for (s += len; *s == ' ' || *s == '\n'; s++) {
             }
         }
     }
@@ -14857,7 +14906,7 @@ static void preload_ui(void)
         CTRL_PANEL, "panel/hlthmana", "panel/overlap", "panel/menubutton", "panel/runbutton", "panel/level",
         "panel/levelsocket", "panel/skillpoints", "panel/invchar6", "panel/buysell", "panel/buysellbtn",
         "panel/buyselltabs", "panel/npcinv", "menu/waygatebackground", "menu/waygatetabs", "menu/waygateicons",
-        "menu/questbackground", "menu/expquesttabs", "menu/questsockets", "cursor/pentspin",
+        "menu/questbackground", "menu/expquesttabs", "menu/questsockets", "menu/questlast", "menu/expwaygatetabs", "cursor/pentspin",
     };
     if (!jobs_running())
         return;
@@ -15043,18 +15092,28 @@ static void draw_skill_tree(const Player *p)
     for (int t = 0; t < 3; t++) {
         int tp = 3 - t, ty = py + 110 + t * 107;
         snprintf(text, sizeof text, "%s", skills_tab_name(p->cls, tp));
-        int lines = font_width(text, 2) > 86 ? 2 : 1;
-        if (lines == 1) {
+        /* (los del Resurrected en alemán traen su propio corte: "Kampf-\nfertigkeiten") */
+        char *nl = strchr(text, '\n');
+        int lines = nl || font_width(text, 2) > 86 ? 2 : 1;
+        if (nl) {
+            uint8_t c = tp == page ? COL(R_GOLD, 15) : COL(R_STONE, 11);
+            *nl = '\0';
+            font_draw_centered(px + 274, ty + 34, text, 2, c);
+            font_draw_centered(px + 274, ty + 52, nl + 1, 2, c);
+        } else if (lines == 1) {
             text_in(px + 227, ty, 94, 103, text, 2, tp == page ? COL(R_GOLD, 15) : COL(R_STONE, 11));
         } else { /* en dos renglones, cortando en el espacio del medio */
             char *mid = strchr(text + strlen(text) / 2 - 2, ' ');
             if (!mid)
                 mid = strrchr(text, ' ');
-            if (mid)
-                *mid = '\0';
             uint8_t c = tp == page ? COL(R_GOLD, 15) : COL(R_STONE, 11);
+            if (!mid) { /* una palabra sola (en alemán): más chica */
+                text_in(px + 227, ty, 94, 103, text, 1, c);
+                continue;
+            }
+            *mid = '\0';
             font_draw_centered(px + 274, ty + 34, text, 2, c);
-            font_draw_centered(px + 274, ty + 52, mid ? mid + 1 : "", 2, c);
+            font_draw_centered(px + 274, ty + 52, mid + 1, 2, c);
         }
     }
     text_in(px + 235, py + 8, 85, 26, "Puntos de", 1, COL(R_GRAY, 15));
@@ -15141,30 +15200,22 @@ static void stats_tick(Player *p, const PlayerInput *pi)
 static int wrap_text(const char *text, int max_w, int font, char lines[][128], int max_lines)
 {
     int n = 0;
-    char line[256] = "";
-    const char *p = text;
+    const char *p = lang_screen(text); /* (en el idioma de la pantalla: se corta lo que se ve) */
     while (*p && n < max_lines) {
-        if (*p == '\n') {
-            snprintf(lines[n++], 128, "%.127s", line);
-            line[0] = '\0';
+        /* hasta donde entra: en un espacio o, en chino, japonés y coreano, entre dos letras */
+        int len = font_break(p, font, max_w);
+        if (len > 127) { /* (sin cortar una letra en el medio) */
+            len = 127;
+            while (len > 0 && ((unsigned char)p[len] & 0xC0) == 0x80)
+                len--;
+        }
+        snprintf(lines[n++], 128, "%.*s", len, p);
+        p += len;
+        while (*p == ' ')
             p++;
-            continue;
-        }
-        const char *end = p;
-        while (*end && *end != ' ' && *end != '\n')
-            end++;
-        char candidate[256];
-        snprintf(candidate, sizeof candidate, "%s%s%.*s", line, line[0] ? " " : "", (int)(end - p), p);
-        if (line[0] && font_width(candidate, font) > max_w) {
-            snprintf(lines[n++], 128, "%.127s", line);
-            snprintf(line, sizeof line, "%.*s", (int)(end - p), p);
-        } else {
-            snprintf(line, sizeof line, "%s", candidate);
-        }
-        p = *end == ' ' ? end + 1 : end;
+        if (*p == '\n')
+            p++;
     }
-    if (line[0] && n < max_lines)
-        snprintf(lines[n++], 128, "%.127s", line);
     return n;
 }
 
@@ -16051,11 +16102,11 @@ static void draw_waypoints(const Player *p)
 {
     int px = panel_x(p), py = PANEL_Y, here = waypoint_near(p), tab = wp_act(p->wp_sel) - 1;
     ui_grid("menu/waygatebackground", 0, 4, 2, px, py);
-    /* Las solapas de los actos: la elegida adelante */
-    for (int t = 3; t >= 0; t--)
+    /* Las solapas de los cinco actos (las de la expansión, waypointspanelexpansion.json): la elegida adelante */
+    for (int t = WP_ACTS - 1; t >= 0; t--)
         if (t != tab)
-            ui_frame("menu/waygatetabs", t * 2 + 1, px + 5 + t * 77, py + 3);
-    ui_frame("menu/waygatetabs", tab * 2, px + 5 + tab * 77, py + 3);
+            ui_frame("menu/expwaygatetabs", t * 2 + 1, px + 5 + t * 62, py + 3);
+    ui_frame("menu/expwaygatetabs", tab * 2, px + 5 + tab * 62, py + 3);
     font_draw_centered(px + PANEL_W / 2, py + 33, str_get("waypointsheader"), 2, COL(R_GOLD, 15));
     for (int k = k_wp_first[tab]; k < k_wp_first[tab + 1]; k++) {
         int by = py + 61 + (k - k_wp_first[tab]) * 36;
@@ -16572,7 +16623,7 @@ static void draw_perf(void)
 static void draw_text_fit(int x, int y, int w, const char *text, int scale, uint8_t color)
 {
     char buf[128];
-    snprintf(buf, sizeof buf, "%s", text);
+    snprintf(buf, sizeof buf, "%s", lang_screen(text)); /* (se corta lo que se ve, ya traducido) */
     if (font_width(buf, scale) > w) {
         size_t n = strlen(buf);
         while (n > 0 && font_width(buf, scale) + font_width("...", scale) > w) {
@@ -16684,7 +16735,7 @@ static void draw_guide(void)
     const uint8_t white = COL(R_GRAY, 15), gray = COL(R_GRAY, 12), gold = COL(R_GOLD, 15);
     if (s_guide_cat == CUBE_CAT_HOWTO) {
         static const char *const k_steps[] = {
-            "1. Caín te da el Cubo Horádrico en el campamento, después de rescatarlo.",
+            "1. El Cubo Horádrico está en un cofre de las Salas de los Muertos (Acto 2).",
             "2. Abrí el inventario y apretá X sobre el cubo: se abre en el lugar del equipo.",
             "3. Con el cubo abierto, X sobre algo de la mochila lo mete en el cubo,",
             "    y X sobre algo del cubo lo devuelve a la mochila.",
@@ -16700,8 +16751,25 @@ static void draw_guide(void)
         const ItemType *box = items_find("box");
         if (box)
             items_draw_icon(box, SCREEN_W / 2 - 32, 104, 64);
-        for (unsigned k = 0; k < sizeof k_steps / sizeof k_steps[0]; k++)
-            font_draw(70, 186 + (int)k * 26, k_steps[k], 2, k_steps[k][0] >= '1' && k_steps[k][0] <= '9' ? white : gray);
+        /* (lo que no entra, en otro renglón: en otros idiomas son más largos) */
+        int y = 182;
+        for (unsigned k = 0; k < sizeof k_steps / sizeof k_steps[0]; k++) {
+            const char *t = lang_screen(k_steps[k]);
+            uint8_t col = k_steps[k][0] >= '1' && k_steps[k][0] <= '9' ? white : gray;
+            if (!t[0]) {
+                y += 12;
+                continue;
+            }
+            for (int first = 1; *t; first = 0) {
+                char line[200];
+                int len = font_break(t, 2, SCREEN_W - 140 - (first ? 0 : 20));
+                snprintf(line, sizeof line, "%.*s", len < 199 ? len : 199, t);
+                font_draw(first ? 70 : 90, y, line, 2, col);
+                y += first ? 24 : 20;
+                for (t += len; *t == ' '; t++) {
+                }
+            }
+        }
     } else if (s_guide_cat == CUBE_CAT_RUNEWORDS) {
         draw_guide_runewords();
     } else {
@@ -16813,7 +16881,12 @@ static void draw_pause(void)
     for (int i = 0; i < PAUSE_COUNT; i++) {
         int y = oy + 76 + i * 33, chosen = i == s_pause_sel;
         uint8_t c = chosen ? COL(R_GOLD, 15) : COL(R_GRAY, 13);
-        font_draw(ox + 52, y, k_labels[i], 3, c);
+        /* (en los idiomas de palabras largas, si no entra antes del valor, más chico) */
+        int room = ow - 18 - 52 - (values[i][0] ? font_width(values[i], 3) + 10 : 0);
+        if (font_width(k_labels[i], 3) > room)
+            font_draw(ox + 52, y + 4, k_labels[i], 2, c);
+        else
+            font_draw(ox + 52, y, k_labels[i], 3, c);
         if (values[i][0])
             font_draw(ox + ow - 18 - font_width(values[i], 3), y, values[i], 3, c);
         if (chosen)

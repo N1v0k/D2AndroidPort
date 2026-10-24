@@ -4,7 +4,7 @@
  * (el almacenamiento CASC, con CascLib). El port no trae ningún archivo de
  * Blizzard: cada uno los pone desde su copia del juego.
  *
- *   d2port-importar [--idioma es|en] [--juego <carpeta del D2R>] [--destino <carpeta>] [--sin-pausa]
+ *   d2port-importar [--idioma esMX|enUS|deDE|...] [--juego <carpeta del D2R>] [--destino <carpeta>] [--sin-pausa]
  *                   [--sin-cinematicas]
  *
  * Sin argumentos pregunta lo que falta. El destino es la carpeta `ports` del
@@ -13,9 +13,10 @@
  * repositorio, con CMakeLists.txt): la lista es tools/archivos-del-juego.txt
  * y los archivos van a su `data/`, que git no sube, para compilarlo y
  * jugarlo desde el código. Solo se copian los de la lista, no el juego
- * entero. Las voces salen del idioma elegido (las del español latino, de
- * locales/audio/esmx) y el idioma queda anotado en `idioma.txt`, que el
- * juego lee al arrancar. Las cinemáticas se convierten aparte, con ffmpeg
+ * entero. Las voces salen del idioma elegido (uno de los trece del
+ * Resurrected: las del español latino, de locales/audio/esmx; las del
+ * inglés, de la ruta de siempre) y el idioma queda anotado en `idioma.txt`
+ * ("esMX", "deDE"...), que el juego lee al arrancar. Las cinemáticas se convierten aparte, con ffmpeg
  * (import_movies), salvo con --sin-cinematicas.
  *
  * Compila para Windows (mingw), Linux y la Pi (aarch64); ver
@@ -41,7 +42,36 @@
 #define MKDIR(p) mkdir(p, 0755)
 #endif
 
-static int s_en; /* los mensajes en inglés */
+static int s_en; /* los mensajes en inglés (en todos los idiomas que no son español) */
+
+/* Los idiomas del Resurrected: el código (el de los .json y el de idioma.txt) y su nombre */
+static const struct {
+    const char *code, *name;
+} k_langs[] = {
+    { "esMX", "Español (Latinoamérica)" }, { "enUS", "English" },  { "esES", "Español (España)" },
+    { "deDE", "Deutsch" },                 { "frFR", "Français" }, { "itIT", "Italiano" },
+    { "ptBR", "Português (Brasil)" },      { "plPL", "Polski" },   { "ruRU", "Русский" },
+    { "jaJP", "日本語" },                  { "koKR", "한국어" },   { "zhCN", "简体中文" },
+    { "zhTW", "繁體中文" },
+};
+#define NUM_LANGS ((int)(sizeof k_langs / sizeof k_langs[0]))
+
+/* "deDE", "dede" (o "es" y "en", los de antes) -> su número; -1 = no está */
+static int lang_index(const char *s)
+{
+    if (!strcmp(s, "es"))
+        return 0;
+    if (!strcmp(s, "en"))
+        return 1;
+    for (int i = 0; i < NUM_LANGS; i++) {
+        int same = strlen(s) == 4;
+        for (int k = 0; same && k < 4; k++)
+            same = tolower((unsigned char)s[k]) == tolower((unsigned char)k_langs[i].code[k]);
+        if (same)
+            return i;
+    }
+    return -1;
+}
 
 #define T(es, en) (s_en ? (en) : (es))
 
@@ -551,7 +581,8 @@ int main(int argc, char **argv)
         else if (strcmp(argv[i], "--sin-cinematicas") == 0)
             movies = 0;
         else {
-            printf("uso / usage: %s [--idioma es|en] [--juego <Diablo II Resurrected>] [--destino <ports | código / source>]"
+            printf("uso / usage: %s [--idioma esMX|enUS|esES|deDE|frFR|itIT|ptBR|plPL|ruRU|jaJP|koKR|zhCN|zhTW]"
+                   " [--juego <Diablo II Resurrected>] [--destino <ports | código / source>]"
                    " [--sin-pausa] [--sin-cinematicas]\n",
                    argv[0]);
             return 2;
@@ -559,18 +590,20 @@ int main(int argc, char **argv)
     }
 
     printf("Diablo II port - importador / importer\n\n");
-    while (strcmp(lang, "es") != 0 && strcmp(lang, "en") != 0) {
+    int li = lang_index(lang);
+    while (li < 0) {
         char ans[32];
-        ask("Idioma del juego / Game language:\n  1) Español\n  2) English\n> ", ans, sizeof ans);
+        printf("Idioma del juego / Game language:\n");
+        for (int i = 0; i < NUM_LANGS; i++)
+            printf("  %2d) %s\n", i + 1, k_langs[i].name);
+        ask("> ", ans, sizeof ans);
         if (!ans[0] && feof(stdin))
             return 2;
-        int c0 = tolower((unsigned char)ans[0]), c1 = tolower((unsigned char)ans[1]);
-        if (strcmp(ans, "1") == 0 || (c0 == 'e' && c1 == 's'))
-            strcpy(lang, "es");
-        else if (strcmp(ans, "2") == 0 || (c0 == 'e' && c1 == 'n'))
-            strcpy(lang, "en");
+        int num = atoi(ans);
+        li = num >= 1 && num <= NUM_LANGS ? num - 1 : lang_index(ans);
     }
-    s_en = strcmp(lang, "en") == 0;
+    snprintf(lang, sizeof lang, "%s", k_langs[li].code);
+    s_en = strncmp(lang, "es", 2) != 0;
 
     /* El juego original */
     if (!game[0] && find_game(game, sizeof game) == 0)
@@ -624,8 +657,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    /* Dónde está cada uno: la ruta de siempre (las voces en inglés) o, en
-       español, la de locales/audio/esmx */
+    /* Dónde está cada uno: la ruta de siempre (las voces en inglés) o la del
+       idioma elegido (locales/audio/esmx, locales/audio/dede...) */
     printf("%s", T("Buscando los archivos...\n", "Looking for the files...\n"));
     CASC_FIND_DATA fd;
     HANDLE find = CascFindFirstFile(storage, "*", &fd, NULL);
@@ -635,15 +668,20 @@ int main(int argc, char **argv)
         pause_exit(pause);
         return 1;
     }
-    const char *loc = "locales/audio/esmx/";
+    char loc[32] = ""; /* (en inglés, ninguna: las de siempre) */
+    if (strcmp(lang, "enUS") != 0) {
+        snprintf(loc, sizeof loc, "locales/audio/%s/", lang);
+        for (char *c = loc; *c; c++)
+            *c = (char)tolower((unsigned char)*c);
+    }
     do {
         char name[1024];
         normalize(fd.szFileName, name, sizeof name);
         if (!fd.bFileAvailable)
             continue;
         /* la del idioma elegido gana; la otra queda si es la única */
-        int local = strncmp(name, loc, strlen(loc)) == 0;
-        int prio = local == !s_en ? 2 : 1;
+        int local = loc[0] && strncmp(name, loc, strlen(loc)) == 0;
+        int prio = local ? 2 : 1;
         Entry *e = lookup(local ? name + strlen(loc) : name);
         if (e && prio > e->prio) {
             free(e->casc_name);

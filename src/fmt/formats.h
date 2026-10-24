@@ -249,4 +249,22 @@ static inline Ds1Cell *ds1_floor(const Ds1 *m, int layer, int x, int y)
     return &m->floors[(layer * m->height + y) * m->width + x];
 }
 
+/* ---- Fuentes TrueType (las .ttf del Resurrected), ttf.c ---- */
+
+typedef struct {
+    const uint8_t *data; /* el archivo entero (no se copia: tiene que seguir ahí) */
+    size_t         size;
+    uint32_t       cmap, hmtx, loca, glyf;
+    int            cmap_fmt, loc_long, num_glyphs, num_hmetrics, upem, ascent, descent;
+} Ttf;
+
+int      ttf_open(Ttf *t, const uint8_t *data, size_t size);
+int      ttf_glyph_index(const Ttf *t, uint32_t cp); /* 0 = no la tiene */
+int      ttf_advance(const Ttf *t, int glyph);       /* en unidades (upem por cuadratín) */
+int      ttf_glyph_top(const Ttf *t, int glyph);     /* lo más alto del dibujo, en unidades */
+/* La letra a ese tamaño (px_size píxeles por cuadratín): cuánto cubre cada
+   píxel (0..255), w x h, desde (x0, y0) respecto de la línea base (y hacia
+   abajo). NULL si no tiene dibujo (el espacio). */
+uint8_t *ttf_render(const Ttf *t, int glyph, float px_size, int *w, int *h, int *x0, int *y0);
+
 #endif

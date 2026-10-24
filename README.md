@@ -119,10 +119,12 @@ You can also import straight to the Pi, if you already copied the port and
 have Batocera's share mounted:
 
 ```bash
-./d2port-importar --idioma en --destino /path/to/share/roms/ports
+./d2port-importar --idioma enUS --destino /path/to/share/roms/ports
 ```
 
-All the options: `--idioma es|en` (language), `--juego <game folder>`,
+All the options: `--idioma <code>` (language: `esMX`, `enUS`, `esES`,
+`deDE`, `frFR`, `itIT`, `ptBR`, `plPL`, `ruRU`, `jaJP`, `koKR`, `zhCN` or
+`zhTW`), `--juego <game folder>`,
 `--destino <ports folder>`, `--sin-pausa` (do not wait for Enter at the
 end) and `--sin-cinematicas` (skip the cinematics).
 
@@ -141,10 +143,18 @@ first gamepad used is player 1's. See [Controls](#controls).
 
 ### Language
 
-It is chosen when importing: **English** or **Spanish** (with Latin
-American Spanish voices). To change it, import again with the other
-language: the voices are replaced and the language is written to
-`.data/d2port/idioma.txt`.
+The port has Resurrected's **13 languages**: English, Latin American
+Spanish, Spanish (Spain), German, French, Italian, Brazilian Portuguese,
+Polish, Russian, Japanese, Korean, Simplified Chinese and Traditional
+Chinese.
+
+- It is chosen when importing. The importer brings that language's voices
+  and cinematic sound, if your copy of Resurrected has them installed
+  (Battle.net only downloads the voices of the language you play in;
+  otherwise they stay in English).
+- It can be changed any time in the main menu, under **LANGUAGE**: the game
+  restarts in the new language. The voices stay in the imported language;
+  to change them too, import again with the other language.
 
 ### Saved games, updating and uninstalling
 
@@ -479,9 +489,13 @@ mercenaries and the resistance penalty (-40 and -100).
 
 ### Languages
 
-- **English** or **Spanish** (Latin American), chosen when importing: the
-  game texts come from Resurrected in that language, and the engine's own
-  texts (menus, help, descriptions) are translated.
+- **Resurrected's 13 languages**, chosen when importing or in the main
+  menu: the game texts come from Resurrected in that language, and the
+  engine's own texts (menus, help, descriptions) are translated into each
+  one.
+- Latin-script languages use the original's fonts (Polish with its own
+  letters). Russian, Japanese, Korean and Chinese use Resurrected's
+  TrueType fonts, drawn at the size of the original ones.
 - Magic, rare and champion names are built in each language's word order,
   with the original's name formats.
 
@@ -573,8 +587,8 @@ purpose, to play comfortably on a Raspberry Pi with a gamepad.
 - **The cinematics** play in low quality (MPEG-1, 640x288) so the Pi can
   decode them.
 - **Six saved games**, and no Hardcore mode.
-- **The language** (English or Latin American Spanish) is chosen when
-  importing.
+- **The language** is chosen when importing or in the main menu. The voices
+  are those of the imported language.
 - **The game tables are Resurrected's current ones**, not those of the old
   1.14 version: for example, every runeword can be made outside the ladder
   (patch 2.4), and the mercenaries have their newer skills.
@@ -665,8 +679,6 @@ if you can, the `d2port.log`.
 
 - On a Pi 3B there can be a stutter when entering the biggest areas of
   Act 3 (Spider Forest, Great Marsh): building them takes almost 100 ms.
-- The cube guide still says Cain gives you the cube: it comes from the
-  Halls of the Dead chest, as in the original.
 - Some character lines are silent in Spanish: Resurrected does not ship
   that audio in Latin American Spanish.
 - Many engine messages and the developer notes are written in Spanish

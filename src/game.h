@@ -19,6 +19,7 @@ void game_start_slots(int num_players, const int *slots, const int *classes);
    antes de game_start_slots */
 void game_set_difficulty(int diff);
 void game_set_terror_zones(int on); /* las zonas de terror (con Baal muerto en esa dificultad) */
+void game_set_language(const char *code); /* el idioma elegido en el menú (opciones.txt; se usa al arrancar) */
 int  game_difficulty(void);
 int  game_tick(const InputState *in);
 void game_render(float alpha);

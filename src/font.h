@@ -26,5 +26,10 @@ int  font_width(const char *s, int scale);
 int  font_height(int scale);
 void font_draw(int x, int y, const char *s, int scale, uint8_t color);
 void font_draw_centered(int cx, int y, const char *s, int scale, uint8_t color);
+/* Cuántos bytes del principio de s entran en max_w píxeles (sin pasar de un
+   salto de línea): corta en el último espacio que entra o, en chino, japonés
+   y coreano, entre dos letras. El texto ya tiene que estar en el idioma de
+   la pantalla. */
+int  font_break(const char *s, int scale, int max_w);
 
 #endif

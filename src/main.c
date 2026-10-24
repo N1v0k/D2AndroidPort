@@ -8,12 +8,18 @@
 #include "input.h"
 #include "ui.h"
 #include "jobs.h"
+#include "lang.h"
 #include "map.h"
 #include "menu.h"
 #include "units.h"
 #include "video.h"
 
 #include <SDL.h>
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -405,6 +411,10 @@ static int run_headless(const Options *o)
                 dump_close();
                 return o->screenshot ? save_screenshot(o->screenshot) : 0;
             }
+            if (r == MENU_RESTART) { /* (sin ventana no se vuelve a arrancar: solo se guarda) */
+                game_set_language(menu_language());
+                printf("idioma elegido: %s\n", menu_language());
+            }
         }
         menu_render();
     } else if (o->autotest) {
@@ -544,6 +554,8 @@ static int run_headless(const Options *o)
     return o->screenshot ? save_screenshot(o->screenshot) : 0;
 }
 
+static int s_restart; /* al salir, el juego vuelve a arrancar (se eligió otro idioma) */
+
 static int run_window(const Options *o)
 {
     const double tick_s = 1.0 / TICK_RATE;
@@ -572,6 +584,7 @@ static int run_window(const Options *o)
     memset(&demo_in, 0, sizeof demo_in);
     int idle = 0, demo_next = 0; /* ticks con el menú quieto; la próxima pareja de la rotación */
     int movie = 0;                /* se pasó una cinemática en este tick */
+    int restart_wait = 0;         /* D2_RESTART_LANG */
     double demo_ms = 0.0;
 
     while (!in.quit) {
@@ -596,6 +609,18 @@ static int run_window(const Options *o)
                 } else if (r == MENU_MOVIE) {
                     in.quit = cinema_play(menu_movie()) == 1;
                     movie = 1;
+                } else if (r == MENU_RESTART) { /* otro idioma: se guarda y se arranca de nuevo */
+                    game_set_language(menu_language());
+                    s_restart = 1;
+                    in.quit = 1;
+                }
+                /* D2_RESTART_LANG=deDE (prueba): como si se eligiera ese idioma en el menú */
+                const char *rl = getenv("D2_RESTART_LANG");
+                if (rl && state == ST_MENU && !s_restart && strncmp(rl, lang_strings_code(), 4) != 0 && ++restart_wait > 10) {
+                    printf("prueba: vuelve a arrancar en %s\n", rl);
+                    game_set_language(rl);
+                    s_restart = 1;
+                    in.quit = 1;
                 }
                 /* Quieto en el menú principal: el bot se pone a jugar solo */
                 idle = menu_is_main() && !input_any(&in) ? idle + 1 : 0;
@@ -783,5 +808,17 @@ int main(int argc, char **argv)
     input_shutdown();
     video_shutdown();
     SDL_Quit();
+    if (s_restart) { /* otra vez, sin las cinemáticas del principio */
+        fflush(NULL);
+#ifdef _WIN32
+        _putenv("D2_NO_CINEMA=1");
+        _execv(argv[0], (const char *const *)argv);
+#else
+        setenv("D2_NO_CINEMA", "1", 1);
+        execv("/proc/self/exe", argv);
+        execv(argv[0], argv);
+#endif
+        fprintf(stderr, "no pude volver a arrancar el juego\n");
+    }
     return rc;
 }

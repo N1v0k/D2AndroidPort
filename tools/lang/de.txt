@@ -1,0 +1,784 @@
+# Deutsch. Nummer<TAB>Übersetzung (die Nummern aus tools/lang_tables.py lista)
+1	Akt %d
+2	Terrorzone: %s
+3	Terrorzone: %s (%d Min.)
+4	Links / rechts: Terrorzonen AN
+5	Links / rechts: Terrorzonen AUS
+6	X: Akt %d terrorisieren
+7	X: Punkte neu verteilen
+8	Truhe
+9	A: aufheben   X: verschieben   LB: sortieren   B: schließen
+10	Du trägst kein Gold
+11	In der Truhe ist kein Gold
+12	Nicht genug Gold: kostet %d
+13	Truhenfach %d
+14	Passt nicht in dieses Fach
+15	A: aufheben   X: in die Truhe   LB: sortieren   B: schließen
+16	A: aufheben   X: in den Rucksack   B: schließen
+17	A oder X: hier ablegen   B: zurück in den Rucksack
+18	A: aufheben und beliebig ablegen
+19	X: zwischen Rucksack und Truhe verschieben
+20	LB: dieses Fach sortieren
+21	Fächer: eins pro Akt; + kauft ein weiteres
+22	Gold in der Truhe geht beim Tod nicht verloren
+23	Gold einlagern
+24	Gold entnehmen
+25	X auf etwas im Rucksack legt es in die Truhe
+26	Eines für jeden Akt, den du erreichst
+27	Weiteres Fach kaufen
+28	Kostet %d Gold
+29	Jedes kostet dreimal so viel wie das vorige
+30	Noch %d kaufbar
+31	A: kaufen
+32	Nochmal A: kaufen
+33	Alles getragene Gold einlagern
+34	Alles Gold aus der Truhe nehmen
+35	Beim Tod verlierst du einen Teil des getragenen Golds,
+36	nicht das Gold in der Truhe
+37	Du hast %d Gold verloren
+38	A: %s
+39	A: %s (verbraucht einen Schlüssel)
+40	%s: Schlüssel nötig
+41	Du brauchst einen Schlüssel
+42	A: Lam Esens Foliant nehmen
+43	A: Den Gidbinn nehmen
+44	A: Truhe öffnen
+45	A: Hebel ziehen
+46	A: Hypnotische Kugel schlagen (%d von 2)
+47	Du brauchst Khalims Wille in der Hand
+48	A: Portal betreten
+49	Akt 5 ist noch nicht da
+50	A: Siegel öffnen
+51	A: Mephistos Seelenstein auf die Schmiede legen
+52	Du brauchst Mephistos Seelenstein
+53	A: Den Stein schlagen (%d von 3)
+54	Du brauchst den Hammer der Höllenschmiede in der Hand
+55	Izual ist tot: sprich mit seinem Geist
+56	Mephistos Seelenstein ist zerschlagen: sag es Cain
+57	Die Treppe ist versperrt: zerstöre die Hypnotische Kugel
+58	Das Gitter ist geschlossen
+59	Der Hohe Rat ist tot: kehre zu Ormus zurück
+60	Diesen Trank hast du schon getrunken
+61	Du hast 20 Leben erhalten
+62	Bedienung
+63	Edelsteine
+64	Runen
+65	Runenworte
+66	Tränke
+67	Sockel
+68	Magisch
+69	Handwerk
+70	Verbesserungen
+71	Verschiedenes
+72	Beliebiger Gegenstand
+73	Heiltrank (beliebig)
+74	Manatrank (beliebig)
+75	Angeschlagener Edelstein (beliebig)
+76	Makelhafter Edelstein (beliebig)
+77	Edelstein (beliebig)
+78	Makelloser Edelstein (beliebig)
+79	Perfekter Edelstein (beliebig)
+80	Rubin (beliebig)
+81	Diamant (beliebig)
+82	Schädel (beliebig)
+83	Waffe
+84	Rüstungsteil
+85	Körperrüstung
+86	Helm
+87	Schild
+88	Axt (beliebig)
+89	Dolch (beliebig)
+90	Speer (beliebig)
+91	Schwert
+92	Stab
+93	Gürtel
+94	Stangenwaffe
+95	Stumpfe Waffe
+96	Zauberstab
+97	Ring
+98	Amulett
+99	 (magisch)
+100	 (selten)
+101	 (Set)
+102	 (einzigartig)
+103	 (gefertigt)
+104	 (normal, weiß)
+105	 (minderwertig)
+106	 (überlegen)
+107	 (normale Version)
+108	 (außergewöhnliche Version)
+109	 (Elite-Version)
+110	, ohne Sockel
+111	, mit Sockeln
+112	Derselbe Gegenstand
+113	Ein gleicher
+114	 (normal)
+115	 (außergewöhnliche Version)
+116	 (Elite-Version)
+117	 mit geleerten Sockeln
+118	 repariert und aufgeladen
+119	 mit %d weiteren Sockel
+120	 mit %d weiteren Sockeln
+121	 mit Sockeln
+122	: Treffer (Frostnova bei Treffern)
+123	: Blut (Lebensraub)
+124	: Zauberer (Manaregeneration)
+125	: Sicherheit (Schadensreduzierung)
+126	Barbar
+127	Amazone
+128	Zauberin
+129	Paladin
+130	Totenbeschwörer
+131	Assassine
+132	Druide
+133	Hexenmeister
+134	Inventar voll
+135	Für eine andere Klasse
+136	Zu wenig Stärke
+137	Zu wenig Geschicklichkeit
+138	Deine Stufe ist zu niedrig
+139	Giftwiderstand
+140	Kältewiderstand
+141	Kein Schild mit einer Zweihandwaffe
+142	Der Würfel ist leer
+143	Das ist kein Rezept
+144	Verwandelt!
+145	Dieses Buch hast du schon gelernt
+146	Du hast einen Fertigkeitspunkt erhalten
+147	Passt nicht in den Würfel
+148	Das gehört nicht dorthin
+149	Kein Platz für den Schild
+150	Passt dort nicht hin
+151	In den Gürtel kommen nur Tränke
+152	Leg es in den Rucksack
+153	Muss nicht gelernt werden
+154	In diesem Port noch nicht vorhanden
+155	Schon auf dem Maximum
+156	Benötigt Stufe %d
+157	Benötigt %s
+158	Du hast keine Fertigkeitspunkte mehr
+159	Du musst sie zuerst lernen
+160	Passive Fertigkeiten kommen auf keine Taste
+161	Angriff
+162	Werfen
+163	(leer)
+164	Schaden %d-%d, geworfen %d-%d, noch %d
+165	Schaden %d-%d%s, Stärke %d
+166	 (zweihändig)
+167	Anzahl: %d (für %s)
+168	Verteidigung %d, Stärke %d
+169	Heilt %d Leben
+170	Stellt %d Mana wieder her
+171	Stellt %d%% Leben und Mana wieder her
+172	Stellt die Ausdauer wieder her
+173	Sprechen
+174	Handeln
+175	Anheuern
+176	Wiederbeleben
+177	Verzaubern
+178	Nach Osten reisen
+179	Nach Westen reisen
+180	Glücksspiel
+181	Verlassen
+182	Söldnerin
+183	Söldner
+184	Zu wenig Stärke
+185	Zu wenig Geschicklichkeit
+186	Ihre Stufe ist zu niedrig
+187	Du hast nicht genug Gold
+188	Du hast %s angeheuert
+189	Noch nicht aktiviert
+190	Rüstung
+191	Waffen
+192	Verkaufen
+193	Erhalten: %s
+194	Du hast mehr aus dem Rucksack genommen
+195	Du hast nichts mehr zum Werfen
+196	Keine Munition mehr
+197	Du brauchst einen Bogen oder eine Armbrust
+198	Du hast nichts zum Werfen
+199	Dir fehlen Bolzen (Köcher in der anderen Hand)
+200	Dir fehlen Pfeile (Köcher in der anderen Hand)
+201	%s ist gestorben
+202	Du brauchst einen Schild
+203	Nicht mit dieser Waffe
+204	Du hast nicht genug Mana
+205	Keine Leiche in der Nähe
+206	In der Stadt wird nicht gekämpft
+207	Du brauchst eine Wurfwaffe
+208	Kein Ziel
+209	Du brauchst die Bärengestalt
+210	Du brauchst die Wolfsgestalt
+211	Du brauchst zwei Waffen
+212	Du brauchst eine Wurfwaffe in jeder Hand
+213	Du brauchst einen Bogen mit Pfeilen
+214	Hier gibt es nichts wiederzubeleben
+215	Du brauchst eine Waffe oder Rüstung am Boden
+216	Den kann man nicht wiederbeleben
+217	Der Dämon ist davongezogen
+218	Diesen Dämon kann man nicht binden
+219	Noch nicht
+220	Du brauchst einen Dämon
+221	Du brauchst eine Waffe
+222	Kein Dämon in der Nähe
+223	Den kann man nicht binden
+224	Für einen Boss braucht es Stufe 15
+225	Hilfe!
+226	Folgt mir
+227	Das gehört dir
+228	Danke
+229	Entschuldigung
+230	Wiedersehen!
+231	Sterbt!
+232	Lauft!
+233	Sätze
+234	A: sagen   B: schließen
+235	Die Sonne ist zurück: sag es den Leuten in Lut Gholein
+236	%s: Quest erfüllt!
+237	Ein Portal nach Tristram hat sich geöffnet
+238	Das Portal wurde in diesem Spiel schon geöffnet
+239	Du hast den Kuhkönig getötet: das Portal öffnet sich nicht mehr
+240	Zuerst muss Baal besiegt werden
+241	Öffnet sich nur im Lager der Jägerinnen
+242	Ein Portal nach %s hat sich geöffnet
+243	Portal zum Kuhlevel (im Lager, nach Baal)
+244	Alptraum
+245	Hölle
+246	ALPTRAUM
+247	HÖLLE
+248	Schwierigkeit: %s
+249	Für das Ritual brauchst du Stufe %d
+250	WÄHLE DIE SCHWIERIGKEIT
+251	Öffnet sich, wenn Baal in der vorigen besiegt ist
+252	A: spielen     B: zurück
+253	A: %s nehmen
+254	A: Den Stein berühren (%d von 5)
+255	A: Deckard Cain befreien
+256	Hammer
+257	A: Den Foliant lesen
+258	A: Den Altar zerstören
+259	A: Horazons Tagebuch lesen
+260	A: Den Horadrimstab einsetzen
+261	Du brauchst den Horadrimstab
+262	Du hast Deckard Cain gerettet: er wartet im Lager auf dich
+263	Radament ist tot: kehre zu Atma zurück
+264	Der Geisterbeschwörer ist tot: lies Horazons Tagebuch
+265	Duriel ist tot: sprich mit Tyrael
+266	Baal ist tot: sprich mit Tyrael
+267	Die Sonne hat sich verdunkelt
+268	%s gereinigt!
+269	Offen
+270	Laufend
+271	Erfüllt
+272	Quests
+273	Steuerkreuz: wählen   Y: Inventar   B: schließen
+274	Steuerkreuz: Quest wählen
+275	LB / RB: anderer Akt
+276	LB / RB: andere Quest
+277	X: der andere Spieler
+278	Quests von S%d: %s
+279	Quests: %s
+280	A: %s benutzen
+281	A: Mit %s sprechen
+282	Du hast keine normalen Waffen oder Rüstungen
+283	Verzaubern nicht möglich
+284	Charsi macht es selten: 3 bis 6 Eigenschaften
+285	A: verzaubern   B: zurück
+286	(angelegt)
+287	B: schließen
+288	magisch
+289	selten
+290	Set
+291	einzigartig
+292	DRÜCKE START ZUM BEGINNEN
+293	Demo: der Bot spielt allein
+294	Demo: der Bot spielt allein (Akt %d, %s)
+295	Position %d, %d
+296	%.0f fps   Logik %.1f ms (max. %.0f)   Zeichnen %.1f   Hochladen %.1f   Anzeigen %.1f
+297	DU HAST STUFE %d ERREICHT
+298	%s-Schaden: %d bis %d
+299	Zweihand
+300	Einhand
+301	Wurfschaden: %d bis %d
+302	Anzahl: %d
+303	Verteidigung: %d
+304	Blockchance: %d%%
+305	Für Bögen
+306	Für Armbrüste
+307	Schlucke: %d von %d
+308	Benötigte Geschicklichkeit: %d
+309	Benötigte Stärke: %d
+310	Benötigte Stufe: %d
+311	%d Gold
+312	 (nicht %s)
+313	Bögen und Armbrüste
+314	Nahkampfwaffen
+315	Stangenwaffen
+316	Paladinschilde
+317	Totenbeschwörerköpfe
+318	Inventar
+319	Sortieren
+320	Rezepte: Optionen, Würfel-Handbuch
+321	Horadrimwürfel
+322	A/X: hier ablegen   RB/Y: auf den Boden   B: wegstecken
+323	A: aufheben   X: verschieben   RB: auf den Boden   B: schließen
+324	A: aufheben  X: benutzen  RB: wegwerfen  LB: sortieren  Y: mehr
+325	Handschuhe
+326	Stiefel
+327	Verbindet, was im Würfel liegt,
+328	wenn es ein Rezept ist (Optionen, Würfel-Handbuch)
+329	X auf etwas im Rucksack legt es in den Würfel
+330	Sortiert den Rucksack (auch mit LB)
+331	Charakter
+332	A: Attributpunkte verteilen
+333	Nicht verteilte Punkte: %d%.0s
+334	A: Punkt hinzufügen   Y: Inventar   B: schließen
+335	Y: Inventar   B: schließen
+336	Punkte
+337	Schaden
+338	Angriffswert
+339	Feuerwid.
+340	Kältewid.
+341	Blitzwid.
+342	Giftwid.
+343	Du hast keine Attributpunkte mehr
+344	Der normale Angriff mit deiner Waffe:
+345	Wirft die Waffe in deiner Hand
+346	(Wurfspieße, Messer, Wurfäxte)
+347	Nahkampf oder ein Schuss mit dem Bogen
+348	Aktuelle Stufe: %d
+349	Nächste Stufe:
+350	Erste Stufe:
+351	Manakosten: %d
+352	%s legen auf:
+353	Steuerkreuz: wählen   A: zuweisen   B: abbrechen
+354	Tasten
+355	Steuerkreuz: wählen   A: zuweisen   B: zurück
+356	A: ändern   Y: Charakter   B: schließen
+357	Was jede Taste macht
+358	Wähle eine Taste und drücke A,
+359	um ihre Funktion zu ändern.
+360	Auch im Fertigkeitsbaum:
+361	X auf einer Fertigkeit.
+362	Fertigkeiten
+363	Steuerkreuz: Taste wählen   A: zuweisen   B: abbrechen
+364	A: lernen   X: auf eine Taste legen   Y: Tasten   B: schließen
+365	Fertigkeits-
+366	punkte
+367	A: wählen   B: verlassen
+368	St. %d
+369	Gratis
+370	Leben %d   Verteidigung %d   Schaden %d-%d
+371	Dein Gold: %d
+372	Die erste ist gratis: deine Belohnung
+373	Ersetzt deinen jetzigen
+374	A: anheuern   B: zurück
+375	A: spielen   B: zurück
+376	Links/Rechts: Reiter   A: kaufen/verkaufen   B: zurück
+377	Gold
+378	Nichts mehr übrig
+379	Du hast nichts zu verkaufen
+380	Keine Ware mehr
+381	Glücksspiel: %d
+382	Du erhältst
+383	Kosten
+384	Die Jägerin benutzt keinen Schild
+385	Sie ist tot: lass sie bei Kaschya wiederbeleben
+386	Du hast nichts, was dorthin passt
+387	A: anlegen   B: zurück
+388	A: aus dem Rucksack wählen   X: abnehmen   Y: Inventar
+389	Leben: %d / %d
+390	Stufe %d
+391	Angriffswert %d
+392	Feuerwid.
+393	Kältewid.
+394	Blitzwid.
+395	Giftwid.
+396	Tot: lass sie bei Kaschya wiederbeleben
+397	Bogen
+398	Schild (die Jägerin benutzt keinen)
+399	Wähle, was sie anlegen soll
+400	A: reisen   B: schließen   <>: Akt
+401	A: reisen   B: schließen
+402	%d Sockel: %s
+403	%d von %d
+404	%s: was es gibt
+405	HORADRIMWÜRFEL-HANDBUCH
+406	1. Der Horadrimwürfel liegt in einer Truhe in den Hallen der Toten (Akt 2).
+407	2. Öffne das Inventar und drücke X auf dem Würfel: er öffnet sich anstelle der Ausrüstung.
+408	3. Bei offenem Würfel legt X auf etwas im Rucksack es in den Würfel,
+409	    und X auf etwas im Würfel legt es zurück in den Rucksack.
+410	4. Lege genau das hinein, was ein Rezept verlangt (nicht mehr und nicht weniger).
+411	5. Geh hinunter zu VERWANDELN und drücke A oder X: das Ergebnis bleibt im Würfel.
+412	Mit A kannst du auch etwas aufheben und von Hand ablegen, wie im Rucksack.
+413	Ein Edelstein, eine Rune oder ein Juwel in der Hand, auf einen Gegenstand mit freien Sockeln
+414	gelegt, wird eingesetzt. Runen in der richtigen Reihenfolge ergeben ein Runenwort (eigener Reiter).
+415	Die Rezepte sind in den anderen Reitern: links und rechts (oder LB und RB).
+416	In den Würfel legen:
+417	Ergebnis: %s
+418	Links / rechts: Kategorie    Hoch / runter: Rezept    B: zurück
+419	WEITERSPIELEN
+420	EFFEKTE
+421	MUSIK
+422	IMMER RENNEN
+423	POSITION ZEIGEN
+424	LEISTUNG
+425	16-BIT-FARBE
+426	WÜRFEL-HANDBUCH
+427	SPEICHERN UND BEENDEN
+428	JA
+429	NEIN
+430	PAUSE
+431	A: wählen   Links / rechts: ändern   B: zurück
+432	der linke Stick
+433	das Steuerkreuz
+434	der rechte Trigger
+435	die R1-Taste
+436	EINZELSPIELER
+437	ZWEI SPIELER
+438	BEENDEN
+439	VIDEOS
+440	Schlüssel öffnen verschlossene Truhen
+441	Öffnen verschlossene Truhen (%d)
+442	Öffnet ein Portal in die Stadt
+443	Öffnen ein Portal in die Stadt (%d)
+444	X: Stapel auffüllen (%d für %d)
+445	X: Portal öffnen
+446	Dieser Gürtelplatz ist belegt
+447	Dort liegt schon etwas
+448	In der Stadt nicht nötig
+449	VIDEO WÄHLEN
+450	Einführung
+451	Akt II
+452	Akt III
+453	Akt IV
+454	Epilog
+455	Die Suche nach Baal
+456	Das Ende der Zerstörung
+457	ABBRECHEN
+458	A: ansehen     B: zurück     (noch nicht gesehene sind nicht wählbar)
+459	Diesen Charakter hat Spieler 1 schon gewählt
+460	Verbundene Controller: %d
+461	Spieler 1: der zuerst benutzte Controller oder WASD   -   Spieler 2: der zweite oder die Pfeiltasten
+462	SPIELER %d: WÄHLE DEINEN CHARAKTER
+463	WÄHLE DEINEN CHARAKTER
+464	Stufe %d  %s
+465	Von Spieler 1 gewählt
+466	Spielstand %d
+467	Spielstand %d leer
+468	A: Charakter erstellen
+469	A: spielen     X: löschen     B: zurück
+470	WÄHLE DIE KLASSE
+471	Schlägt hart zu
+472	und schreit
+473	Bögen und
+474	Wurfspieße
+475	Feuer, Blitze
+476	und Kälte
+477	Auren
+478	und Schild
+479	Flüche
+480	und Tote
+481	Klauen, Fallen
+482	und Schatten
+483	Bestien, Feuer
+484	und Wind
+485	Dämonen, Bannflüche
+486	und Chaos
+487	A: erstellen     B: zurück
+488	%s der Stufe %d löschen?
+489	Alles geht verloren: Stufe, Ausrüstung und Gold
+490	JA, LÖSCHEN
+491	+%d%% Schaden, +%d Schaden, stößt zurück
+492	+%d%% Angriffswert, +%d%% Schaden, betäubt %.1f s
+493	+%d%% Schaden, +%d%% Angriffswert, +%d%% Verteidigung
+494	Monster fliehen %d s (Radius %d)
+495	+%d%% Verteidigung für die Gruppe, %d s
+496	Monster: %d%% Verteidigung und %d%% Schaden für %d s
+497	Ein Monster: %d%% Angriffswert und %d%% Schaden
+498	%d%% Chance, einen Trank in einer Leiche zu finden
+499	%d%% Chance, einen Gegenstand in einer Leiche zu finden
+500	+%d%% Schaden, +%d%% Angriffswert, %d%% kritischer Treffer
+501	+%d%% Ausdauer
+502	+%d%% Verteidigung
+503	+%d%% Lauf- und Renngeschwindigkeit
+504	+%d%% auf Feuer-, Kälte- und Blitzwiderstand
+505	Springt bis zu %d Unterfelder weit und stößt Umstehende zurück
+506	Landet auf dem Monster: +%d%% Schaden, +%d%% Angriffswert
+507	Zwei Waffen: ein Treffer mit jeder, +%d%% Schaden, +%d%% Angriffswert
+508	Wirft beide Waffen: +%d%% Schaden, +%d%% Angriffswert
+509	Zwei Waffen: +%d%% Schaden; jeder Treffer bis +%d%% Tempo und +%d%% Angriff
+510	Dreht sich und trifft alle: +%d%% Schaden, +%d%% Angriffswert
+511	+%d%% magischer Schaden, +%d%% Angriffswert; Verteidigung 0 für %.1f s
+512	+%d%% Leben, Mana und Ausdauer für die Gruppe, %d s
+513	+%d auf alle Fertigkeiten der Gruppe für %d s
+514	Totem auf einer Leiche: verscheucht im Umkreis von %d Unterfeldern, %d s
+515	%d-%d Schaden ringsum, betäubt %.1f s
+516	Aufeinanderfolgende Treffer mit %+d%% Schaden, +%d%% Angriffswert
+517	+%d%% Schaden, verlangsamt das Monster; langsamer Angriff
+518	Trifft alle ringsum: +%d%% Schaden, +%d%% Angriffswert
+519	Fügt %d-%d Blitzschaden hinzu, +%d%% Angriffswert
+520	Entfesselt %d Comboblitze mit %d-%d Blitzschaden
+521	Kettenblitz auf %d Monster: %d-%d Blitzschaden
+522	-%d Verteidigung für Monster, %d s
+523	Monstergeschosse fliegen %d%% schnell, %d s
+524	Ein Abbild, das Monster ablenkt, %d s
+525	Beschwört eine Walküre (+%d%% Leben, +%d%% Angriffswert)
+526	%d%% Chance auf doppelten Schaden
+527	%d%% Chance, im Stehen einem Treffer auszuweichen
+528	%d%% Chance, im Stehen einem Geschoss auszuweichen
+529	%d%% Chance, in Bewegung Treffern und Geschossen zu entgehen
+530	+%d%% Angriffswert
+531	%d%% Chance, dass das Geschoss das Monster durchdringt
+532	Magischer Pfeil: +%d Schaden, +%d%% Angriffswert, verbraucht keine Pfeile
+533	%s %d-%d Feuerschaden, +%d%% Angriffswert
+534	Explodiert mit
+535	Fügt hinzu:
+536	Explodiert mit %d-%d Feuerschaden und lässt den Boden brennen
+537	Fügt %d-%d Kälteschaden hinzu, %s %.1f s
+538	friert ein
+539	kühlt
+540	Explodiert mit %d-%d Kälteschaden und friert %.1f s ein
+541	Schießt %d Pfeile mit 75%% des Schadens
+542	Je ein Pfeil auf %d Monster, +%d%% Schaden
+543	Sucht das Monster und trifft immer, +%d%% Schaden
+544	%d-%d Giftschaden in %d s
+545	Durchdringender Blitz: %d-%d Blitzschaden
+546	Beim Aufprall %d Blitze mit %d-%d Blitzschaden
+547	%s%d-%d Feuerschaden
+548	Explodiert mit\
+549	%s%d-%d Kälteschaden, %s %.1f s
+550	Nova:\
+551	%d Funken mit %d-%d Blitzschaden
+552	%s%d-%d Blitzschaden
+553	Durchdringender Blitz:\
+554	%d-%d Blitzschaden, springt %d-mal
+555	Speit Stöße mit %d-%d Kälteschaden
+556	Nimmt Umstehenden %d%% des Lebens (Radius %d)
+557	%d-%d Blitzschaden; stößt manchmal zurück und betäubt
+558	Springt in Blickrichtung
+559	Hinterlässt Feuer, wo du gehst: %d-%d pro Sekunde, %d s
+560	%s: %d-%d Feuerschaden pro Sekunde
+561	Flammen
+562	Wand
+563	Schlägt nach 2,4 s ein: %d-%d Feuerschaden und hinterlässt Feuer
+564	Eissplitter mit %d-%d Kälteschaden
+565	Drei Köpfe für %d s, die %d-%d Feuer speien
+566	+%d%% Verteidigung für %d s; friert Angreifer %.1f s ein
+567	+%d%% Verteidigung für %d s; %d-%d Kälte für jeden, der %s
+568	dich trifft
+569	auf dich schießt
+570	Mana absorbiert %d%% des Schadens, %d s
+571	Ein Blitz mit %d-%d alle 1,6 s, %d s lang
+572	+%d-%d Feuer auf deine Treffer, %d s
+573	+%d%% Manaregeneration
+574	+%d%% %s-Schaden
+575	Feuer
+576	Blitz
+577	Kälte
+578	-%d%% auf den Kältewiderstand der Monster
+579	+%d%% Schaden, +%d%% Angriffswert; %d%% des Schadens verletzen dich
+580	Schildschlag, der nie verfehlt: +%d%% Schaden, betäubt %.1f s
+581	%d-%d magischer Schaden an Untoten und Dämonen; heilt Verbündete um %d-%d
+582	%d Treffer in Folge: +%d%% Schaden, +%d%% Angriffswert
+583	Stürmt zum Monster: +%d%% Schaden, +%d%% Angriffswert
+584	Vom Waffenschaden: +%d%% Feuer, +%d%% Kälte, +%d%% Blitz
+585	Kreisender Hammer: %d-%d magischer Schaden
+586	%d%% Chance, dass das Monster %d s für dich kämpft
+587	+%d%% Verteidigung, +%d%% Blocken, Niederstrecken +%d-%d, %d s lang
+588	Blitz mit %d-%d und bis zu %d heilige Blitze
+589	Aura: +%d%% Schaden
+590	Aura: %d-%d %s an alle ringsum; +%d-%d auf deine Treffer
+591	Kälte (und verlangsamt)
+592	Aura: wer dich trifft, erleidet %d%% des Schadens
+593	Aura: +%d%% Angriffswert
+594	Aura: %d-%d magischer Schaden an Untoten, stößt sie zurück
+595	Aura: +%d%% Angriffstempo, +%d%% Angriffswert, +%d%% Schaden
+596	Aura: %d%% Verteidigung und -%d%% Widerstände der Monster
+597	Aura: heilt %d Leben alle 2 s
+598	Aura: +%d%% Widerstand gegen %s
+599	Aura: +%d%% Verteidigung
+600	Aura: Gift und Flüche halten %d%% so lange
+601	Aura: +%d%% Tempo, +%d%% Ausdauer
+602	Aura: +%d%% Manaregeneration
+603	Aura: %d%% Chance, eine Leiche für %d Leben und Mana zu nehmen
+604	Aura: +%d%% auf alle Widerstände
+605	Erleiden +%d%% physischen Schaden
+606	Sehen nur, wer direkt neben ihnen ist (Bosse nicht)
+607	Treffen %d%% schwächer
+608	%d%% ihres Nahkampfschadens kehrt zu ihnen zurück
+609	Fliehen (Bosse nicht)
+610	Greifen sich gegenseitig an (Bosse nicht)
+611	Wer sie im Nahkampf trifft, heilt sich um %d%% des Schadens
+612	Umstehende greifen den Verfluchten an
+613	%d%% Tempo, Schaden und physischer Widerstand
+614	-%d%% auf Widerstände (gegen Immune ein Fünftel)
+615	%d Zähne mit %d-%d magischem Schaden
+616	Absorbiert %d Nahkampfschaden
+617	%s%d-%d Giftschaden in %d s
+618	Mit Dolch:\
+619	%d bis %d%% des Lebens der Leiche, halb Feuer (Radius %d)
+620	Knochen mit +%d%% Leben, die den Weg versperren, %d s
+621	%d-%d magischer Schaden; %s
+622	durchdringt
+623	sucht das Monster
+624	Skelette: +%d Leben und +%d Schaden; Wiederbelebte: +%d%% Leben und +%d%% Schaden
+625	Bis zu %d für %d s, mit +%d%% Leben (keine Bosse)
+626	Bis zu %d (aus einer Leiche), mit +%d%% Leben
+627	+%d%% Leben; verlangsamt Getroffene um %d%%
+628	+%d%% Leben; raubt %d%% des Schadens und gibt dir %d%%
+629	Aus einer Waffe oder Rüstung am Boden; wirft %d Schaden zurück
+630	%d-%d Feuer auf seine Treffer und Heiliges Feuer Stufe %d
+631	Golems: +%d%% Leben, +%d%% Tempo und +%d Angriffswert
+632	Diener: +%d%% auf Widerstände
+633	Ladung: +%d%% Schaden pro Ladung beim Finalschlag
+634	Ladung: raubt %d%% als Leben (mit 2 auch Mana; mit 3 doppelt)
+635	Ladung: %d-%d %s; mit 2: %s; mit 3: %s
+636	eine Nova
+637	eine Explosion
+638	Feuer am Boden
+639	Funken
+640	Ladung: mit 1 ein Meteor; mit 2 ein Blitzring; mit 3 Eis ringsum
+641	Bis zu %d Raben%.0s mit %d-%d Schaden, die %d-mal treffen
+642	Eine Ranke, die vergiftet: %d-%d in %d s; +%d%% Leben
+643	Frisst Leichen: jede stellt %d%%%s wieder her
+644	 deines Lebens
+645	 deines Manas
+646	Bis zu %d Wölfe%.0s mit %d-%d Kälte, +%d Angriffswert und +%d%% Leben
+647	Ein Bär mit %d-%d Schaden und +%d%% Leben
+648	Bis zu %d Wölfe%.0s mit %d-%d Schaden und +%d%% Leben
+649	Ein Geist, der Umstehenden +%d%% Leben gibt
+650	Ein Geist, der +%d%% Schaden und +%d%% Angriffswert gibt
+651	Ein Geist: wer dich trifft, erleidet %d Schaden
+652	Wolf für %d s: +%d%% Angriffstempo, +%d%% Angriffswert, +%d%% Leben
+653	Bär für %d s: +%d%% Schaden, +%d%% Verteidigung, +%d%% Leben
+654	Verwandelt: +%d%% Leben und %d s länger
+655	+%d%% Schaden; jeder Treffer gibt eine Ladung (bis %d): mehr Tempo und Lebensraub
+656	Jeder Treffer gibt eine Ladung (bis %d): je +%d%% Schaden, und betäubt
+657	Ein Biss, der vergiftet (%d-%d in %d s) und ansteckt
+658	+%d-%d Feuer auf den Treffer
+659	Ein Biss, der %d%% Leben und %d%% Mana raubt (%d%% Schaden)
+660	%d Treffer in Folge mit +%d%% Schaden
+661	Eine Welle mit %d-%d Schaden, die %.1f s betäubt
+662	%d Flammen, die Feuer hinterlassen: %d-%d pro Sekunde
+663	Rollt und stößt zurück: %d-%d Schaden und %d-%d Feuer
+664	Speit Felsen mit %d-%d Schaden und %d-%d Feuer
+665	Felsen fallen ringsum: %d-%d Schaden und %d-%d Feuer
+666	Feuerrisse: %d-%d Schaden
+667	Ein Kältestrahl: %d-%d pro Sekunde (Reichweite %d)
+668	Absorbiert %d Feuer-, Kälte- und Blitzschaden
+669	%d Wirbelstürme mit %d-%d Schaden, die %.1f s betäuben
+670	Ein Tornado mit %d-%d Schaden
+671	Kälte ringsum für %d s: %d-%d
+672	Ein Ziegenmensch, der im Nahkampf kämpft
+673	Ein Besudelter, der Feuerbälle wirft
+674	Ein Entweiher, der die Seelen der Feinde verbindet
+675	%s; +%d%% Leben (bis zu %d Dämonen%.0s)
+676	Deine Dämonen: +%d%% Tempo, +%d Angriffswert, +%d%% Schaden; bis zu %d
+677	Dein Dämon springt den Feind an und senkt seine Verteidigung um %d für %d s
+678	%d%% des Schadens, den du erleidest, geht an deinen Dämon; er erhält +%d%% Widerstände
+679	Dein Dämon frisst eine Leiche und heilt %d%% seines Lebens
+680	Deine Dämonen explodieren: %d-%d Schaden und %d-%d Feuer
+681	Du opferst einen Dämon: +%d%% maximales Leben und +%d%% Tempo für %d s
+682	%d%% Chance, einen verwundeten Dämon zu behalten (+%d%% Leben und Schaden)
+683	Mit einer Waffe: +%d%% Schaden, +%d%% Angriffswert und %d%% kritischer Treffer
+684	Für %d s: %d-%d Magie an verhexte Feinde ringsum; raubt %d%%
+685	Waffe: +%d-%d Magie; Getroffene erhalten -%d%% Verteidigung
+686	Waffe: +%d Leben und +%d Mana pro Tötung; Getroffene machen -33%% Schaden
+687	Waffe: +%d%% Tempo; Getroffene können explodieren (%d-%d Magie)
+688	Absorbiert %d Schaden; betäubt, wer dich aus der Nähe trifft
+689	Waffenechos, die alle durchdringen: +%d%% Schaden
+690	Du wirfst eine Astralwaffe und erscheinst, wo sie trifft: %d-%d Magie
+691	Trifft alle in einem Bogen von %d Grad: +%d%% Schaden
+692	%d Waffenspiegelungen mit %d%% des Schadens
+693	Ein Siegel für %d s: verlangsamt um die Hälfte und senkt die Verteidigung um %d%%
+694	Ein Siegel für %d s: wer darin ist, kämpft gegeneinander
+695	Ein Siegel für %d s: wer unter %d%% Leben hat, stirbt und explodiert
+696	%d Flammen ringsum: %d-%d Feuer; stoßen zurück
+697	%d-%d Magie und eine Miasmawolke
+698	Ketten auf bis zu %d Feinde: %d-%d Magie und Miasma
+699	Miasma: +%d%% Schaden, +%d%% Radius und Dauer; Abgrund: +%d%%
+700	Eine vorrückende Feuerwelle: %d-%d und der Boden brennt
+701	Höllenfeuer ringsum: %d-%d; -%d%% Feuerwiderstand
+702	Ein Riss, der Feinde anzieht und explodiert: %d-%d Magie
+703	Tritte: %d%.0s mit +%d%% Schaden; der letzte stößt zurück
+704	Mit zwei Klauen: +%d%% Schaden
+705	Ein Tritt mit +%d%% Schaden, der in Feuer explodiert (Radius %d)
+706	Springt neben das Monster und tritt mit +%d%% Schaden zu
+707	Mit Klauen: +%d%% Angriffswert, +%d%% Schaden, %d%% kritischer Treffer
+708	Mit zwei Klauen: %d%% Blockchance
+709	%d-%d magischer Schaden, stößt zurück
+710	+%d%% Tempo und +%d%% Angriffstempo für %d s
+711	+%d%% auf Widerstände für %d s
+712	Treffer mit %d-%d Gift, %d s lang
+713	Blendet Umstehende und senkt ihre Verteidigung um %d%%, %d s
+714	Betäubt Umstehende; %d%% Chance, sie zu bekehren (keine Bosse)
+715	Ein dunkler Klon mit deiner Ausrüstung (+%d Angriffswert)
+716	Eine Bombe mit %d-%d Feuer
+717	Blitze am Boden: %d-%d pro Sekunde
+718	%d-%d Schaden plus %d%% des Waffenschadens%s
+719	, fliegt hin und zurück
+720	, trifft die Nebenstehenden
+721	Falle: %d Schüsse mit %d-%d %s%s
+722	; lässt Leichen explodieren
+723	 (Radius %d)
+724	, %d s (Radius %d)
+725	STEUERUNG
+726	CONTROLLER
+727	TASTATUR
+728	Manatrank
+729	Heiltrank
+730	Gehen und in Menüs wählen
+731	Ausdauerelixier
+732	Gürteltränke (1 bis 4)
+733	Inventar und Fenster
+734	Rennen (halten)
+735	Automap
+736	Fertigk. 4 / nächstes Fenster
+737	Fertigk. 3 / Gegenst. verschieben
+738	Fertigkeit 2 / zurück
+739	Angreifen, aufheben und sprechen
+740	Sätze (Hilfe!, Danke...)
+741	Pause (mit Select: beenden)
+742	IM INVENTAR, IN LÄDEN UND IN DER TRUHE
+743	Gegenstand nehmen oder ablegen
+744	In Rucksack, Würfel oder Truhe
+745	Nächstes Fenster (Fertigkeiten, Tasten, ...)
+746	Schließen
+747	Auf den Boden
+748	Steuerkreuz: bewegen
+749	Spieler 1: der zuerst benutzte Controller   -   Spieler 2: der zweite
+750	AKTION
+751	SPIELER 1
+752	SPIELER 2
+753	Gehen
+754	Fertigkeit 2
+755	Fertigkeit 3
+756	Fertigkeit 4
+757	Gürteltränke
+758	Fertigkeitsbaum
+759	Gegenstand wegwerfen
+760	Zurück / schließen
+761	Umschalt links
+762	Umschalt rechts
+763	Leertaste
+764	Rücktaste
+765	Entf
+766	Pause (beide)
+767	Taste halten: Spieler 1 geht
+768	Links / rechts (oder LB / RB): anderer Reiter    B: zurück
+769	Öffnet sich nur in Harrogath, in der Hölle
+770	Die drei Portale wurden in diesem Spiel schon geöffnet
+771	Das Portal nach Tristram wurde in diesem Spiel schon geöffnet
+772	Punkte zurücksetzen
+773	%d Attribut- und %d Fertigkeitspunkte zu verteilen
+774	Öffnet sich nur in Akt 5, in der Hölle
+775	Sprich mit Larzuk.
+776	Töte Schenk den Aufseher im Blutigen Vorgebirge.
+777	A: Malahs Trank benutzen
+778	Anya ist eingefroren: du brauchst Malahs Trank
+779	A: Den Altar berühren
+780	Die Tür ist verschlossen: besiege zuerst die Urahnen
+781	SPRACHE
+782	Die Stimmen bleiben auf %s (die importierte Sprache)
+783	A: wählen (das Spiel startet neu)     B: zurück

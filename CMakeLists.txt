@@ -27,6 +27,7 @@ add_library(d2fmtlib STATIC
   src/fmt/dt1.c
   src/fmt/ds1.c
   src/fmt/flac.c
+  src/fmt/ttf.c
 )
 target_compile_options(d2fmtlib PRIVATE -Wall -Wextra)
 

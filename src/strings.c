@@ -93,9 +93,9 @@ static char *json_string(const char **p)
 
 static int gender_of_tag(const char *tag)
 {
-    static const char *const tags[GENDER_COUNT] = { "[ms]", "[fs]", "[mp]", "[fp]" };
+    static const char *const tags[GENDER_COUNT] = { "[ms]", "[fs]", "[mp]", "[fp]", "[ns]", "[pl]", "[nl]", "[p]" };
     for (int g = 0; g < GENDER_COUNT; g++)
-        if (strncmp(tag, tags[g], 4) == 0)
+        if (strncmp(tag, tags[g], strlen(tags[g])) == 0)
             return g;
     return -1;
 }

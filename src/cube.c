@@ -600,7 +600,7 @@ int cube_recipe_info(int i, CubeLine *in, int max_in, CubeLine *out)
     }
     if (o->sock > 0) {
         char more[32];
-        snprintf(more, sizeof more, tr(" con %d engarce%s más"), o->sock, o->sock > 1 ? "s" : "");
+        snprintf(more, sizeof more, tr(o->sock > 1 ? " con %d engarces más" : " con %d engarce más"), o->sock);
         add_text(out->text, sizeof out->text, more);
     }
     for (int k = 0; k < o->nmods; k++) {

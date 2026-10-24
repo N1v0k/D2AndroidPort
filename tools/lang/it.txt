@@ -1,0 +1,784 @@
+# Italiano. Numero<TAB>traduzione (numeri di tools/lang_tables.py lista)
+1	Atto %d
+2	Zona del terrore: %s
+3	Zona del terrore: %s (%d min)
+4	Sinistra / destra: zone del terrore SÌ
+5	Sinistra / destra: zone del terrore NO
+6	X: terrorizza l'atto %d
+7	X: ridistribuisci i punti
+8	Forziere
+9	A: prendi   X: sposta   LB: ordina   B: chiudi
+10	Non hai oro con te
+11	Nel forziere non c'è oro
+12	Oro insufficiente: costa %d
+13	Scheda %d del forziere
+14	Non entra in questa scheda
+15	A: prendi   X: al forziere   LB: ordina   B: chiudi
+16	A: prendi   X: allo zaino   B: chiudi
+17	A o X: posa qui   B: rimetti nello zaino
+18	A: prendi e posa dove vuoi
+19	X: sposta tra zaino e forziere
+20	LB: ordina questa scheda
+21	Schede: una per atto; + ne compra un'altra
+22	L'oro del forziere non si perde morendo
+23	Deposita oro
+24	Preleva oro
+25	X su un oggetto dello zaino lo mette nel forziere
+26	Una per ogni atto che raggiungi
+27	Compra un'altra scheda
+28	Costa %d monete d'oro
+29	Ognuna costa il triplo della precedente
+30	Se ne possono comprare ancora %d
+31	A: comprala
+32	Ancora A: comprala
+33	Deposita tutto l'oro che hai con te
+34	Preleva tutto l'oro dal forziere
+35	Morendo perdi parte dell'oro che hai con te,
+36	non quello del forziere
+37	Hai perso %d monete d'oro
+38	A: %s
+39	A: %s (usa una chiave)
+40	%s: serve una chiave
+41	Serve una chiave
+42	A: Prendi il Libro di Lam Esen
+43	A: Prendi il Gidbinn
+44	A: Apri lo scrigno
+45	A: Tira la leva
+46	A: Colpisci la Sfera del Dominio (%d di 2)
+47	Devi avere in mano la Volontà di Khalim
+48	A: Entra nel portale
+49	L'atto 5 non c'è ancora
+50	A: Apri il sigillo
+51	A: Metti la Pietra dell'Anima di Mefisto sulla fornace
+52	Serve la Pietra dell'Anima di Mefisto
+53	A: Colpisci la pietra (%d di 3)
+54	Devi avere in mano il Martello della Fornace Infernale
+55	Izual è morto: parla con il suo spirito
+56	La Pietra dell'Anima di Mefisto è distrutta: dillo a Cain
+57	La scala è chiusa: distruggi la Sfera del Dominio
+58	La grata è chiusa
+59	Il Consiglio è morto: torna da Ormus
+60	Hai già bevuto questa pozione
+61	Hai guadagnato 20 punti vita
+62	Come si usa
+63	Gemme
+64	Rune
+65	Parole runiche
+66	Pozioni
+67	Castoni
+68	Magici
+69	Artigianato
+70	Migliorie
+71	Varie
+72	Qualsiasi oggetto
+73	Pozione guaritrice (qualsiasi)
+74	Pozione del mana (qualsiasi)
+75	Gemma scheggiata (qualsiasi)
+76	Gemma difettosa (qualsiasi)
+77	Gemma (qualsiasi)
+78	Gemma impeccabile (qualsiasi)
+79	Gemma perfetta (qualsiasi)
+80	Rubino (qualsiasi)
+81	Diamante (qualsiasi)
+82	Teschio (qualsiasi)
+83	Arma
+84	Pezzo d'armatura
+85	Corazza
+86	Elmo
+87	Scudo
+88	Ascia (qualsiasi)
+89	Pugnale (qualsiasi)
+90	Lancia (qualsiasi)
+91	Spada
+92	Bastone
+93	Cintura
+94	Arma in asta
+95	Arma contundente
+96	Verga
+97	Anello
+98	Amuleto
+99	 (magico)
+100	 (raro)
+101	 (del set)
+102	 (unico)
+103	 (artigianale)
+104	 (normale, bianco)
+105	 (di bassa qualità)
+106	 (superiore)
+107	 (versione normale)
+108	 (versione eccezionale)
+109	 (versione élite)
+110	, senza castoni
+111	, con castoni
+112	Lo stesso oggetto
+113	Un altro uguale
+114	 (normale)
+115	 (versione eccezionale)
+116	 (versione élite)
+117	 con i castoni svuotati
+118	 riparato e ricaricato
+119	 con %d castone in più
+120	 con %d castoni in più
+121	 con castoni
+122	: d'urto (Nova Gelida quando subisci colpi)
+123	: di sangue (ruba vita)
+124	: da incantatore (rigenera mana)
+125	: di sicurezza (riduce i danni)
+126	Barbaro
+127	Amazzone
+128	Incantatrice
+129	Paladino
+130	Negromante
+131	Assassina
+132	Druido
+133	Stregone
+134	Inventario pieno
+135	È per un'altra classe
+136	Forza insufficiente
+137	Destrezza insufficiente
+138	Il tuo livello è troppo basso
+139	Resistenza al veleno
+140	Resistenza al freddo
+141	Niente scudo con un'arma a due mani
+142	Il cubo è vuoto
+143	Questa non è una ricetta
+144	Trasmutato!
+145	Hai già imparato ciò che insegna questo libro
+146	Hai guadagnato un punto abilità
+147	Non entra nel cubo
+148	Non va lì
+149	Non c'è posto per lo scudo
+150	Non entra lì
+151	Nella cintura vanno solo pozioni
+152	Posalo nello zaino
+153	Non serve impararla
+154	Non ancora in questo port
+155	Già al massimo
+156	Richiede il livello %d
+157	Richiede %s
+158	Non hai più punti abilità
+159	Prima devi impararla
+160	Le abilità passive non vanno su un tasto
+161	Attacco
+162	Lancia
+163	(vuoto)
+164	Danni %d-%d, lanciata %d-%d, ne restano %d
+165	Danni %d-%d%s, forza %d
+166	 (a due mani)
+167	Quantità: %d (per %s)
+168	Difesa %d, forza %d
+169	Cura %d punti vita
+170	Ripristina %d di mana
+171	Ripristina %d%% di vita e mana
+172	Ripristina il vigore
+173	Parla
+174	Commercia
+175	Assolda
+176	Resuscita
+177	Infondi
+178	Viaggia a est
+179	Viaggia a ovest
+180	Scommetti
+181	Esci
+182	Mercenaria
+183	Mercenario
+184	Forza insufficiente
+185	Destrezza insufficiente
+186	Il suo livello è troppo basso
+187	Non hai abbastanza oro
+188	Hai assoldato %s
+189	Non l'hai ancora attivato
+190	Armatura
+191	Armi
+192	Vendi
+193	Ottenuto: %s
+194	Hai preso di più dallo zaino
+195	Non ti resta nulla da lanciare
+196	Munizioni finite
+197	Ti serve un arco o una balestra
+198	Non hai nulla da lanciare
+199	Ti servono dardi (faretra nell'altra mano)
+200	Ti servono frecce (faretra nell'altra mano)
+201	%s è morto
+202	Ti serve uno scudo
+203	Non con quest'arma
+204	Non hai abbastanza mana
+205	Nessun cadavere nelle vicinanze
+206	In città non si combatte
+207	Ti serve un'arma da lancio
+208	Nessun bersaglio
+209	Ti serve la forma d'orso
+210	Ti serve la forma di lupo
+211	Ti servono due armi
+212	Ti serve un'arma da lancio in ogni mano
+213	Ti serve un arco con frecce
+214	Non c'è nulla da rianimare
+215	Serve un'arma o un'armatura a terra
+216	Quello non si può rianimare
+217	Il demone si è allontanato
+218	Quel demone non si può vincolare
+219	Non ancora
+220	Ti serve un demone
+221	Ti serve un'arma
+222	Nessun demone nelle vicinanze
+223	Quello non si può vincolare
+224	Per un boss serve il livello 15
+225	Aiuto!
+226	Seguimi
+227	Questo è tuo
+228	Grazie
+229	Scusa
+230	A presto!
+231	Muori!
+232	Scappa!
+233	Frasi
+234	A: di'   B: chiudi
+235	Il sole è tornato: dillo alla gente di Lut Gholein
+236	%s: missione compiuta!
+237	Si è aperto un portale per Tristram
+238	Il portale è già stato aperto in questa partita
+239	Hai ucciso il Re Bovino: il portale non si apre più
+240	Prima bisogna sconfiggere Baal
+241	Si apre solo nel Campo delle Scolte
+242	Si è aperto un portale per %s
+243	Portale per il livello delle mucche (nel campo, dopo Baal)
+244	Incubo
+245	Inferno
+246	INCUBO
+247	INFERNO
+248	Difficoltà: %s
+249	Per il rito serve il livello %d
+250	SCEGLI LA DIFFICOLTÀ
+251	Si apre sconfiggendo Baal nella precedente
+252	A: gioca     B: indietro
+253	A: Prendi %s
+254	A: Tocca la pietra (%d di 5)
+255	A: Libera Deckard Cain
+256	Martello
+257	A: Leggi il libro
+258	A: Distruggi l'altare
+259	A: Leggi il Diario di Horazon
+260	A: Colloca la Verga Horadrica
+261	Serve la Verga Horadrica
+262	Hai salvato Deckard Cain: ti aspetta al campo
+263	Radament è morto: torna da Atma
+264	L'Evocatore è morto: leggi il Diario di Horazon
+265	Duriel è morto: parla con Tyrael
+266	Baal è morto: parla con Tyrael
+267	Il sole si è oscurato
+268	%s purificata!
+269	Da fare
+270	In corso
+271	Compiuta
+272	Missioni
+273	Croce: scegli   Y: inventario   B: chiudi
+274	Croce: scegli la missione
+275	LB / RB: altro atto
+276	LB / RB: altra missione
+277	X: l'altro giocatore
+278	Missioni del G%d: %s
+279	Missioni: %s
+280	A: Usa %s
+281	A: Parla con %s
+282	Non hai armi né armature normali
+283	Impossibile infondere
+284	Charsi lo rende raro: da 3 a 6 proprietà
+285	A: infondi   B: indietro
+286	(indossato)
+287	B: chiudi
+288	magico
+289	raro
+290	del set
+291	unico
+292	PREMI START PER INIZIARE
+293	Demo: il bot gioca da solo
+294	Demo: il bot gioca da solo (atto %d, %s)
+295	posizione %d, %d
+296	%.0f fps   logica %.1f ms (peggiore %.0f)   disegno %.1f   invio %.1f   presentazione %.1f
+297	HAI RAGGIUNTO IL LIVELLO %d
+298	Danni %s: %d-%d
+299	a due mani
+300	a una mano
+301	Danni da lancio: %d-%d
+302	Quantità: %d
+303	Difesa: %d
+304	Probabilità di parata: %d%%
+305	Per archi
+306	Per balestre
+307	Sorsi: %d di %d
+308	Destrezza richiesta: %d
+309	Forza richiesta: %d
+310	Livello richiesto: %d
+311	%d monete d'oro
+312	 (non %s)
+313	archi e balestre
+314	armi da mischia
+315	armi in asta
+316	scudi da paladino
+317	teste da negromante
+318	Inventario
+319	Ordina
+320	Le ricette: Opzioni, Guida del cubo
+321	Cubo Horadrico
+322	A/X: posa qui   RB/Y: a terra   B: riponi
+323	A: prendi   X: sposta   RB: getta a terra   B: chiudi
+324	A: prendi  X: usa  RB: getta  LB: ordina  Y: altro
+325	Guanti
+326	Stivali
+327	Combina ciò che c'è nel cubo
+328	se è una delle ricette (Opzioni, Guida del cubo)
+329	X su un oggetto dello zaino lo mette nel cubo
+330	Riordina lo zaino (anche con LB)
+331	Personaggio
+332	A: distribuisci i punti caratteristica
+333	Punti da distribuire: %d%.0s
+334	A: aggiungi un punto   Y: inventario   B: chiudi
+335	Y: inventario   B: chiudi
+336	Punti
+337	Danni
+338	Indice d'attacco
+339	Res. al fuoco
+340	Res. al freddo
+341	Res. al fulmine
+342	Res. al veleno
+343	Non hai più punti caratteristica
+344	L'attacco normale con la tua arma:
+345	Lancia l'arma che hai in mano
+346	(giavellotti, coltelli, asce da lancio)
+347	in mischia, o un tiro con l'arco
+348	Livello attuale: %d
+349	Livello successivo:
+350	Primo livello:
+351	Costo in mana: %d
+352	Metti %s su:
+353	Croce: scegli   A: assegna   B: annulla
+354	Tasti
+355	Croce: scegli   A: assegnala   B: indietro
+356	A: cambia   Y: personaggio   B: chiudi
+357	Cosa fa ogni tasto
+358	Scegli un tasto e premi A
+359	per cambiare cosa fa.
+360	Anche dall'albero delle
+361	abilità: X su un'abilità.
+362	Abilità
+363	Croce: scegli il tasto   A: assegna   B: annulla
+364	A: impara   X: metti su un tasto   Y: tasti   B: chiudi
+365	Punti
+366	abilità
+367	A: scegli   B: esci
+368	Liv %d
+369	Gratis
+370	Vita %d   Difesa %d   Danni %d-%d
+371	Il tuo oro: %d
+372	La prima è gratis: la tua ricompensa
+373	Sostituisce quello che hai
+374	A: assolda   B: indietro
+375	A: scommetti   B: indietro
+376	Sinistra/Destra: schede   A: compra/vendi   B: indietro
+377	Oro
+378	Non resta nulla
+379	Non hai nulla da vendere
+380	Merce esaurita
+381	Scommetti: %d
+382	Ricevi
+383	Costo
+384	La scolta non usa scudi
+385	È morta: falla resuscitare da Kashya
+386	Non hai nulla da metterle lì
+387	A: equipaggiala   B: indietro
+388	A: scegli dallo zaino   X: togli   Y: inventario
+389	Vita: %d / %d
+390	Livello %d
+391	Indice d'attacco %d
+392	Res. fuoco
+393	Res. freddo
+394	Res. fulmine
+395	Res. veleno
+396	Morta: falla resuscitare da Kashya
+397	Arco
+398	Scudo (la scolta non lo usa)
+399	Scegli cosa equipaggiarle
+400	A: viaggia   B: chiudi   <>: atto
+401	A: viaggia   B: chiudi
+402	%d castoni: %s
+403	%d di %d
+404	%s: cosa dà
+405	GUIDA DEL CUBO HORADRICO
+406	1. Il Cubo Horadrico è in uno scrigno delle Sale dei Morti (atto 2).
+407	2. Apri l'inventario e premi X sul cubo: si apre al posto dell'equipaggiamento.
+408	3. Con il cubo aperto, X su un oggetto dello zaino lo mette nel cubo,
+409	    e X su un oggetto del cubo lo rimette nello zaino.
+410	4. Metti esattamente ciò che chiede una ricetta (né più né meno).
+411	5. Scendi fino a TRASMUTA e premi A o X: il risultato resta nel cubo.
+412	Con A puoi anche prendere un oggetto e sistemarlo a mano, come nello zaino.
+413	Una gemma, una runa o un gioiello in mano, posato su un oggetto con castoni liberi,
+414	viene incastonato. Le rune nell'ordine giusto formano una parola runica (vedi la scheda).
+415	Le ricette sono nelle altre schede: sinistra e destra (o LB e RB).
+416	Metti nel cubo:
+417	Risultato: %s
+418	Sinistra / destra: categoria    Su / giù: ricetta    B: indietro
+419	RIPRENDI
+420	EFFETTI
+421	MUSICA
+422	CORRI SEMPRE
+423	MOSTRA POSIZIONE
+424	PRESTAZIONI
+425	COLORE A 16 BIT
+426	GUIDA DEL CUBO
+427	SALVA ED ESCI
+428	SÌ
+429	NO
+430	PAUSA
+431	A: scegli   Sinistra / destra: cambia   B: indietro
+432	lo stick sinistro
+433	la croce
+434	il grilletto destro
+435	il tasto R1
+436	GIOCATORE SINGOLO
+437	DUE GIOCATORI
+438	ESCI
+439	FILMATI
+440	Le chiavi aprono gli scrigni chiusi
+441	Aprono gli scrigni chiusi (%d)
+442	Apre un portale per la città
+443	Aprono un portale per la città (%d)
+444	X: riempi la pila (%d per %d)
+445	X: apri il portale
+446	Quel posto della cintura è occupato
+447	Lì c'è già qualcosa
+448	In città non serve
+449	SCEGLI UN FILMATO
+450	Introduzione
+451	Atto II
+452	Atto III
+453	Atto IV
+454	Epilogo
+455	La ricerca di Baal
+456	La fine della distruzione
+457	ANNULLA
+458	A: guarda     B: indietro     (quelli non ancora visti non si possono scegliere)
+459	Quel personaggio l'ha già scelto il giocatore 1
+460	Controller collegati: %d
+461	Giocatore 1: il primo controller usato o WASD   -   Giocatore 2: il secondo o le frecce
+462	GIOCATORE %d: SCEGLI IL TUO PERSONAGGIO
+463	SCEGLI IL TUO PERSONAGGIO
+464	Livello %d  %s
+465	Scelto dal giocatore 1
+466	Partita %d
+467	Partita %d vuota
+468	A: crea un personaggio
+469	A: gioca     X: cancella     B: indietro
+470	SCEGLI LA CLASSE DEL PERSONAGGIO
+471	Colpisce forte
+472	e urla
+473	Archi e
+474	giavellotti
+475	Fuoco, fulmini
+476	e freddo
+477	Aure
+478	e scudo
+479	Maledizioni
+480	e morti
+481	Artigli, trappole
+482	e ombre
+483	Bestie, fuoco
+484	e vento
+485	Demoni, malefici
+486	e caos
+487	A: crea     B: indietro
+488	Cancellare %s di livello %d?
+489	Si perde tutto: livello, equipaggiamento e oro
+490	SÌ, CANCELLA
+491	+%d%% di danni, +%d di danni, respinge
+492	+%d%% all'indice d'attacco, +%d%% di danni, stordisce %.1f s
+493	+%d%% di danni, +%d%% all'indice d'attacco, +%d%% di difesa
+494	I mostri fuggono %d s (raggio %d)
+495	+%d%% di difesa al gruppo per %d s
+496	Mostri: %d%% di difesa e %d%% di danni per %d s
+497	Un mostro: %d%% all'indice d'attacco e %d%% di danni
+498	%d%% di probabilità di trovare una pozione in un cadavere
+499	%d%% di probabilità di trovare un oggetto in un cadavere
+500	+%d%% di danni, +%d%% all'indice d'attacco, %d%% di colpo critico
+501	+%d%% di vigore
+502	+%d%% di difesa
+503	+%d%% di velocità di camminata e corsa
+504	+%d%% alle resistenze a fuoco, freddo e fulmine
+505	Salta fino a %d sottoriquadri e respinge chi è intorno
+506	Piomba sul mostro: +%d%% di danni, +%d%% all'indice d'attacco
+507	Due armi: un colpo con ciascuna, +%d%% di danni, +%d%% all'indice d'attacco
+508	Lancia entrambe le armi: +%d%% di danni, +%d%% all'indice d'attacco
+509	Due armi: +%d%% di danni; ogni colpo, fino a +%d%% di velocità e +%d%% di attacco
+510	Gira colpendo tutti: +%d%% di danni, +%d%% all'indice d'attacco
+511	+%d%% di danni magici, +%d%% all'indice d'attacco; difesa 0 per %.1f s
+512	+%d%% di vita, mana e vigore al gruppo per %d s
+513	+%d a tutte le abilità del gruppo per %d s
+514	Totem su un cadavere: spaventa entro %d sottoriquadri per %d s
+515	%d-%d danni intorno, stordisce %.1f s
+516	Colpi consecutivi con %+d%% di danni, +%d%% all'indice d'attacco
+517	+%d%% di danni, rallenta il mostro; attacco lento
+518	Colpisce tutti intorno: +%d%% di danni, +%d%% all'indice d'attacco
+519	Aggiunge %d-%d danni da fulmine, +%d%% all'indice d'attacco
+520	Rilascia %d scariche elettriche da %d-%d danni da fulmine
+521	Catena di fulmini su %d mostri: %d-%d danni da fulmine
+522	-%d di difesa ai mostri per %d s
+523	I proiettili dei mostri vanno al %d%% per %d s
+524	Una copia che distrae i mostri per %d s
+525	Evoca una valchiria (+%d%% di vita, +%d%% all'indice d'attacco)
+526	%d%% di probabilità di danni doppi
+527	%d%% di probabilità di schivare un colpo da fermo
+528	%d%% di probabilità di schivare un proiettile da fermo
+529	%d%% di probabilità di evitare colpi e proiettili in movimento
+530	+%d%% all'indice d'attacco
+531	%d%% di probabilità che il proiettile trapassi il mostro
+532	Freccia magica: +%d di danni, +%d%% all'indice d'attacco, non consuma frecce
+533	%s %d-%d danni da fuoco, +%d%% all'indice d'attacco
+534	Esplode con
+535	Aggiunge
+536	Esplode con %d-%d danni da fuoco e lascia il terreno in fiamme
+537	Aggiunge %d-%d danni da freddo, %s %.1f s
+538	congela
+539	raffredda
+540	Esplode con %d-%d danni da freddo e congela %.1f s
+541	Scocca %d frecce con il 75%% dei danni
+542	Una freccia a ciascuno di %d mostri, +%d%% di danni
+543	Cerca il mostro e non manca mai, +%d%% di danni
+544	%d-%d danni da veleno in %d s
+545	Fulmine perforante: %d-%d danni da fulmine
+546	All'impatto rilascia %d fulmini da %d-%d danni da fulmine
+547	%s%d-%d danni da fuoco
+548	Esplode con\
+549	%s%d-%d danni da freddo, %s %.1f s
+550	Nova:\
+551	%d scintille da %d-%d danni da fulmine
+552	%s%d-%d danni da fulmine
+553	Fulmine perforante:\
+554	%d-%d danni da fulmine, rimbalza %d volte
+555	Sputa raffiche da %d-%d danni da freddo
+556	Toglie il %d%% della vita a chi è intorno (raggio %d)
+557	%d-%d danni da fulmine; a volte respinge e stordisce
+558	Salta dove guardi
+559	Lascia fuoco dove cammina: %d-%d al secondo, %d s
+560	%s: %d-%d danni da fuoco al secondo
+561	Fiamme
+562	Muro
+563	Cade dopo 2,4 s: %d-%d danni da fuoco e lascia fuoco
+564	Schegge di ghiaccio da %d-%d danni da freddo
+565	Tre teste per %d s che sputano %d-%d di fuoco
+566	+%d%% di difesa per %d s; congela per %.1f s chi ti colpisce
+567	+%d%% di difesa per %d s; %d-%d di freddo a chi %s
+568	ti colpisce
+569	ti spara
+570	Il mana assorbe il %d%% dei danni per %d s
+571	Un fulmine da %d-%d ogni 1,6 s per %d s
+572	+%d-%d di fuoco sui tuoi colpi per %d s
+573	+%d%% di rigenerazione del mana
+574	+%d%% di danni da %s
+575	fuoco
+576	fulmine
+577	freddo
+578	-%d%% alla resistenza al freddo dei mostri
+579	+%d%% di danni, +%d%% all'indice d'attacco; il %d%% dei danni ferisce te
+580	Colpo di scudo che non manca mai: +%d%% di danni, stordisce %.1f s
+581	%d-%d danni magici a non morti e demoni; cura gli alleati di %d-%d
+582	%d colpi consecutivi: +%d%% di danni, +%d%% all'indice d'attacco
+583	Carica il mostro: +%d%% di danni, +%d%% all'indice d'attacco
+584	Dai danni dell'arma: +%d%% di fuoco, +%d%% di freddo, +%d%% di fulmine
+585	Martello a spirale: %d-%d danni magici
+586	%d%% di probabilità che il mostro combatta per te %d s
+587	+%d%% di difesa, +%d%% di parata, Espiazione +%d-%d, per %d s
+588	Fulmine da %d-%d e fino a %d fulmini sacri
+589	Aura: +%d%% di danni
+590	Aura: %d-%d di %s a chi è intorno; +%d-%d sui tuoi colpi
+591	freddo (e li rallenta)
+592	Aura: chi ti colpisce subisce il %d%% dei danni
+593	Aura: +%d%% all'indice d'attacco
+594	Aura: %d-%d danni magici ai non morti e li respinge
+595	Aura: +%d%% di velocità d'attacco, +%d%% all'indice d'attacco, +%d%% di danni
+596	Aura: %d%% di difesa e -%d%% alle resistenze dei mostri
+597	Aura: cura %d punti vita ogni 2 s
+598	Aura: +%d%% di resistenza al %s
+599	Aura: +%d%% di difesa
+600	Aura: veleno e maledizioni durano il %d%%
+601	Aura: +%d%% di velocità, +%d%% di vigore
+602	Aura: +%d%% di rigenerazione del mana
+603	Aura: %d%% di probabilità di prendere un cadavere per %d di vita e mana
+604	Aura: +%d%% a tutte le resistenze
+605	Subiscono +%d%% di danni fisici
+606	Vedono solo chi hanno accanto (non i boss)
+607	Colpiscono il %d%% in meno
+608	Il %d%% dei danni in mischia che infliggono torna a loro
+609	Fuggono (non i boss)
+610	Si attaccano tra loro (non i boss)
+611	Chi li colpisce in mischia si cura del %d%% dei danni
+612	Chi è intorno attacca il maledetto
+613	%d%% di velocità, danni e resistenza fisica
+614	-%d%% alle resistenze (agli immuni, un quinto)
+615	%d denti da %d-%d danni magici
+616	Assorbe %d danni in mischia
+617	%s%d-%d danni da veleno in %d s
+618	Con un pugnale:\
+619	Dal %d al %d%% della vita del cadavere, metà fuoco (raggio %d)
+620	Ossa con +%d%% di vita che sbarrano il passo, %d s
+621	%d-%d danni magici; %s
+622	trapassa
+623	cerca il mostro
+624	Scheletri: +%d di vita e +%d di danni; rianimati: +%d%% di vita e +%d%% di danni
+625	Fino a %d per %d s, con +%d%% di vita (non i boss)
+626	Fino a %d (da un cadavere), con +%d%% di vita
+627	+%d%% di vita; rallenta del %d%% chi colpisce
+628	+%d%% di vita; ruba il %d%% dei danni e te ne passa il %d%%
+629	Da un'arma o un'armatura a terra; restituisce %d danni
+630	%d-%d di fuoco sui suoi colpi e Fuoco Sacro di livello %d
+631	Golem: +%d%% di vita, +%d%% di velocità e +%d all'indice d'attacco
+632	Servitori: +%d%% alle resistenze
+633	Carica: +%d%% di danni per carica al colpo finale
+634	Carica: ruba il %d%% in vita (con 2, anche mana; con 3, il doppio)
+635	Carica: %d-%d di %s; con 2, %s; con 3, %s
+636	una nova
+637	un'esplosione
+638	fuoco a terra
+639	scintille
+640	Carica: con 1, una meteora; con 2, un cerchio di fulmini; con 3, ghiaccio intorno
+641	Fino a %d rapaci%.0s da %d-%d danni che colpiscono %d volte
+642	Un rampicante velenoso: %d-%d in %d s; +%d%% di vita
+643	Mangia cadaveri: ognuno ti restituisce il %d%%%s
+644	 della vita
+645	 del mana
+646	Fino a %d lupi%.0s con %d-%d di freddo, +%d all'indice d'attacco e +%d%% di vita
+647	Un orso con %d-%d di danni e +%d%% di vita
+648	Fino a %d lupi%.0s con %d-%d di danni e +%d%% di vita
+649	Uno spirito che dà +%d%% di vita a chi è intorno
+650	Uno spirito che dà +%d%% di danni e +%d%% all'indice d'attacco
+651	Uno spirito: chi ti colpisce subisce %d danni
+652	Lupo per %d s: +%d%% di velocità d'attacco, +%d%% all'indice d'attacco, +%d%% di vita
+653	Orso per %d s: +%d%% di danni, +%d%% di difesa, +%d%% di vita
+654	Trasformato: +%d%% di vita e %d s in più
+655	+%d%% di danni; ogni colpo aggiunge una carica (fino a %d): più velocità e furto di vita
+656	Ogni colpo aggiunge una carica (fino a %d): +%d%% di danni ciascuna, e stordisce
+657	Un morso che avvelena (%d-%d in %d s) e contagia
+658	+%d-%d di fuoco sul colpo
+659	Un morso che ruba il %d%% di vita e il %d%% di mana (%d%% di danni)
+660	%d colpi consecutivi con +%d%% di danni
+661	Un'onda da %d-%d danni che stordisce %.1f s
+662	%d fiamme che lasciano fuoco: %d-%d al secondo
+663	Rotola e respinge: %d-%d di danni e %d-%d di fuoco
+664	Sputa rocce da %d-%d di danni e %d-%d di fuoco
+665	Cadono rocce intorno: %d-%d di danni e %d-%d di fuoco
+666	Crepe di fuoco: %d-%d di danni
+667	Un getto di freddo: %d-%d al secondo (portata %d)
+668	Assorbe %d danni da fuoco, freddo e fulmine
+669	%d turbini da %d-%d danni che stordiscono %.1f s
+670	Un tornado da %d-%d danni
+671	Freddo intorno per %d s: %d-%d
+672	Un uomo capra che combatte in mischia
+673	Un contaminato che lancia palle di fuoco
+674	Un profanatore che lega le anime dei nemici
+675	%s; +%d%% di vita (fino a %d demoni%.0s)
+676	I tuoi demoni: +%d%% di velocità, +%d all'indice d'attacco, +%d%% di danni; fino a %d
+677	Il tuo demone salta sul nemico e gli abbassa la difesa di %d per %d s
+678	Il %d%% dei danni che subisci va al tuo demone; lui ottiene +%d%% alle resistenze
+679	Il tuo demone divora un cadavere e recupera il %d%% della vita
+680	I tuoi demoni esplodono: %d-%d di danni e %d-%d di fuoco
+681	Sacrifichi un demone: +%d%% di vita massima e +%d%% di velocità per %d s
+682	%d%% di probabilità di tenere un demone ferito (+%d%% di vita e danni)
+683	Con un'arma: +%d%% di danni, +%d%% all'indice d'attacco e %d%% di colpo critico
+684	Per %d s: %d-%d di magia ai maledetti intorno; ruba il %d%%
+685	L'arma: +%d-%d di magia; chi colpisce ha -%d%% di difesa
+686	L'arma: +%d di vita e +%d di mana per uccisione; chi colpisce fa -33%% di danni
+687	L'arma: +%d%% di velocità; chi colpisce può esplodere (%d-%d di magia)
+688	Assorbe %d danni; stordisce chi ti colpisce da vicino
+689	Echi dell'arma che trapassano tutti: +%d%% di danni
+690	Lanci un'arma astrale e appari dove colpisce: %d-%d di magia
+691	Colpisce tutti in un arco di %d gradi: +%d%% di danni
+692	%d riflessi dell'arma con il %d%% dei danni
+693	Un sigillo per %d s: rallenta della metà e abbassa la difesa del %d%%
+694	Un sigillo per %d s: chi è dentro combatte contro gli altri
+695	Un sigillo per %d s: chi ha meno del %d%% di vita muore ed esplode
+696	%d fiamme intorno: %d-%d di fuoco; respingono
+697	%d-%d di magia e una nube di miasma
+698	Catene fino a %d nemici: %d-%d di magia e miasma
+699	Il miasma: +%d%% di danni, +%d%% di raggio e durata; l'Abisso: +%d%%
+700	Un'onda di fuoco che avanza: %d-%d e lascia il terreno in fiamme
+701	Fuoco infernale intorno: %d-%d; -%d%% alla resistenza al fuoco
+702	Una fenditura che attira i nemici ed esplode: %d-%d di magia
+703	Calci: %d%.0s con +%d%% di danni; l'ultimo respinge
+704	Con due artigli: +%d%% di danni
+705	Un calcio con +%d%% di danni che esplode in fuoco (raggio %d)
+706	Salta accanto al mostro e scalcia con +%d%% di danni
+707	Con artigli: +%d%% all'indice d'attacco, +%d%% di danni, %d%% di colpo critico
+708	Con due artigli: %d%% di parata
+709	%d-%d danni magici e lo respinge
+710	+%d%% di velocità e +%d%% di velocità d'attacco per %d s
+711	+%d%% alle resistenze per %d s
+712	Colpi con %d-%d di veleno, per %d s
+713	Acceca chi è intorno e ne abbassa la difesa del %d%%, %d s
+714	Stordisce chi è intorno; %d%% di probabilità di convertirli (non i boss)
+715	Un clone oscuro con il tuo equipaggiamento (+%d all'indice d'attacco)
+716	Una bomba da %d-%d di fuoco
+717	Fulmini a terra: %d-%d al secondo
+718	%d-%d di danni più il %d%% dei danni dell'arma%s
+719	, va e torna
+720	, a chi è accanto
+721	Trappola: %d tiri da %d-%d di %s%s
+722	; fa esplodere i cadaveri
+723	 (raggio %d)
+724	, %d s (raggio %d)
+725	CONTROLLI
+726	CONTROLLER
+727	TASTIERA
+728	Pozione del mana
+729	Pozione guaritrice
+730	Camminare e scegliere nei menu
+731	Pozione del vigore
+732	Pozioni della cintura (da 1 a 4)
+733	Inventario e pannelli
+734	Correre (tenuto premuto)
+735	Automappa
+736	Abilità 4 / pannello successivo
+737	Abilità 3 / spostare un oggetto
+738	Abilità 2 / indietro
+739	Attaccare, prendere e parlare
+740	Frasi (Aiuto!, Grazie...)
+741	Pausa (con Select: esci)
+742	NELL'INVENTARIO, NEI NEGOZI E NEL FORZIERE
+743	Prendere o posare un oggetto
+744	Allo zaino, al cubo o al forziere
+745	Pannello successivo (abilità, tasti, ...)
+746	Chiudi
+747	A terra
+748	Croce: muoversi
+749	Giocatore 1: il primo controller usato   -   Giocatore 2: il secondo
+750	AZIONE
+751	GIOCATORE 1
+752	GIOCATORE 2
+753	Camminare
+754	Abilità 2
+755	Abilità 3
+756	Abilità 4
+757	Pozioni della cintura
+758	Albero delle abilità
+759	Gettare l'oggetto
+760	Indietro / chiudi
+761	Maiusc sin.
+762	Maiusc des.
+763	Spazio
+764	Backspace
+765	Canc
+766	Pausa (entrambi)
+767	tasto premuto: il giocatore 1 cammina
+768	Sinistra / destra (o LB / RB): altra scheda    B: indietro
+769	Si apre solo ad Harrogath, in Inferno
+770	I tre portali sono già stati aperti in questa partita
+771	Il portale per Tristram è già stato aperto in questa partita
+772	Ripristina i punti
+773	%d punti caratteristica e %d punti abilità da distribuire
+774	Si apre solo nell'atto 5, in Inferno
+775	Parla con Larzuk.
+776	Uccidi Shenk il Sovrintendente nelle Colline Insanguinate.
+777	A: Usa la pozione di Malah
+778	Anya è congelata: serve la pozione di Malah
+779	A: Tocca l'altare
+780	La porta è chiusa: bisogna sconfiggere gli Antichi
+781	LINGUA
+782	Le voci restano in %s (la lingua importata)
+783	A: scegli (il gioco riparte)     B: indietro

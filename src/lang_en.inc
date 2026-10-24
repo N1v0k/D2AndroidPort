@@ -129,7 +129,8 @@
 { " en versión de élite", " (elite version)" },
 { " con los engarces vacíos", " with its sockets emptied" },
 { " reparado y recargado", " repaired and recharged" },
-{ " con %d engarce%s más", " with %d more socket%s" },
+{ " con %d engarce más", " with %d more socket" },
+{ " con %d engarces más", " with %d more sockets" },
 { " con engarces", " with sockets" },
 { ": de golpe (Nova de escarcha al recibir golpes)", ": Hit Power (Frost Nova when struck)" },
 { ": de sangre (roba vida)", ": Blood (life steal)" },
@@ -444,8 +445,8 @@
 { "%d de %d", "%d of %d" },
 { "%s: lo que da", "%s: what it gives" },
 { "GUÍA DEL CUBO HORÁDRICO", "HORADRIC CUBE GUIDE" },
-{ "1. Caín te da el Cubo Horádrico en el campamento, después de rescatarlo.",
-  "1. Cain gives you the Horadric Cube in the camp, after you rescue him." },
+{ "1. El Cubo Horádrico está en un cofre de las Salas de los Muertos (Acto 2).",
+  "1. The Horadric Cube is in a chest in the Halls of the Dead (Act 2)." },
 { "2. Abrí el inventario y apretá X sobre el cubo: se abre en el lugar del equipo.",
   "2. Open the inventory and press X on the cube: it opens where the equipment is." },
 { "3. Con el cubo abierto, X sobre algo de la mochila lo mete en el cubo,",
@@ -850,3 +851,16 @@
 { "Restablecer puntos", "Reset Points" },
 { "%d puntos de atributo y %d de habilidad para repartir", "%d attribute and %d skill points to spend" },
 { "Solo se abre en el Acto 5, en Infierno", "It only opens in Act 5, in Hell" },
+
+/* Acto 5: lo que dicen las misiones y los objetos de Harrogath */
+{ "Hablá con Larzuk.", "Talk to Larzuk." },
+{ "Matá a Shenk el Capataz en el Bloody Foothills.", "Kill Shenk the Overseer in the Bloody Foothills." },
+{ "A: Usar la poción de Malah", "A: Use Malah's potion" },
+{ "Anya está congelada: hace falta la poción de Malah", "Anya is frozen: you need Malah's potion" },
+{ "A: Tocar el altar", "A: Touch the altar" },
+{ "La puerta está cerrada: hay que vencer a los Antiguos", "The door is closed: you must defeat the Ancients" },
+
+/* Los idiomas (menu.c) */
+{ "IDIOMA", "LANGUAGE" },
+{ "Las voces siguen en %s (el idioma que se importó)", "Voices stay in %s (the imported language)" },
+{ "A: elegir (el juego vuelve a arrancar)     B: volver", "A: choose (the game restarts)     B: back" },
