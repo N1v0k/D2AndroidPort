@@ -374,7 +374,9 @@ can also be played over the local network:
 - At the end, the **Echo chest** (more and better items the further you
   got) and a portal back to the menu. Each character keeps its best wave.
 
-<a href="docs/videos/echo-from-level-1.mp4"><img src="docs/screenshots/echo-video.jpg" width="400" alt="Video: two bots from level 1 in the Echo of Hatred"></a><br>
+
+
+<img src="docs/screenshots/echo-video.jpg" width="400" alt="Video: two bots from level 1 in the Echo of Hatred"></a><br>
 <sub>Video: two bots that start at level 1 (an Amazon and a Paladin, playing
 by themselves with their skills and potions), 3x speed, until they fall on
 wave 8.</sub>
