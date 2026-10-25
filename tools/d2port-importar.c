@@ -434,13 +434,13 @@ static const struct {
     { "new_bliz", "data/global/video/new_bliz.webm", NULL, 1 },
     { "bliznorth", "data/global/video/bliznorth.webm", NULL, 1 },
     { "blizzardlogos", "data/hd/global/video/blizzardlogos.webm", "data/hd/local/video/blizzardlogos.flac", 1 },
-    { "d2intro", "data/global/video/d2intro.webm", "data/local/video/d2intro.flac" },
-    { "act02start", "data/global/video/act2/act02start.webm", "data/local/video/act2/act02start.flac" },
-    { "act03start", "data/global/video/act3/act03start.webm", "data/local/video/act3/act03start.flac" },
-    { "act04start", "data/global/video/act4/act04start.webm", "data/local/video/act4/act04start.flac" },
-    { "act04end", "data/global/video/act4/act04end.webm", "data/local/video/act4/act04end.flac" },
-    { "d2x_intro", "data/global/video/d2x_intro.webm", "data/local/video/d2x_intro.flac" },
-    { "d2x_out", "data/global/video/act5/d2x_out.webm", "data/local/video/act5/d2x_out.flac" },
+    { "d2intro", "data/global/video/d2intro.webm", "data/local/video/d2intro.flac", 0 },
+    { "act02start", "data/global/video/act2/act02start.webm", "data/local/video/act2/act02start.flac", 0 },
+    { "act03start", "data/global/video/act3/act03start.webm", "data/local/video/act3/act03start.flac", 0 },
+    { "act04start", "data/global/video/act4/act04start.webm", "data/local/video/act4/act04start.flac", 0 },
+    { "act04end", "data/global/video/act4/act04end.webm", "data/local/video/act4/act04end.flac", 0 },
+    { "d2x_intro", "data/global/video/d2x_intro.webm", "data/local/video/d2x_intro.flac", 0 },
+    { "d2x_out", "data/global/video/act5/d2x_out.webm", "data/local/video/act5/d2x_out.flac", 0 },
 };
 #define NUM_MOVIES ((int)(sizeof k_movies / sizeof k_movies[0]))
 static char *s_movie_video[NUM_MOVIES], *s_movie_audio[NUM_MOVIES]; /* sus nombres en el CASC */
