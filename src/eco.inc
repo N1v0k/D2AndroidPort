@@ -1057,6 +1057,17 @@ static void eco_pause_line(char *out, size_t cap)
 }
 
 /* Arriba a la derecha: la oleada y su nivel, lo que falta y la barra del desborde */
+/* Un aviso abajo del panel: centrado en cx pero sin salirse de la pantalla, con fondo (si no, se mezcla
+   con los nombres de los objetos del suelo) */
+static void eco_note(int cx, int y, const char *text, int scale, uint8_t color)
+{
+    int tw = font_width(text, scale), x = cx - tw / 2;
+    x = x + tw > SCREEN_W - 6 ? SCREEN_W - 6 - tw : x;
+    x = x < 6 ? 6 : x;
+    fb_blend_rect(x - 4, y - 2, tw + 8, font_height(scale) + 4, COL(R_GRAY, 0), BLEND_50);
+    font_draw(x, y, text, scale, color);
+}
+
 static void eco_draw(void)
 {
     if (!s_eco || s_er.phase == EP_OFF)
@@ -1088,8 +1099,8 @@ static void eco_draw(void)
     fb_fill_rect(bx, by, fill, 5, blink ? COL(R_GOLD, 15) : COL(R_RED, 12));
     if (s_er.over > 0 && s_er.phase <= EP_BREAK) {
         snprintf(t, sizeof t, tr("¡Desborde! %d"), (eco_overrun_ticks() - s_er.over) / TICK_RATE + 1);
-        font_draw_centered(x + w / 2, y + h + 4, t, 2, COL(R_RED, 15));
+        eco_note(x + w / 2, y + h + 4, t, 2, COL(R_RED, 15));
     }
     if (s_er.phase == EP_LOOT)
-        font_draw_centered(x + w / 2, y + h + 4, "Abrí el cofre; el portal vuelve al menú", 1, COL(R_GRAY, 14));
+        eco_note(x + w / 2, y + h + 4, "Abrí el cofre; el portal vuelve al menú", 1, COL(R_GRAY, 14));
 }

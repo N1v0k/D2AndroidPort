@@ -148,8 +148,24 @@ static void add_entry(char *key, char *text, int id)
     free(text);
 }
 
+/* En vo.json, la mitad de las líneas en inglés, alemán, francés, italiano, polaco y español de España
+   empiezan con un número pegado ("46I should add...", "95\nPareces noble..."; en el latino no está):
+   no es parte de lo que se dice. Se saca si va pegado a una letra o con un salto de línea (un "3 días"
+   con espacio queda) */
+static void strip_vo_number(char *text)
+{
+    size_t d = 0;
+    while (text[d] >= '0' && text[d] <= '9')
+        d++;
+    if (d == 0 || text[d] == '\0' || text[d] == ' ' || text[d] == '\t')
+        return;
+    while (text[d] == '\n' || text[d] == '\r')
+        d++;
+    memmove(text, text + d, strlen(text + d) + 1);
+}
+
 /* Los archivos son listas de objetos {"id": .., "Key": "..", "enUS": "..", ..., "esMX": ".."} */
-static void parse_file(const char *json, const char *lang)
+static void parse_file(const char *json, const char *lang, int vo)
 {
     char lang_field[16];
     snprintf(lang_field, sizeof lang_field, "\"%s\"", lang);
@@ -173,6 +189,8 @@ static void parse_file(const char *json, const char *lang)
                 free(key);
                 key = value;
             } else if (key) {
+                if (vo)
+                    strip_vo_number(value);
                 add_entry(key, value, id);
                 key = NULL;
             } else {
@@ -270,7 +288,7 @@ int strings_load(const char *lang)
         if (!d)
             continue;
         d[n] = '\0';
-        parse_file((const char *)d, lang);
+        parse_file((const char *)d, lang, strcmp(files[i], "vo") == 0);
         free(d);
         loaded++;
     }

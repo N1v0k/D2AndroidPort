@@ -856,3 +856,23 @@
 855	restants
 856	Autre version du jeu : il faut la même partout
 857	La partie est pleine ou a déjà commencé
+858	Tu as déjà lu ce parchemin
+859	Tu gagnes +10 à toutes les résistances
+860	Tu n'as aucune arme ni armure sans châsses
+861	Tu n'as aucun objet magique, rare ou unique à personnaliser
+862	Cet objet ne peut pas avoir de châsses
+863	Châsser
+864	Personnaliser
+865	Larzuk ajoute toutes les châsses possibles
+866	Anya y inscrit ton nom
+867	A : châsser   B : retour
+868	A : personnaliser   B : retour
+869	Démon lié
+870	Les Anciens sont retournés dans leurs statues
+871	Anya est libre : elle est retournée à Harrogath
+872	Tu as trouvé Anya : parle à Malah
+873	Shenk est mort : parle à Larzuk
+874	Nihlathak est mort : parle à Anya
+875	Baal est entré dans la Chambre de la Pierre-Monde
+876	Tu as libéré les 15 soldats : parle à Qual-Kehk
+877	Tu as libéré %d soldats

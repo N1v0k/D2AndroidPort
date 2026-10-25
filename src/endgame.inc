@@ -863,7 +863,7 @@ static void tz_text(const TzZone *z, char *out, size_t cap)
 /* Un aviso para todos, un rato más largo que los otros */
 static void tz_say(const char *text)
 {
-    for (int i = 0; i < s_num_players; i++) {
+    for (int i = 0; i < s_num_players && i < MAX_PLAYERS; i++) {
         show_message(&s_pl[i], text);
         s_pl[i].message_ticks = 6 * TICK_RATE;
     }

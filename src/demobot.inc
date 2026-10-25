@@ -654,7 +654,7 @@ static int demo_can_use(const Player *p, int b)
         return what == BTN_ATTACK;
     const SkillDef *s = skills_get(p->cls, what);
     if (p->skill_lvl[what] <= 0 || s->passive || s->kind == SK_NONE || !weapon_allows(p, s) ||
-        p->mana < skill_mana(s, p->skill_lvl[what]))
+        p->mana < skill_mana(s, p->skill_lvl[what]) || !skill_ready(p, what))
         return 0;
     if (skill_attack_kind(s) == ATK_THROW) /* las jabalinas: que quede alguna para pegar */
         return items_can_throw(p->equip[SLOT_WEAPON].type) && p->equip[SLOT_WEAPON].amount > 2;
@@ -669,7 +669,8 @@ static int demo_skill(const Player *p, const char *key, int reserve)
     if (s < 0 || p->skill_lvl[s] <= 0)
         return -1;
     const SkillDef *d = skills_get(p->cls, s);
-    if (d->passive || d->kind == SK_NONE || !weapon_allows(p, d) || p->mana < skill_mana(d, p->skill_lvl[s]) + reserve)
+    if (d->passive || d->kind == SK_NONE || !weapon_allows(p, d) || p->mana < skill_mana(d, p->skill_lvl[s]) + reserve ||
+        !skill_ready(p, s))
         return -1;
     if (skill_attack_kind(d) == ATK_THROW &&
         !(items_can_throw(p->equip[SLOT_WEAPON].type) && p->equip[SLOT_WEAPON].amount > 2))

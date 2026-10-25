@@ -444,6 +444,7 @@ int skills_init(void)
         }
         s->intown = txt_get_int(&sk, r, "InTown", 0);
         s->delay = txt_get_int(&sk, r, "localdelay", 0);
+        s->gdelay = txt_get_int(&sk, r, "globaldelay", 0);
         s->st_sound = audio_find(txt_get(&sk, r, txt_col(&sk, "stsound")));
         s->st_sound_class = audio_find(txt_get(&sk, r, txt_col(&sk, "stsoundclass")));
         s->weapon_sound = txt_get_int(&sk, r, "weaponsnd", 0) == 1;
@@ -556,11 +557,13 @@ int skill_dm(const SkillDef *s, int a, int b, int lvl)
     return s->param[a] + (s->param[b] - s->param[a]) * (110 * lvl / (lvl + 6)) / 100;
 }
 
-/* El maná está en 1/256 de punto: (mana + lvlmana * (nivel - 1)) << manashift */
+/* El maná está en 1/256 de punto: (mana + lvlmana * (nivel - 1)) << manashift, con el mínimo en
+   minmana << 8 (SKILLS_GetManaCosts y D2Game). Con multiplicación: las que cuestan menos por nivel
+   (Teletransportar...) dan negativo a nivel alto, y desplazar un negativo no está definido en C */
 int skill_mana(const SkillDef *s, int lvl)
 {
-    int m = ((s->mana + s->lvlmana * (lvl - 1)) << s->manashift) >> 8;
-    return m < s->minmana ? s->minmana : m;
+    int m = (s->mana + s->lvlmana * (lvl - 1)) * (1 << s->manashift), min = s->minmana * 256;
+    return (m < min ? min : m) / 256;
 }
 
 int skill_tohit(const SkillDef *s, int lvl)

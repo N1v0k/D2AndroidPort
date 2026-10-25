@@ -104,3 +104,17 @@
 /* El menú: la historia o el Eco, la red con cuántos juegan en cada máquina (menu.c) */
 { "Creás la partida: las otras máquinas de la red la encuentran solas.", "Creas la partida: las otras máquinas de la red la encuentran solas." },
 { "Buscás una partida que se creó en otra máquina de esta red.", "Buscas una partida que se creó en otra máquina de esta red." },
+
+/* Larzuk y Anya (Acto 5), dos mensajes de misión y el demonio del Brujo */
+{ "Ya leíste este pergamino", "Ya has leído este pergamino" },
+{ "Ganaste 10 de resistencia a todo", "Has ganado 10 de resistencia a todo" },
+{ "No tenés armas ni armaduras sin engarces", "No tienes armas ni armaduras sin engarces" },
+{ "No tenés objetos mágicos, raros o únicos para personalizar", "No tienes objetos mágicos, raros o únicos para personalizar" },
+{ "Los Antiguos volvieron a sus estatuas", "Los Antiguos han vuelto a sus estatuas" },
+{ "Anya está libre: volvió a Harrogath", "Anya está libre: ha vuelto a Harrogath" },
+{ "Encontraste a Anya: hablá con Malah", "Has encontrado a Anya: habla con Malah" },
+{ "Shenk murió: hablá con Larzuk", "Shenk ha muerto: habla con Larzuk" },
+{ "Nihlathak murió: hablá con Anya", "Nihlathak ha muerto: habla con Anya" },
+{ "Baal se fue a la Cámara de la Piedra del Mundo", "Baal ha entrado en la Cámara de la Piedra del Mundo" },
+{ "Liberaste a los 15 soldados: hablá con Qual-Kehk", "Has liberado a los 15 soldados: habla con Qual-Kehk" },
+{ "Liberaste a %d soldados", "Has liberado a %d soldados" },

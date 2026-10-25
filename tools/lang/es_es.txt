@@ -66,3 +66,15 @@
 811	Abre el cofre; el portal vuelve al menú
 849	Creas la partida: las otras máquinas de la red la encuentran solas.
 850	Buscas una partida que se creó en otra máquina de esta red.
+858	Ya has leído este pergamino
+859	Has ganado 10 de resistencia a todo
+860	No tienes armas ni armaduras sin engarces
+861	No tienes objetos mágicos, raros o únicos para personalizar
+870	Los Antiguos han vuelto a sus estatuas
+871	Anya está libre: ha vuelto a Harrogath
+872	Has encontrado a Anya: habla con Malah
+873	Shenk ha muerto: habla con Larzuk
+874	Nihlathak ha muerto: habla con Anya
+875	Baal ha entrado en la Cámara de la Piedra del Mundo
+876	Has liberado a los 15 soldados: habla con Qual-Kehk
+877	Has liberado a %d soldados

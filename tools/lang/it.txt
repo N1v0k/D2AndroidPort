@@ -856,3 +856,23 @@
 855	rimanenti
 856	Altra versione del gioco: serve la stessa su tutte
 857	La partita è piena o è già iniziata
+858	Hai già letto questa pergamena
+859	Hai ottenuto +10 a tutte le resistenze
+860	Non hai armi o armature senza incastonature
+861	Non hai oggetti magici, rari o unici da personalizzare
+862	Quell'oggetto non può avere incastonature
+863	Incastonare
+864	Personalizzare
+865	Larzuk aggiunge tutte le incastonature possibili
+866	Anya ci incide il tuo nome
+867	A: incastonare   B: indietro
+868	A: personalizzare   B: indietro
+869	Demone vincolato
+870	Gli Antichi sono tornati nelle loro statue
+871	Anya è libera: è tornata ad Harrogath
+872	Hai trovato Anya: parla con Malah
+873	Shenk è morto: parla con Larzuk
+874	Nihlathak è morto: parla con Anya
+875	Baal è entrato nella Camera della Pietra del Mondo
+876	Hai liberato i 15 soldati: parla con Qual-Kehk
+877	Hai liberato %d soldati

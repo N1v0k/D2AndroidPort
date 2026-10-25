@@ -856,3 +856,23 @@
 855	übrig
 856	Andere Spielversion: alle brauchen dieselbe
 857	Das Spiel ist voll oder hat schon begonnen
+858	Du hast diese Schriftrolle schon gelesen
+859	+10 auf alle Widerstände erhalten
+860	Du hast keine Waffen oder Rüstungen ohne Sockel
+861	Du hast keine magischen, seltenen oder einzigartigen Gegenstände zum Personalisieren
+862	Dieser Gegenstand kann keine Sockel haben
+863	Sockeln
+864	Personalisieren
+865	Larzuk fügt so viele Sockel hinzu wie möglich
+866	Anya versieht ihn mit deinem Namen
+867	A: sockeln   B: zurück
+868	A: personalisieren   B: zurück
+869	Gebundener Dämon
+870	Die Uralten sind zu ihren Statuen zurückgekehrt
+871	Anya ist frei: Sie ist nach Harrogath zurückgekehrt
+872	Du hast Anya gefunden: Sprich mit Malah
+873	Shenk ist tot: Sprich mit Larzuk
+874	Nihlathak ist tot: Sprich mit Anya
+875	Baal ist in die Weltsteinkammer gegangen
+876	Du hast die 15 Soldaten befreit: Sprich mit Qual-Kehk
+877	Du hast %d Soldaten befreit

@@ -804,7 +804,7 @@ static void a5_quest_tick(void)
                 s_pl[j].rescue_q = 2;
         }
         char msg[64];
-        snprintf(msg, sizeof msg, s_pl[0].rescued >= 15 ? "Liberaste a los 15 soldados: hablá con Qual-Kehk" : "Liberaste a %d soldados",
+        snprintf(msg, sizeof msg, s_pl[0].rescued >= 15 ? tr("Liberaste a los 15 soldados: hablá con Qual-Kehk") : tr("Liberaste a %d soldados"),
                  s_pl[0].rescued);
         quest_banner(msg, NULL);
         (void)freed;

@@ -317,7 +317,8 @@ typedef struct {
     char        petmax[128];  /* cuántos puede tener (fórmula) */
     char        sumskcalc[64]; /* el nivel de la habilidad del esbirro (sumsk1calc) */
     int         intown;    /* se puede usar en el pueblo */
-    int         delay;     /* localdelay: cuadros hasta poder usarla otra vez (las del Brujo) */
+    int         delay;     /* localdelay: cuadros hasta poder usarla otra vez */
+    int         gdelay;    /* globaldelay: la misma demora para todas las que la tienen (las transformaciones del Druida) */
     int         param[15]; /* Param1..Param14 (el 0 no se usa; del 9 en adelante, los del Brujo de D2R) */
     char        passive_itype[8];  /* pasivas que dependen del arma ("axe", "blde") */
     char        weapon_itype[3][8]; /* armas con las que se puede usar ("" = cualquiera) */

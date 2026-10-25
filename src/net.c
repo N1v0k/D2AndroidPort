@@ -426,7 +426,7 @@ int net_join(const char *host, int port, const NetLocal *mine)
         return -1;
     }
     /* Sin bloquear el menú más de 3 segundos si no hay nadie en esa IP */
-    int fd = (int)socket(res->ai_family, res->ai_socktype, res->ai_protocol), ok = 0;
+    int fd = (int)socket(res->ai_family, res->ai_socktype, res->ai_protocol), ok = 0, why = 0;
     if (fd >= 0) {
         sock_nonblock(fd);
         if (connect(fd, res->ai_addr, (int)res->ai_addrlen) == 0) {
@@ -438,15 +438,20 @@ int net_join(const char *host, int port, const NetLocal *mine)
             FD_SET(fd, &w);
             FD_SET(fd, &e);
             struct timeval tv = { 3, 0 };
-            int err = 0;
+            int err = 0, sel = select(fd + 1, NULL, &w, &e, &tv);
             socklen_t el = sizeof err;
-            ok = select(fd + 1, NULL, &w, &e, &tv) == 1 && FD_ISSET(fd, &w) &&
-                 getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&err, &el) == 0 && err == 0;
+            if (sel == 1 && getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&err, &el) != 0)
+                err = sock_err();
+            ok = sel == 1 && FD_ISSET(fd, &w) && err == 0;
+            why = sel == 0 ? -1 : err; /* (el motivo de verdad: el connect sin bloquear siempre dice "en curso") */
+        } else {
+            why = sock_err();
         }
     }
     freeaddrinfo(res);
     if (!ok) {
-        fprintf(stderr, "red: no pude conectarme a %s:%d (%s)\n", host, port, sock_strerror(sock_err()));
+        fprintf(stderr, "red: no pude conectarme a %s:%d (%s)\n", host, port,
+                why < 0 ? "no contesta" : sock_strerror(why ? why : sock_err()));
         if (fd >= 0)
             sock_close(fd);
         return -1;

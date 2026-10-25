@@ -433,6 +433,12 @@ wave 8.</sub>
   `experience.txt`, stamina as in the original.
 - The original skill tree, and a **Buttons** page to choose what each
   gamepad button does.
+- **Holding a button** keeps using its skill or attack, like holding the
+  mouse button in the original: once each animation ends it is used again,
+  so you do not have to press it over and over.
+- The skills with a **cooldown** in the original (Blizzard, Meteor, Frozen
+  Orb, Fire Wall, Fist of the Heavens, Volcano, Shadow Warrior, the Druid's
+  shapeshifts…) have it: the button darkens until it is ready.
 
 ### Monsters
 
@@ -455,6 +461,9 @@ wave 8.</sub>
   Fanaticism, Hephasto and Bremm Sparkfist a random one.
 - Under the name of the monster you attack: undead or demon, champion,
   its boss modifiers and its immunities, with the game's own texts.
+- When a wall, a house or a column is in the way, monsters **walk around
+  it** to reach you (like the original, which follows the wall when the
+  straight path is blocked) instead of pushing against it.
 
 ### Combat
 
@@ -923,8 +932,8 @@ the Pi, in [docs/rendimiento.md](docs/rendimiento.md).
 |---|---|---|
 | Move (walking) | Left stick, WASD or holding the left mouse button | Left stick or arrow keys |
 | Run (hold; with "Always run" on, it walks) | RT / R2, or left Shift | RT / R2, or right Shift |
-| A button: attack or skill, pick up an item, talk | A or Space | A or Enter |
-| B, X and Y buttons: skills (or Throw) | B, X, Y or E, R, F | B, X, Y or J, L, O |
+| A button: attack or skill, pick up an item, talk (hold it to keep attacking) | A or Space | A or Enter |
+| B, X and Y buttons: skills (or Throw); hold one to keep using it | B, X, Y or E, R, F | B, X, Y or J, L, O |
 | Drink the potion of a belt slot (each slot shows its arrow) | D-pad ◀ ▲ ▶ ▼, or 1 to 4 | D-pad, or 7 to 0 |
 | Healing / mana potion (the first one in the belt) | LB / LT | LB / LT |
 | Stamina potion | Press the left stick (L3) | L3 |

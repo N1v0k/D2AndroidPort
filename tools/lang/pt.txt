@@ -856,3 +856,23 @@
 855	restantes
 856	Outra versão do jogo: todas precisam da mesma
 857	A partida está cheia ou já começou
+858	Você já leu este pergaminho
+859	Você ganhou +10 em todas as resistências
+860	Você não tem armas nem armaduras sem engastes
+861	Você não tem itens mágicos, raros ou únicos para personalizar
+862	Esse item não pode ter engastes
+863	Engastar
+864	Personalizar
+865	Larzuk adiciona todos os engastes possíveis
+866	Anya coloca o seu nome nele
+867	A: engastar   B: voltar
+868	A: personalizar   B: voltar
+869	Demônio vinculado
+870	Os Anciãos voltaram às suas estátuas
+871	Anya está livre: voltou para Harrogath
+872	Você encontrou Anya: fale com Malah
+873	Shenk morreu: fale com Larzuk
+874	Nihlathak morreu: fale com Anya
+875	Baal entrou na Câmara da Pedra do Mundo
+876	Você libertou os 15 soldados: fale com Qual-Kehk
+877	Você libertou %d soldados

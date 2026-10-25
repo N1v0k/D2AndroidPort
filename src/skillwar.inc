@@ -653,7 +653,7 @@ static void war_bind_tick(Player *p)
         p->bind_ch_skill = -1;
         return;
     }
-    p->bind_ch_acc += (s->mana + s->lvlmana * (lvl - 1)) << s->manashift;
+    p->bind_ch_acc += (s->mana + s->lvlmana * (lvl - 1)) * (1 << s->manashift);
     int use = p->bind_ch_acc >> 8;
     p->bind_ch_acc &= 255;
     if (use > p->mana) {
@@ -776,10 +776,6 @@ static int war_start(Player *p, int skill, int cost)
     int lvl = eff_lvl(p, skill);
     int in_town = p->level && p->level->town;
     p->cast_target = -1;
-    if (p->war_cd[skill] > 0) {
-        show_message(p, "Todavía no se puede");
-        return 0;
-    }
     if (in_town && !s->intown) {
         show_message(p, "En el pueblo no se pelea");
         return 0;
@@ -891,9 +887,7 @@ static int war_start(Player *p, int skill, int cost)
     p->attack_skill = skill;
     p->hits_done = 0;
     play_skill_sound(p, s);
-    p->mana -= cost;
-    if (s->delay > 0)
-        p->war_cd[skill] = s->delay;
+    p->mana -= cost; /* (la demora la pone use_skill_mana) */
     (void)lvl;
     if (!player_anim(p, MODE_SC)->ok) {
         cast_effect(p);
@@ -1393,9 +1387,6 @@ static void war_tick(Player *p)
     if (p->cls != 7)
         return;
     int me = (int)(p - s_pl);
-    for (int k = 0; k < MAX_CLASS_SKILLS; k++)
-        if (p->war_cd[k] > 0)
-            p->war_cd[k]--;
     if (p->hex_ticks > 0 && --p->hex_ticks == 0)
         refresh_stats(p);
     if (p->consume_ticks > 0 && --p->consume_ticks == 0)
@@ -1486,7 +1477,8 @@ static void war_clear(Player *p)
     for (int k = 0; k < WAR_SIGILS; k++)
         if (s_sigils[k].owner == me)
             s_sigils[k].used = 0;
-    memset(p->war_cd, 0, sizeof p->war_cd);
+    memset(p->skill_cd, 0, sizeof p->skill_cd);
+    p->global_cd = p->repeat_mask = 0;
 }
 
 /* ---- Los íconos ----

@@ -54,6 +54,7 @@ void game_print_status(void); /* depuración */
    mientras sigue, 0 si terminó bien y -1 si falló. */
 int  game_autotest_start(const char *name, int players);
 int  game_autotest_input(InputState *in, double last_tick_ms);
+void game_autotest_close_ui(void); /* D2_MONKEY: cierra paneles, diálogos y la pausa (lo que dejó abierto) */
 void game_autotest_render_time(double ms);
 int  game_debug_fx(int *kind); /* depuración: cuánto lleva el efecto de un jefe (-1 = ninguno) */
 int  game_debug_obj(int *kind); /* depuración: hace cuánto el J1 usó un cofre, barril... (-1 = nada); kind = su OperateFn */

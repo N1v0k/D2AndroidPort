@@ -466,7 +466,9 @@ typedef struct {
     int     consume_n, consume_stat[5], consume_val[5]; /* Consumir: lo que da el demonio sacrificado (monpet.txt) */
     int     war_req_pct;                     /* Dominio de la levitación: % menos de requisitos de las armas */
     int     held_mask, last_button;          /* los botones mantenidos ahora y el último que usó (para canalizar) */
-    int     war_cd[MAX_CLASS_SKILLS];        /* lo que falta para poder usar cada una otra vez (localdelay) */
+    int     skill_cd[MAX_CLASS_SKILLS];      /* lo que falta para poder usar cada una otra vez (localdelay) */
+    int     global_cd;                       /* lo que falta para las que tienen globaldelay */
+    int     repeat_mask, repeat_wait;        /* botones mantenidos que repiten su habilidad; el próximo reintento */
     CharAnim anim[MODE_COUNT];      /* animaciones con el equipo que lleva puesto (para dibujarlo: se cargan en otro hilo) */
     char    look_key[64];           /* para no recargarlas si el aspecto no cambió */
     char    look_want[64];          /* el aspecto del equipo actual (se carga en otro hilo) */
@@ -745,6 +747,7 @@ static char      s_lang_pref[8]; /* el idioma elegido en el menú ("" = el que s
 
 /* Último monstruo golpeado: su nombre y vida se muestran arriba */
 static int       s_shown_target = -1;
+static int       s_repeat_quiet; /* reintento del botón mantenido: sin mensajes ni voces ("sin maná" cada vez) */
 static int       s_shown_ticks;
 
 /* ¿La pantalla está partida? y hacia dónde (del jugador 1 al 2) */
@@ -2532,6 +2535,8 @@ static int sector_from_screen(float sx, float sy)
    sounds.txt que empiezan con la clase, como "barbarian_needmana_1" */
 static void player_say(const Player *p, const char *what)
 {
+    if (s_repeat_quiet)
+        return;
     char name[64];
     snprintf(name, sizeof name, "%s_%s", s_classes[p->cls].voice, what);
     audio_play_name(name, p->x, p->y);
@@ -3169,6 +3174,8 @@ static void refresh_look(Player *p)
 
 static void show_message(Player *p, const char *text)
 {
+    if (s_repeat_quiet)
+        return;
     snprintf(p->message, sizeof p->message, "%.*s", (int)sizeof p->message - 1, tr(text));
     p->message_ticks = 2 * TICK_RATE;
 }
@@ -7853,7 +7860,7 @@ static void cast_effect(Player *p)
 
 /* Usa una habilidad aprendida: gasta el maná y arranca el ataque o el
    lanzamiento. Devuelve 1 si el personaje quedó ocupado. */
-static int use_skill_mana(Player *p, int skill)
+static int skill_start(Player *p, int skill)
 {
     const SkillDef *s = skills_get(p->cls, skill);
     int lvl = eff_lvl(p, skill);
@@ -7954,6 +7961,30 @@ static int use_skill_mana(Player *p, int skill)
     }
     set_player_state(p, PS_CAST, MODE_SC);
     return 1;
+}
+
+/* La demora del original (localdelay de skills.txt, en cuadros: Blizzard 45, Meteoro 30...): esa
+   habilidad no se puede usar de nuevo hasta que pase (STATE_SKILLDELAY en D2Game, Skills.cpp); la de
+   globaldelay (las transformaciones del Druida) es común a todas las que la tienen */
+static int skill_ready(const Player *p, int skill)
+{
+    const SkillDef *s = skills_get(p->cls, skill);
+    return p->skill_cd[skill] <= 0 && !(s->gdelay > 0 && p->global_cd > 0);
+}
+
+static int use_skill_mana(Player *p, int skill)
+{
+    const SkillDef *s = skills_get(p->cls, skill);
+    if (!skill_ready(p, skill)) {
+        show_message(p, "Todavía no se puede");
+        return 0;
+    }
+    int ok = skill_start(p, skill);
+    if (ok && s->delay > 0)
+        p->skill_cd[skill] = s->delay;
+    if (ok && s->gdelay > 0)
+        p->global_cd = s->gdelay;
+    return ok;
 }
 
 /* Con Blood Mana (la maldición de las súcubos, D2GAME_SKILLS_BloodMana) lo
@@ -8186,6 +8217,12 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
         p->act_top = p->act;
     tick_potions(p);
     skills_tick(p);
+    for (int k = 0; k < MAX_CLASS_SKILLS; k++)
+        if (p->skill_cd[k] > 0)
+            p->skill_cd[k]--;
+    if (p->global_cd > 0)
+        p->global_cd--;
+    p->repeat_mask &= p->held_mask; /* (soltó el botón: deja de repetir) */
     PlayerInput none;
     memset(&none, 0, sizeof none);
     if (p->state >= PS_DYING || p->dialog_npc >= 0 || p->reading || p->wp_open || p->inv_open)
@@ -8389,6 +8426,28 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
         items_ground_remove(gold);
     }
 
+    /* Un botón de habilidad mantenido la repite, como mantener el clic en el original: cuando termina
+       la animación (acá, el personaje ya está libre) se vuelve a usar como si se apretara otra vez. Solo
+       si al apretarlo usó la habilidad o pegó (no hablar, levantar o usar algo) y sin paneles abiertos
+       (`none`); si no se puede (maná, demora), se reintenta cada un cuarto de segundo sin avisar */
+    int pressed = pi->action;
+    for (int b = 1; b < NUM_BUTTONS; b++)
+        pressed |= pi->button[b];
+    if (!pressed && pi != &none && (p->repeat_mask & p->held_mask) && (int)(s_ticks - (uint32_t)p->repeat_wait) >= 0) {
+        int b = p->last_button >= 0 && ((p->repeat_mask & p->held_mask) >> p->last_button & 1) ? p->last_button : -1;
+        for (int k = 0; k < NUM_BUTTONS && b < 0; k++)
+            if ((p->repeat_mask & p->held_mask) >> k & 1)
+                b = k;
+        s_repeat_quiet = 1;
+        int ok = use_button(p, b, in_town);
+        s_repeat_quiet = 0;
+        if (ok && getenv("D2_USE_LOG"))
+            printf("uso: tick %u J%d botón %d (mantenido)\n", s_ticks, (int)(p - s_pl) + 1, b);
+        if (ok)
+            return;
+        p->repeat_wait = (int)s_ticks + TICK_RATE / 4;
+    }
+
     /* El botón de acción levanta un objeto si hay uno al lado y ningún
        monstruo cerca; si no, ataca. En el pueblo no se pelea. */
     if (pi->action) {
@@ -8456,12 +8515,19 @@ static void player_tick(Player *p, float sx, float sy, int sprint, const PlayerI
         } else if (quest_interact(p)) { /* se usan una sola vez: aunque haya monstruos cerca */
             return;
         } else if (!full && use_button(p, 0, in_town)) {
+            p->repeat_mask |= 1; /* (pegó o usó la habilidad: si lo mantiene, repite) */
+            if (getenv("D2_USE_LOG"))
+                printf("uso: tick %u J%d botón 0\n", s_ticks, (int)(p - s_pl) + 1);
             return;
         }
     } else {
         for (int b = 1; b < NUM_BUTTONS; b++)
-            if (pi->button[b] && use_button(p, b, in_town))
+            if (pi->button[b] && use_button(p, b, in_town)) {
+                p->repeat_mask |= 1 << b;
+                if (getenv("D2_USE_LOG"))
+                    printf("uso: tick %u J%d botón %d\n", s_ticks, (int)(p - s_pl) + 1, b);
                 return;
+            }
     }
 
     /* En el pueblo la vida se recupera sola */
@@ -10572,9 +10638,18 @@ static void imbue_tick(Player *p, const PlayerInput *pi)
         }
         p->shenk_q = 4;
     } else if (p->imbue_mode == 2) { /* Anya (A5Q4): con el nombre del personaje */
-        char label[64];
+        char label[64], who[48];
         items_label(&copy, label, sizeof label);
-        snprintf(copy.name, sizeof copy.name, "%.38s de %.20s", label, s_classes[p->cls].title);
+        const char *owner = game_class_name(p->cls);
+        size_t ol = strlen(owner);
+        if (lang_current() == LANG_ES || lang_current() == LANG_ES_ES || !str_exists("PlayerNameOnItemstring")) {
+            snprintf(copy.name, sizeof copy.name, "%.38s de %.20s", label, owner);
+        } else { /* como el original: "Amazon's" (PlayerNameOnItemstring; con la X si termina en s) */
+            const char *fmt = ol > 0 && owner[ol - 1] == 's' && str_exists("PlayerNameOnItemstringX") ? "PlayerNameOnItemstringX"
+                                                                                                         : "PlayerNameOnItemstring";
+            snprintf(who, sizeof who, str_get(fmt), owner);
+            snprintf(copy.name, sizeof copy.name, "%.24s %.38s", who, label);
+        }
         p->nihl_q = 5;
     } else if (!items_make_rare(&copy, p->level_num + 4)) { /* Como en el original: un raro de nivel del personaje + 4 */
         show_message(p, "No se pudo imbuir");
@@ -11675,7 +11750,7 @@ static void talk_test(void)
             printf("%s (al abrir): %s\n", npcs[k], s_last_talk);
         for (int t = 0; t < times; t++) {
             npc_talk(p, npcs[k]);
-            printf("%s %d: %s\n", npcs[k], t + 1, s_last_talk);
+            printf("%s %d: %s | %.50s\n", npcs[k], t + 1, s_last_talk, p->talk_text ? p->talk_text : "");
         }
         int opts[8], n = npc_options(p, npcs[k], opts);
         for (int o = 0; o < n; o++)
@@ -13500,6 +13575,13 @@ int game_tick(const InputState *in)
 
     if (s_shown_ticks > 0 && --s_shown_ticks == 0)
         s_shown_target = -1;
+    if (s_shown_target >= 0) { /* (se fue de la zona: por un portal o un waypoint, ya no se muestra) */
+        int here = 0, z = units_zone(s_shown_target);
+        for (int i = 0; i < s_num_local && !here; i++)
+            here = zone_at(s_pl[s_local[i]].x, s_pl[s_local[i]].y) == z;
+        if (!here)
+            s_shown_target = -1;
+    }
 
     /* Depuración (D2_KILL="ticks,nombre"): a los tantos ticks mata a ese
        monstruo (para ver la muerte de un jefe); "all", a todos los cargados */
@@ -14598,16 +14680,23 @@ static void draw_player_banners(const Player *p, int cx, int y, int max_w)
         y += draw_banner_line(cx, y, max_w, text, 3, COL(R_GOLD, 15));
         y += draw_banner_line(cx, y, max_w, "Select + X: atributos   Select + Y: habilidades", 1, COL(R_GRAY, 15));
     }
-    if (p->state >= PS_DYING)
-        draw_banner_line(cx, y, max_w, "MORISTE", 4, COL(R_RED, 13));
+    if (p->state >= PS_DYING) { /* "Has muerto" del juego en su idioma (StrYouDied; la otra línea es "Pulsa ESC...") */
+        char died[96];
+        snprintf(died, sizeof died, "%s", str_exists("StrYouDied") ? str_get("StrYouDied") : "MORISTE");
+        died[strcspn(died, "\r\n")] = '\0';
+        draw_banner_line(cx, y, max_w, died, 4, COL(R_RED, 13));
+    }
 }
+
+static int target_bar(int draw);
 
 /* Con dos jugadores, cada uno ve sus carteles de su lado: en columnas si la
    cámara es compartida, o dentro de su mitad si la pantalla está partida */
 static void draw_banners(void)
 {
     eco_draw(); /* (arriba a la derecha) */
-    int y = 36;
+    int y = 36, bar = target_bar(0) + 6; /* (debajo de la barra del monstruo: si no, se encimaban) */
+    y = bar > y ? bar : y;
     if (s_quest_ticks > 0) {
         font_draw_centered(SCREEN_W / 2, y, s_quest_banner, 3, COL(R_GOLD, 15));
         y += 30;
@@ -14659,16 +14748,13 @@ static void draw_banners(void)
 
 /* Nombre y vida del último monstruo golpeado, arriba al centro */
 /* Vida del último monstruo golpeado, arriba al centro como en el juego:
-   barra roja translúcida con el nombre encima (dorado si es un jefe) */
-static void draw_target_bar(void)
+   barra roja translúcida con el nombre encima (dorado si es un jefe).
+   Devuelve dónde termina (0 si no hay); con draw = 0 solo lo calcula (los
+   carteles de la zona y las misiones van debajo) */
+static int target_bar(int draw)
 {
-    if (getenv("D2_SHOW_TARGET")) { /* depuración: ese monstruo (por su Id o el nombre del jefe) */
-        int id;
-        if (units_find_all(getenv("D2_SHOW_TARGET"), &id, 1) == 1)
-            s_shown_target = id;
-    }
     if (s_shown_target < 0)
-        return;
+        return 0;
     int hp, hp_max;
     units_health(s_shown_target, &hp, &hp_max);
     const char *name = units_display_name(s_shown_target);
@@ -14676,17 +14762,19 @@ static void draw_target_bar(void)
     if (w < 140)
         w = 140;
     int x = SCREEN_W / 2 - w / 2, y = 8, h = 20;
-    fb_blend_rect(x, y, w, h, COL(R_GRAY, 0), BLEND_25);
-    fb_blend_rect(x, y, hp_max > 0 ? w * hp / hp_max : 0, h, COL(R_RED, 6), BLEND_50);
-    font_draw_centered(SCREEN_W / 2, y + (h - font_height(2)) / 2, name, 2,
-                       units_is_unique(s_shown_target) ? COL(R_GOLD, 15) : units_is_champion(s_shown_target) ? COL(R_BLUE, 15)
-                                                                                           : COL(R_GRAY, 15));
+    if (draw) {
+        fb_blend_rect(x, y, w, h, COL(R_GRAY, 0), BLEND_25);
+        fb_blend_rect(x, y, hp_max > 0 ? w * hp / hp_max : 0, h, COL(R_RED, 6), BLEND_50);
+        font_draw_centered(SCREEN_W / 2, y + (h - font_height(2)) / 2, name, 2,
+                           units_is_unique(s_shown_target) ? COL(R_GOLD, 15) : units_is_champion(s_shown_target) ? COL(R_BLUE, 15)
+                                                                                               : COL(R_GRAY, 15));
+    }
     /* Debajo, como el original: no muerto o demonio, lo del jefe o del campeón y las inmunidades
        (en dos renglones si no entra) */
     char desc[256];
     units_describe(s_shown_target, desc, sizeof desc);
     if (!desc[0])
-        return;
+        return y + h;
     int dy = y + h + 2, most = SCREEN_W / 2 - 20;
     char *line = desc;
     for (int row = 0; row < 2 && *line; row++) {
@@ -14703,11 +14791,24 @@ static void draw_target_bar(void)
         if (cut)
             *cut = '\0';
         int tw = font_width(line, 1);
-        fb_blend_rect(SCREEN_W / 2 - tw / 2 - 4, dy - 1, tw + 8, font_height(1) + 2, COL(R_GRAY, 0), BLEND_50);
-        font_draw_centered(SCREEN_W / 2, dy, line, 1, COL(R_GRAY, 15));
+        if (draw) {
+            fb_blend_rect(SCREEN_W / 2 - tw / 2 - 4, dy - 1, tw + 8, font_height(1) + 2, COL(R_GRAY, 0), BLEND_50);
+            font_draw_centered(SCREEN_W / 2, dy, line, 1, COL(R_GRAY, 15));
+        }
         dy += font_height(1) + 2;
         line = cut ? cut + 2 : line + strlen(line);
     }
+    return dy;
+}
+
+static void draw_target_bar(void)
+{
+    if (getenv("D2_SHOW_TARGET")) { /* depuración: ese monstruo (por su Id o el nombre del jefe) */
+        int id;
+        if (units_find_all(getenv("D2_SHOW_TARGET"), &id, 1) == 1)
+            s_shown_target = id;
+    }
+    target_bar(1);
 }
 
 
@@ -16234,6 +16335,13 @@ static void draw_button(const Player *p, int b, int x, int y, int size)
         const SkillDef *s = skills_get(p->cls, what);
         int usable = s->aura || (p->mana >= skill_mana(s, p->skill_lvl[what]) && weapon_allows(p, s));
         draw_icon(p->cls, s->icon, x, y, size, usable ? LIGHT_LEVELS - 1 : 10);
+        int cd = p->skill_cd[what], full = s->delay;
+        if (s->gdelay > 0 && p->global_cd > cd) /* (la global, si es más larga) */
+            cd = p->global_cd, full = s->gdelay;
+        if (cd > 0 && full > 0) { /* la demora: lo que falta, oscuro de arriba hacia abajo */
+            int h = size * cd / full;
+            fb_blend_rect(x, y, size, h > size ? size : h, COL(R_GRAY, 0), BLEND_75);
+        }
         if (s->aura && p->aura == what) /* el aura puesta */
             draw_frame(x, y, size, size, COL(R_GOLD, 15));
         int kind = skill_attack_kind(s);
@@ -16553,6 +16661,8 @@ static void draw_effects(const Player *p, int cx, int y, int width)
         int x = cx - (in_row * EFFECT_STEP - (EFFECT_STEP - EFFECT_ICON)) / 2 + (k % per_row) * EFFECT_STEP;
         int top = y - EFFECT_ICON - row * (EFFECT_ICON + 4);
         if (e[k].ticks > 0 && e[k].ticks < 3 * TICK_RATE && (s_anim_ticks / 6) % 2) /* se está por terminar */
+            continue;
+        if (e[k].set >= 0 && !skill_icons(e[k].set)) /* (sus íconos se están leyendo: si no, un cuadro negro) */
             continue;
         fb_fill_rect(x, top, EFFECT_ICON, EFFECT_ICON, COL(R_GRAY, 0));
         if (e[k].set >= 0)

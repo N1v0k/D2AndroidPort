@@ -188,6 +188,19 @@ static void demo_input(InputState *in, const Options *o, int tick)
     if (getenv("D2_ACTION"))
         in->player[0].action = tick % 6 == 0;
 
+    /* D2_HOLD=a|b|x|y: quedarse quieto, apretar ese botón una vez (tick 10) y mantenerlo (la
+       repetición); D2_HOLD_UNTIL=n, soltarlo en el tick n */
+    if (getenv("D2_HOLD")) {
+        char c = getenv("D2_HOLD")[0];
+        int b = c == 'b' ? 1 : c == 'x' ? 2 : c == 'y' ? 3 : 0;
+        int until = getenv("D2_HOLD_UNTIL") ? atoi(getenv("D2_HOLD_UNTIL")) : 1 << 30;
+        in->player[0].move_x = in->player[0].move_y = 0.0f;
+        in->player[0].button[b] = tick == 10;
+        in->player[0].action = b == 0 && tick == 10;
+        in->player[0].held[b] = tick >= 10 && tick < until;
+        return;
+    }
+
     /* D2_ATTACK: quedarse quieto y atacar cada medio segundo. Con
        D2_ATTACK=b, x o y usa ese botón en vez del A. */
     if (getenv("D2_ATTACK")) {
@@ -205,6 +218,87 @@ static void demo_input(InputState *in, const Options *o, int tick)
    están los de todos para t, lo juega. bots: los controles salen del bot de la prueba (todos en
    in->player, por su número en la partida); si no, de los joysticks. 0 = esperando, 1 = jugó,
    2 = se terminó (salir o se cortó la red). wait: esperar hasta tenerlos (las pruebas sin ventana). */
+/* D2_MONKEY=semilla (pruebas, con --autotest): además de los bots, de vez en cuando se aprieta algo al
+   azar (los paneles, el cinturón, tirar, los menús, la pausa, el mouse, caminar para un lado) para
+   encontrar caídas en lo que los bots no tocan; D2_MONKEY_RATE=n: una cosa cada n ticks (8). Con su
+   propio sorteo: no toca el del juego */
+static void monkey_input(InputState *in, int players, int tick)
+{
+    static uint32_t s;
+    static int rate, hold, who, clicked, tidy = -1;
+    static float mx, my;
+    if (!s) {
+        s = (uint32_t)atoi(getenv("D2_MONKEY")) * 2654435761u | 1u;
+        rate = getenv("D2_MONKEY_RATE") ? atoi(getenv("D2_MONKEY_RATE")) : 8;
+        rate = rate < 1 ? 1 : rate;
+    }
+#define MONKEY_RND() (s ^= s << 13, s ^= s >> 17, s ^= s << 5, s)
+    if (clicked) /* (el clic dura un tick) */
+        in->mouse_down = clicked = 0;
+    if (hold > 0) {
+        hold--;
+        in->player[who].move_x = mx;
+        in->player[who].move_y = my;
+    }
+    if (tick == tidy) /* (al rato cierra lo que abrió, como cualquiera: si no, el bot no sigue) */
+        game_autotest_close_ui();
+    if (MONKEY_RND() % (uint32_t)rate)
+        return;
+    if (tidy < tick)
+        tidy = tick + 10 + (int)(MONKEY_RND() % 150);
+    who = (int)(MONKEY_RND() % (uint32_t)(players > 0 ? players : 1));
+    PlayerInput *p = &in->player[who];
+    switch (MONKEY_RND() % 25) {
+    case 0: p->action = 1; break;
+    case 1: case 2: p->button[MONKEY_RND() % 4] = 1; break;
+    case 3: p->skill_tree = 1; break;
+    case 4: p->stats_page = 1; break;
+    case 5: p->potion_life = 1; break;
+    case 6: p->potion_mana = 1; break;
+    case 7: p->potion_stamina = 1; break;
+    case 8: p->automap = 1; break;
+    case 9: p->chat = 1; break;
+    case 10: p->belt = 1 + (int)(MONKEY_RND() % 4); break;
+    case 11: p->inventory = 1; break;
+    case 12: p->nav_up = 1; break;
+    case 13: p->nav_down = 1; break;
+    case 14: p->nav_left = 1; break;
+    case 15: p->nav_right = 1; break;
+    case 16: p->drop = 1; break;
+    case 17: p->back = 1; break;
+    case 18: {
+        float a = (float)(MONKEY_RND() % 628) / 100.0f;
+        mx = cosf(a);
+        my = sinf(a);
+        hold = 5 + (int)(MONKEY_RND() % 40);
+        break;
+    }
+    case 19:
+        in->mouse_x = (int)(MONKEY_RND() % SCREEN_W);
+        in->mouse_y = (int)(MONKEY_RND() % SCREEN_H);
+        in->mouse_down = clicked = (int)(MONKEY_RND() % 2);
+        break;
+    case 20:
+        switch (MONKEY_RND() % 4) {
+        case 0: in->menu_up = 1; break;
+        case 1: in->menu_down = 1; break;
+        case 2: in->menu_left = 1; break;
+        default: in->menu_right = 1; break;
+        }
+        break;
+    case 21: in->confirm = 1; break;
+    case 22: in->menu_back = 1; break;
+    case 23: in->menu_delete = 1; break;
+    default:
+        if (MONKEY_RND() % 4 == 0)
+            in->escape = 1;
+        else
+            in->start = 1;
+        break;
+    }
+#undef MONKEY_RND
+}
+
 static uint32_t s_net_sent = UINT32_MAX; /* el último tick para el que ya se mandaron los controles */
 static uint32_t s_net_tick;              /* el próximo tick de la partida en red */
 
@@ -616,6 +710,8 @@ static int run_headless(const Options *o)
                 SDL_Delay((Uint32)atoi(getenv("D2_MENU_DELAY")));
             MenuResult r = menu_tick(&in);
             dump_tick();
+            if (getenv("D2_RENDER_EVERY")) /* (pruebas: el dibujo de cada pantalla del menú) */
+                menu_render();
             if (r == MENU_START) {
                 game_set_difficulty(menu_difficulty());
                 game_set_terror_zones(menu_terror_zones());
@@ -678,6 +774,8 @@ static int run_headless(const Options *o)
         int cap = o->frames > 0 ? o->frames : hours * 3600 * TICK_RATE;
         for (int t = 0; r == 1 && t < cap; t++) {
             r = game_autotest_input(&in, last);
+            if (getenv("D2_MONKEY"))
+                monkey_input(&in, o->players, t);
             Uint64 t0 = SDL_GetPerformanceCounter();
             if (net_role() != NET_OFF) { /* en red: con los controles de todas las máquinas */
                 int st = net_step(&in, (uint32_t)t, 1, 1);

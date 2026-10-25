@@ -1850,6 +1850,19 @@ static int autotest_input_fill(InputState *in, double last_tick_ms);
 /* Llena los controles de este tick; 1 = sigue, 0 = terminó bien, -1 = falló.
    Los bots mantienen apretado el botón de lo que canalizan (Vincular demonio
    del Brujo), hasta 8 segundos */
+void game_autotest_close_ui(void)
+{
+    for (int i = 0; i < s_num_players; i++) {
+        Player *p = &s_pl[i];
+        if (p->dialog_npc >= 0)
+            close_ui(p);
+        p->shop_open = p->shop_selling = p->hire_open = p->imbue_open = p->wp_open = p->inv_open = 0;
+        p->stash_open = p->chat_open = p->map_open = p->inv_page = 0;
+        p->reading = NULL;
+    }
+    s_paused = s_controls_open = s_guide_open = 0;
+}
+
 int game_autotest_input(InputState *in, double last_tick_ms)
 {
     int r = autotest_input_fill(in, last_tick_ms);

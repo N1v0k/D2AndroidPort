@@ -856,3 +856,23 @@
 855	pozostałe
 856	Inna wersja gry: wszyscy muszą mieć tę samą
 857	Gra jest pełna albo już się zaczęła
+858	Już przeczytałeś ten zwój
+859	Zyskałeś +10 do wszystkich odporności
+860	Nie masz broni ani zbroi bez gniazd
+861	Nie masz magicznych, rzadkich ani unikatowych przedmiotów do personalizacji
+862	Ten przedmiot nie może mieć gniazd
+863	Gniazda
+864	Personalizacja
+865	Larzuk dodaje tyle gniazd, ile się da
+866	Anya umieszcza na nim twoje imię
+867	A: dodaj gniazda   B: wróć
+868	A: personalizuj   B: wróć
+869	Związany demon
+870	Starożytni wrócili do swoich posągów
+871	Anya jest wolna: wróciła do Harrogath
+872	Znalazłeś Anyę: porozmawiaj z Malah
+873	Shenk nie żyje: porozmawiaj z Larzukiem
+874	Nihlathak nie żyje: porozmawiaj z Anyą
+875	Baal wszedł do Komnaty Kamienia Świata
+876	Uwolniłeś 15 żołnierzy: porozmawiaj z Qual-Kehkiem
+877	Uwolniłeś %d żołnierzy
