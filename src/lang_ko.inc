@@ -949,3 +949,15 @@
 { "Baal se fue a la Cámara de la Piedra del Mundo", "바알이 세계석 보관실로 들어갔습니다" },
 { "Liberaste a los 15 soldados: hablá con Qual-Kehk", "병사 15명을 구했습니다: 콸케크와 대화하세요" },
 { "Liberaste a %d soldados", "병사 %d명을 구했습니다" },
+
+/* La comparación con lo equipado (en el inventario, como en Diablo IV) */
+{ "EQUIPADO", "착용 중" },
+{ "Contra lo equipado:", "착용 중인 아이템과 비교:" },
+{ "Daño: %+d a %+d", "피해: %+d~%+d" },
+{ "Defensa: %+d", "방어력: %+d" },
+{ "Bloqueo: %+d%%", "막기: %+d%%" },
+{ "X: ponértelo (lo cambia por lo equipado)", "X: 착용 (착용 중인 아이템과 교체)" },
+
+/* Los engarces (en el inventario) */
+{ "A: levantarla para engarzarla", "A: 집어서 장착" },
+{ "A: engarzarla", "A: 장착" },

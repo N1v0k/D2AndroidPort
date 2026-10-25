@@ -610,10 +610,11 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
   sale gratis.
 - Las muertes de jefe con efecto propio del original (`bossfx.inc`, con las
   piezas de `missiles.txt`):
-  - Blood Raven (`brdeathcontrol`): unos 15 segundos de rayos que salen de
-    alrededor (`brdeathlightningbolt`: no se ven, alumbran al pasar), van
-    hacia el cuerpo y caen sobre él (`brdeathlightninghit`; antes caían al
-    azar por todo el lugar), con su chasquido, truenos y un leve destello,
+  - Blood Raven (`brdeathcontrol`): unos 15 segundos de rayos que salen del
+    cuerpo hacia cualquier lado (`brdeathlightningbolt`: no se ven, alumbran
+    al pasar), recorren hasta sus 20 cuadros (unos 20 subtiles) o hasta una
+    pared y caen donde terminan (`brdeathlightninghit`): por todo el
+    cementerio, y uno de cada cuatro sobre ella; con su chasquido, truenos y un leve destello,
     mientras suben el humo y los espíritus (`brdeathsmoke*` y
     `brdeathspirit*`, encadenados: empiezan, siguen y terminan, con los
     sonidos de la niebla).
@@ -1021,9 +1022,17 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
     Akara lo traduce, las cinco Piedras Cairn se tocan en el orden del
     pergamino y abren el portal rojo a Tristram, donde se libera a Caín.
     Las piedras están apagadas; cada una se prende al tocarla en orden (con
-    su sonido) y queda prendida. Con la quinta caen rayos grandes sobre las
-    piedras y corren rayos por el piso (`cairnstones`), y a los 2,4 segundos
-    se abre el portal.
+    su sonido) y queda prendida. Con la quinta empieza `cairnstones` (300
+    cuadros): la escena se oscurece en 40 cuadros (Fade Frames), corren rayos
+    por el piso de cada piedra a la segunda de al lado, una estrella como un
+    pentagrama (`cairnstonesground`), y del cuadro 40 al 260 caen rayos
+    grandes por todos lados a menos de 17 subtiles (`cairn stones bolt`, cada
+    2 cuadros). El portal se abre a los 160 (6,4 segundos: el contador del
+    original baja desde 300 y lo abre en Param1 + Param5 = 140) y al final la
+    escena vuelve a aclararse.
+  - **La Guarida del Mal** limpia: además de que la cueva se ilumina, bajan
+    haces de luz del techo alrededor del que la limpió (`denofevillight`,
+    LightBeams, 12 segundos), como en el original.
   - **Herramientas del Oficio** (Charsi): el Mazo de Horadric en la forja de
     los Barracones; al devolverlo, Charsi vuelve raro (amarillo) un objeto.
     El Mazo es un arma: Charsi lo acepta también si lo tenés en la mano, y
@@ -1035,6 +1044,12 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
   - Con 2 jugadores las misiones arrancan para los dos; los jefes cuentan
     para todos y los objetos de misión, para el que los levanta.
   - Página de misiones en el ciclo de paneles (Y) con el estado de cada una.
+- Los colores de los nombres, como el original (`items_label_color`, con
+  los de `_profilehd.json` del Resurrected: DefaultColor, MagicColor...):
+  comunes, gemas, pociones y oro en blanco; con engarces (comunes) en gris;
+  mágicos en azul; raros en amarillo; de conjunto en verde; únicos,
+  palabras rúnicas y los de las misiones (columna `quest`) en dorado;
+  artesanales y runas en anaranjado.
 - Objetos raros (nombre amarillo), con los nombres de `rareprefix.txt` y
   `raresuffix.txt`: de 3 a 6 afijos.
 - Únicos (dorado, `uniqueitems.txt`) y de conjunto (verde, `setitems.txt` y
@@ -1044,8 +1059,21 @@ Los planes de cada acto están en [plan-acto2.md](plan-acto2.md) y
   un único de ese objeto, sale raro, como en el original.
 - Anillos (dos) y amuleto, en sus lugares del inventario del original.
   Talismanes: dan lo suyo desde la mochila.
-- Engarces, gemas, runas y joyas (`gems.txt`): una gema, runa o joya en la
-  mano soltada sobre un objeto con engarces libres se engarza; da lo de un
+- Comparación con lo equipado (como en Diablo IV): con el cursor sobre algo
+  de la mochila, del arcón o del cubo que va donde ya hay algo puesto, al
+  lado de su descripción va la de lo equipado con el cartel EQUIPADO, y en
+  la suya cuánto sube o baja el daño, la defensa y el bloqueo (verde o
+  rojo). X lo cambia por lo equipado: lo que se saca queda en el mismo lugar
+  de la mochila con el cursor encima (X otra vez lo vuelve a poner). En
+  pantalla dividida las descripciones van con la letra chica y, si no
+  entran una al lado de la otra, una arriba de la otra.
+- Engarces, gemas, runas y joyas (`gems.txt`): con el cursor sobre un
+  objeto con engarces se ven sus huecos (`panel/gemsocket`, al 25%) y lo
+  engarzado, en los lugares del original según el tamaño del objeto y
+  cuántos tiene (los que copia ItemScreenshot de blizzhackers: 2-1-2 los de
+  5, de a dos por fila los de 4 y 6 en los de 2 x 3...). Para engarzar, A
+  levanta la gema, runa o joya y A sobre un objeto con engarces libres
+  (que se marca en verde, con "A: engarzarla") la engarza; da lo de un
   arma, un casco o armadura, o un escudo. Las runas en el orden justo en un
   objeto de calidad baja, común o superior (también etéreo; no mágico ni
   mejor, como `ITEMS_GetRunesTxtRecordFromItem` del original) con la
@@ -1492,6 +1520,19 @@ GPU de una Pi 3B.
     al otro solo, porque se mueve por la posición en pantalla
     (`nav_nearest`). El nombre es el del juego: "Arcón" (`stash` de
     objects.json) y "Oro en Arcón:" (`strGoldInStash`).
+  - Con dos jugadores en una máquina, los paneles de cada uno (inventario,
+    arcón, tienda, habilidades, personaje...) van del lado de la pantalla
+    donde está su vista: el que está más a la izquierda en pantalla tiene
+    los suyos a la izquierda (la pantalla se parte perpendicular a la recta
+    que los une), con un margen de 3 subtiles para que no salten mientras
+    están parejos; la barra de abajo no cambia. Como el cursor se mueve
+    según dónde está cada casilla y eso se calcula en la lógica (igual en
+    todas las máquinas de una partida en red), el lado sale de la partida:
+    `s_lay_n`, `s_lay_slot` y `s_lay_owner` (cuántos juegan en la máquina
+    de cada jugador, su lugar y de qué máquina es: del anfitrión en red) y
+    `lay_update` en cada tick, con las posiciones; `panel_x`, `half_range`,
+    `stash_side`, `belt_x` y `shop_px` los usan (antes dependían de cuántos
+    jugaban en la máquina que lo calculaba).
   - El fondo de la grilla es casi negro (no se ven los lugares del equipo
     detrás), el oro guardado va en dos renglones y los botones del oro
     miden lo que su texto en el idioma de la pantalla. Si la ayuda de
@@ -1514,8 +1555,13 @@ GPU de una Pi 3B.
   importador (`import_movies`) saca cada una de a pedazos y ffmpeg la pasa a
   MPEG-1 640x288 a 24 cuadros con sonido MP2 estéreo a 44100 Hz en
   `data/global/video/<nombre>.mpg` (`idioma.txt` dice de qué idioma es el
-  sonido; si cambia, se vuelven a convertir). Los logos (`new_bliz`,
-  `bliznorth`) son 640x480 sin sonido. Pesan 190 MB las siete; las de la
+  sonido; si cambia, se vuelven a convertir). Los logos clásicos
+  (`new_bliz`, `bliznorth`) son 640x480 y el Resurrected los trae mudos (en
+  el original sonaban); por eso también va `blizzardlogos`, el video de
+  logos del Resurrected (`data/hd/global/video/blizzardlogos.webm`: los
+  mismos dos logos, con la misma animación) con su sonido
+  (`data/hd/local/video/blizzardlogos.flac`, no depende del idioma),
+  recortado a 4:3 y en 640x480. Pesan 190 MB las siete; las de la
   expansión (`d2x_intro`, `d2x_out`) no se convierten todavía.
   - Las pasa [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
     (`src/third/pl_mpeg.h`): en la PC decodifica unos 1500 cuadros por
@@ -1533,7 +1579,11 @@ GPU de una Pi 3B.
     vez (A1COMPLETED, A2COMPLETED, A3COMPLETED). Acá: `andy_q` 3,
     `A2F_SAILED` y `A3F_HELLGATE`; el juego la pide (`game_take_movie`) y la
     pasa `main.c`, nunca los bots de la demo ni las pruebas. Al arrancar, los
-    logos y la presentación (cada una se saltea con A, B, Start o Esc).
+    logos (`blizzardlogos`, con sonido; si no se importó, los dos clásicos)
+    y la presentación. Cualquier tecla, botón del joystick (menos el del
+    logo del control) o clic saltea una (`any_press` de `input.c`: por
+    evento, así un stick apretado no la saltea; Alt, Ctrl, Shift y Tab
+    solas no cuentan).
   - En el menú principal, **Cinemáticas** con el panel de la expansión
     (`cinematicsselectionexp`, siete filas en el orden de
     `cinematicsmodalhd.json`, que es el del número del paquete 0x61):
@@ -1881,14 +1931,14 @@ Variables de depuración:
 |---|---|
 | `D2_DEBUG=1` | Marca los subtiles que bloquean el paso y, con `--headless`, muestra el estado de los jugadores; en la prueba de habilidades, al empezar, lo que dice el árbol de cada habilidad en los niveles 1 y 20, y a cuántos afecta cada uso |
 | `D2_SEED=N` | Fija la semilla del Blood Moor |
-| `D2_START=x,y` | Elige dónde aparece el jugador (en subtiles) |
+| `D2_START=x,y[,dx,dy]` | Elige dónde aparece el jugador (en subtiles); con `dx,dy`, cada jugador corrido eso del anterior (por ejemplo `-10,10`: el segundo a la izquierda del primero en pantalla) |
 | `D2_START_NEAR=fallen1` | Aparece al lado de ese monstruo |
 | `D2_WALK=x,y` | Con `--demo`, camina siempre en esa dirección de pantalla |
 | `D2_ATTACK=1` | Con `--demo`, se queda quieto y ataca cada medio segundo |
 | `D2_LIST_GFX=1` | Lista los gráficos de monstruos y objetos que se cargan |
 | `D2_ACTION=1` | Con `--demo`, aprieta acción cada 6 ticks sin dejar de caminar |
 | `D2_DROPTEST=N` | Tira N veces el botín de un Fallen y muestra qué sale |
-| `D2_SPAWN_ITEMS=1` | Deja oro, pociones y equipo al lado del inicio |
+| `D2_SPAWN_ITEMS=1` | Deja oro, pociones y equipo al lado del inicio (con `=2`, uno de cada color de nombre: común, con engarces, mágico, raro, de conjunto, único, artesanal, runa, gema, de misión, oro y poción) |
 | `D2_INV_OPEN=1` | Arranca con el inventario abierto |
 | `D2_EQUIP=ltp,hlm` | Equipa esos objetos al empezar (aunque no sean mejores) |
 | `D2_INV_SCRIPT=ddda` | Con `--demo`, una tecla cada 5 ticks para el jugador 1 (u/d/l/r, a/b/x/y, i = inventario, t = árbol, o = LB, c = R3 las frases, . = nada) |
@@ -1964,7 +2014,7 @@ Variables de depuración:
 | `D2_ATTACK=x` | Con `--demo`, usa el botón B, X o Y en vez del A |
 | (botón mantenido, demoras y rodear) | Un botón de habilidad mantenido la repite al terminar cada animación (`repeat_mask` en game.c: solo si al apretarlo pegó o usó la habilidad; los reintentos que fallan, cada 1/4 s y sin mensajes: `s_repeat_quiet`). Las demoras de skills.txt (`localdelay`, `globaldelay`) valen para todas las clases (`skill_cd`, `global_cd`; se revisan y se ponen en `use_skill_mana`; el botón se oscurece). Los monstruos que no avanzan hacia su blanco siguen dos segundos los pasos hasta él (`chase_steer` en units.c: un BFS de 81x81 subtiles por blanco, rehecho cada 4 ticks si alguien lo pide), como el WALL_FOLLOW del original |
 | `D2_HOLD=b` | Con `--demo`: quieto, aprieta ese botón (a, b, x o y) una vez y lo mantiene (la repetición del botón mantenido); `D2_HOLD_UNTIL=n` lo suelta en el tick n. Con `D2_USE_LOG=1` se ve cada uso (y si fue por mantenerlo) |
-| `D2_BAG="sbw,lea"` | Pone esos objetos en la mochila |
+| `D2_BAG="sbw,lea/3"` | Pone esos objetos en la mochila (con `/N`, con N engarces) |
 | (Windows) | `d2port.exe` se compila desde WSL con `cmake/mingw-w64.cmake` (`build-win/`; `SDL2_DIR` la de SDL2-devel-2.30.x-mingw). Lo que cambia con Linux está en `src/compat.c` (carpetas, reemplazar archivos, temporales, la carpeta del .exe y el registro `d2port.log` sin consola). La red local va con Winsock (en `net.c`, unas macros para lo que cambia: cerrar, no bloquear, los errores; la IP propia "conectando" un UDP afuera; la búsqueda pregunta a cada red de la máquina con GetAdaptersAddresses / getifaddrs, a 255.255.255.255 y a 127.0.0.1, y el anfitrión contesta con un número de la partida para no repetirla). `D2_NET_BIND=127.0.0.1` escucha solo en esa dirección: en Windows así no pregunta el firewall en las pruebas. En una sesión con `NoDefaultCurrentDirectoryInExePath`, cmd no busca programas en la carpeta actual: los .bat llaman con `%~dp0` |
 | (red entre máquinas distintas) | La Pi, Linux y Windows tienen que calcular lo mismo bit por bit (`docs/plan-lan.md`, "La Pi, Linux y Windows juntas"): nunca dos sorteos en la misma expresión ni como argumentos de una misma llamada (el orden no está definido y GCC lo hace distinto en x86 y en ARM); `sinf`/`cosf`/`atan2f`/`expf`/`hypotf` son las de `src/dmath.c` en los archivos que incluyen `dmath.h` (un archivo nuevo de la simulación tiene que incluirlo); nada de `qsort` con empates en lo que se simula; `-ffp-contract=off -fsigned-char` en CMakeLists. Para comprobar: `D2_ZONETEST=1 D2_COLLHASH=1` (la colisión de cada zona) y las partidas con `D2_LOCKSTEP=1 D2_NO_JOBS=1 D2_HASH=50`, en x86 y en ARM con `qemu-aarch64-static -L /usr/aarch64-linux-gnu` |
 | `D2_VIDEO=archivo.mp4` | (con `--autotest`) Graba la prueba: cada cuadro pasa a ffmpeg (`D2_FFMPEG`, si no `ffmpeg`; en WSL, `~/ffwrap/ffmpeg` llama al de Windows). `D2_VIDEO_EVERY=N` un cuadro cada N ticks (el video va N veces más rápido), `D2_VIDEO_CRF=N` la calidad (28; más alto, más chico) |
@@ -1990,6 +2040,7 @@ Variables de depuración:
 | `D2_KILL=ticks,nombre` | A los tantos ticks mata a ese monstruo (`bloodraven`, `andariel`...) para ver su muerte; `all` mata a todos los cargados |
 | `D2_ANIM_CHECK=1` | Al arrancar, carga las animaciones de cada monstruo con gráficos y avisa las que faltan |
 | `D2_FX_SHOTS=prefijo` | Con `--autotest`, guarda capturas de los efectos de los jefes y de las Piedras Cairn (`prefijo_tipo_tick.bmp`) |
+| `D2_FXTEST=1/2/3/4` | A los 2 segundos, junto al J1: los rayos de las Piedras Cairn (con cinco piedras de mentira, sin portal), la muerte de Blood Raven, los haces de luz de la Guarida del Mal, o los haces con la cueva iluminándose (4); para mirarlos con `D2_SHOTS` |
 | `D2_BLOCK_DUMP=x,y,radio` | Al empezar, dibuja con caracteres qué subtiles bloquean alrededor de (x, y) (`#`), con el jugador 1 en `@` |
 | `D2_DEPTH_AUDIT=1` | Al empezar, arma todas las zonas y revisa el orden de dibujo en cada lugar donde puede pararse el jugador: cuenta (y muestra los primeros) dónde quedaría encima de una pieza que tiene delante o tapado por una que tiene detrás |
 | `D2_FX_DEBUG=1` | Muestra cada efecto de habilidad que se pide (overlay.txt) |

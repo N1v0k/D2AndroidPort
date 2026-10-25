@@ -876,3 +876,11 @@
 875	Baal ist in die Weltsteinkammer gegangen
 876	Du hast die 15 Soldaten befreit: Sprich mit Qual-Kehk
 877	Du hast %d Soldaten befreit
+878	AUSGERÜSTET
+879	Im Vergleich zur Ausrüstung:
+880	Schaden: %+d bis %+d
+881	Verteidigung: %+d
+882	Blocken: %+d%%
+883	X: Anlegen (tauscht mit dem Ausgerüsteten)
+884	A: aufnehmen, um sie einzusetzen
+885	A: einsetzen

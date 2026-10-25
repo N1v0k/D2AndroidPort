@@ -118,3 +118,6 @@
 { "Baal se fue a la Cámara de la Piedra del Mundo", "Baal ha entrado en la Cámara de la Piedra del Mundo" },
 { "Liberaste a los 15 soldados: hablá con Qual-Kehk", "Has liberado a los 15 soldados: habla con Qual-Kehk" },
 { "Liberaste a %d soldados", "Has liberado a %d soldados" },
+
+/* Los engarces (en el inventario) */
+{ "A: levantarla para engarzarla", "A: cogerla para engarzarla" },

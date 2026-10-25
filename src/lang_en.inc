@@ -974,3 +974,15 @@
 { "Baal se fue a la Cámara de la Piedra del Mundo", "Baal went into the Worldstone Chamber" },
 { "Liberaste a los 15 soldados: hablá con Qual-Kehk", "You freed the 15 soldiers: talk to Qual-Kehk" },
 { "Liberaste a %d soldados", "You freed %d soldiers" },
+
+/* La comparación con lo equipado (en el inventario, como en Diablo IV) */
+{ "EQUIPADO", "EQUIPPED" },
+{ "Contra lo equipado:", "Compared to equipped:" },
+{ "Daño: %+d a %+d", "Damage: %+d to %+d" },
+{ "Defensa: %+d", "Defense: %+d" },
+{ "Bloqueo: %+d%%", "Block: %+d%%" },
+{ "X: ponértelo (lo cambia por lo equipado)", "X: equip it (swaps with the equipped one)" },
+
+/* Los engarces (en el inventario) */
+{ "A: levantarla para engarzarla", "A: pick it up to socket it" },
+{ "A: engarzarla", "A: socket it" },

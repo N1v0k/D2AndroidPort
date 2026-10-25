@@ -225,7 +225,7 @@ void input_clear_events(InputState *in)
         p->belt = p->automap = p->chat = 0;
     }
     in->menu_up = in->menu_down = in->menu_left = in->menu_right = in->menu_back = in->menu_delete = 0;
-    in->confirm = in->start = in->escape = 0;
+    in->confirm = in->start = in->escape = in->any_press = 0;
 }
 
 static void on_key(InputState *in, const SDL_KeyboardEvent *k)
@@ -241,6 +241,15 @@ static void on_key(InputState *in, const SDL_KeyboardEvent *k)
         if (!k->repeat)
             video_toggle_fullscreen();
         return;
+    }
+    switch (k->keysym.sym) { /* (solas, las de Alt+Tab y compañía no cuentan como apretar algo) */
+    case SDLK_LALT: case SDLK_RALT: case SDLK_LGUI: case SDLK_RGUI: case SDLK_LCTRL: case SDLK_RCTRL:
+    case SDLK_LSHIFT: case SDLK_RSHIFT: case SDLK_TAB:
+        break;
+    default:
+        if (!k->repeat)
+            in->any_press = 1;
+        break;
     }
     switch (k->keysym.sym) {
     case SDLK_w:     in->menu_up = 1;   p1->nav_up = 1;    return;
@@ -467,7 +476,11 @@ void input_poll(InputState *in)
         case SDL_CONTROLLERDEVICEADDED:   open_pad(e.cdevice.which); break;
         case SDL_CONTROLLERDEVICEREMOVED: close_pad(e.cdevice.which); break;
         case SDL_KEYDOWN:                 on_key(in, &e.key); break;
-        case SDL_CONTROLLERBUTTONDOWN:    on_button(in, &e.cbutton, 1); break;
+        case SDL_CONTROLLERBUTTONDOWN:
+            if (e.cbutton.button != SDL_CONTROLLER_BUTTON_GUIDE)
+                in->any_press = 1;
+            on_button(in, &e.cbutton, 1);
+            break;
         case SDL_CONTROLLERBUTTONUP:      on_button(in, &e.cbutton, 0); break;
         case SDL_CONTROLLERAXISMOTION:    on_axis(in, &e.caxis); break;
         case SDL_MOUSEMOTION:
@@ -480,6 +493,8 @@ void input_poll(InputState *in)
             in->mouse_y = e.button.y;
             if (e.button.button == SDL_BUTTON_LEFT)
                 in->mouse_down = e.type == SDL_MOUSEBUTTONDOWN;
+            if (e.type == SDL_MOUSEBUTTONDOWN)
+                in->any_press = 1;
             break;
         }
     }

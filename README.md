@@ -279,7 +279,10 @@ mercenaries and the resistance penalty (-40 and -100).
   Evil, Sisters' Burial Grounds (Blood Raven), The Search for Cain (the
   Inifuss tree, the Cairn Stones and Tristram), The Forgotten Tower (the
   Countess), Tools of the Trade (the Horadric Malus and Charsi) and Sisters
-  to the Slaughter (Andariel).
+  to the Slaughter (Andariel). With the original effects: light beams in
+  the Den of Evil when it is cleared, lightning all over the graveyard when
+  Blood Raven dies, and the Cairn Stones' pentagram of lightning in a
+  darkened scene before the red portal opens.
 - **Act 2:** Lut Gholein, the Sewers, the desert (Rocky Waste, Dry Hills,
   Far Oasis, Lost City, Valley of Snakes and the Canyon of the Magi), the
   Halls of the Dead, the caves, the Claw Viper Temple, the Palace, the
@@ -485,9 +488,21 @@ wave 8.</sub>
   level, as in the original.
 - **All qualities:** normal, low quality, superior, magic (blue), rare
   (yellow), unique (gold), set (green, with their partial set bonuses) and
-  runewords.
+  runewords. Names use the original colors: white for normal items, gems,
+  potions and gold, grey for socketed normal items, gold for uniques,
+  runewords and quest items, orange for crafted items and runes.
 - **Sockets:** gems, runes and jewels; runes in the right order make a
-  runeword.
+  runeword. With the cursor on a socketed item you see its sockets and
+  what is in them, laid out as in the original. To socket, A picks up the
+  gem, rune or jewel and A on an item with free sockets (it turns green)
+  puts it in.
+- **Comparing with what you wear** (as in Diablo IV): with the cursor on an
+  item in the backpack, stash or cube that goes where you already wear
+  something, its description shows next to the equipped one (tagged
+  EQUIPPED), with how much damage, defense and block go up or down (green
+  or red). X swaps them: the item you take off lands in the same spot of
+  the backpack under the cursor, so X again swaps back. With two players
+  the descriptions use the small font.
 - Rings, amulets, charms, arrows and bolts, throwing weapons, potions
   (healing, mana, rejuvenation, stamina, antidote, thawing), keys and
   Town Portal scrolls.
@@ -586,7 +601,8 @@ wave 8.</sub>
 - Two players on the same screen, each with a gamepad (or the keyboard).
 - A single camera while they are close; when they move apart, the screen
   splits along a line perpendicular to the one joining them, and joins
-  again when they get together.
+  again when they get together. Each player's inventory and other panels
+  open on the side of the screen where that player's view is.
 - Quests, bosses and experience count for both.
 - As in the original, each extra player gives the monsters 50% more life
   and experience, and they drop more often.
@@ -619,8 +635,10 @@ wave 8.</sub>
 - The original cinematics, in low quality so the Pi plays them smoothly
   (MPEG-1 640x288 decoded with [pl_mpeg](https://github.com/phoboslab/pl_mpeg),
   colors converted by the GPU), with the audio of the imported language
-  (English if your copy of the game does not have it). A, B, Start or Esc
-  skips one.
+  (English if your copy of the game does not have it). Any key, gamepad
+  button or mouse click skips one. The Blizzard logos play with their
+  sound (the classic logo videos in D2R are silent, so the importer also
+  converts D2R's logo video, the same two logos with their sound).
 - They play where the original plays them (the server's packet 0x61 in
   D2MOO's `QUESTS_ActChange` and `QUESTS_HellPortalActChange`):
   - the Blizzard logos and the **introduction** when the game starts;
@@ -781,6 +799,8 @@ purpose, to play comfortably on a Raspberry Pi with a gamepad.
     backpack;
   - each belt slot has its own direction on the d-pad.
 - **Keys stack up to 20** (12 in the original).
+- **Item comparison:** the side-by-side comparison with the equipped item
+  and the X swap in the inventory come from Diablo IV.
 - **No durability and no identification:** items never wear out (there is
   no repair) and they drop already identified, so there are no Scrolls or
   Tome of Identify and Cain does not identify. Bookshelves give Town Portal

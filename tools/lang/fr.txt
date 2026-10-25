@@ -876,3 +876,11 @@
 875	Baal est entré dans la Chambre de la Pierre-Monde
 876	Tu as libéré les 15 soldats : parle à Qual-Kehk
 877	Tu as libéré %d soldats
+878	ÉQUIPÉ
+879	Par rapport à l'objet équipé :
+880	Dégâts : %+d à %+d
+881	Défense : %+d
+882	Blocage : %+d%%
+883	X : équiper (échange avec l'objet équipé)
+884	A : la prendre pour l'enchâsser
+885	A : l'enchâsser

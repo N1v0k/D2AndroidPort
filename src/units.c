@@ -186,6 +186,10 @@ typedef struct {
     float       slot_x, slot_y; /* lugar alrededor del jugador al que va (para rodearlo) */
     int         has_slot;
     int         detour;         /* ticks que sigue los pasos hasta el jugador (no avanzaba derecho: chase_steer) */
+    float       wp_x, wp_y;     /* el punto del camino al que va mientras rodea */
+    uint32_t    wp_tick;        /* hasta cuándo vale (s_unit_ticks) */
+    int         blocked_ticks;  /* ticks seguidos que otro monstruo le tapó el paso (más de medio segundo: pasa) */
+    int         squeeze;        /* ticks que rodea con la huella de un subtile (por su tamaño no había camino) */
     int         npc;   /* NPC del pueblo con el que se puede hablar */
     int         talk_ticks; /* mientras le hablan se queda quieto */
     uint32_t    rng;
@@ -3077,9 +3081,11 @@ static int        s_tick_npl;
 
 /* Otro monstruo o un jugador demasiado cerca (según el tamaño de cada uno):
    evita que se apilen. Si ya estaba encimado, lo deja alejarse. */
-static int crowded(const Unit *self, float x, float y)
+/* ghost: no cuentan los otros monstruos (el que lleva rato trabado detrás de otro pasa encimándose), solo
+   los jugadores */
+static int crowded_by(const Unit *self, float x, float y, int ghost)
 {
-    for (int i = 0; i < s_num_units; i++) {
+    for (int i = 0; i < s_num_units && !ghost; i++) {
         const Unit *o = &s_units[i];
         if (o == self || !o->solid)
             continue;
@@ -3098,6 +3104,11 @@ static int crowded(const Unit *self, float x, float y)
             return 1;
     }
     return 0;
+}
+
+static int crowded(const Unit *self, float x, float y)
+{
+    return crowded_by(self, x, y, 0);
 }
 
 /* Contra las paredes, como en el original (D2Collision): según su tamaño
@@ -3173,58 +3184,97 @@ static void flow_steer(const Unit *u, float *tx, float *ty)
 /* ---- Rodear lo que tapa (fuera del Eco) ----
    Como el original, que va derecho al blanco y, si el camino derecho no sale, sigue la pared
    (MONSTERMODE: PATHTYPE_TOWARD -> PATHTYPE_WALL_FOLLOW): para cada blanco (un jugador, una mercenaria,
-   un señuelo), los pasos hasta él en un cuadrado de 65 x 65 subtiles a su alrededor (en 8 direcciones,
-   sin cortar esquinas, con la colisión de los que caminan). Se arma solo si algún monstruo lo pide, y
-   dura 4 ticks. El que no avanza hacia su blanco, o tiene una pared adelante, los sigue dos segundos
-   (chase_steer). */
-#define CHASE_R     32
+   un señuelo), los pasos hasta él en un cuadrado de 81 x 81 subtiles a su alrededor, en 8 direcciones y
+   sin cortar esquinas, para cada tamaño de monstruo (la huella de wall_foot: un subtile, la cruz o el
+   3x3: los grandes no se meten donde no entran). Se arma solo si algún monstruo lo pide y dura 4 ticks.
+   El que tiene una pared entre él y a donde va (el blanco o un lugar cerca de él) sigue ese camino hasta
+   ver derecho su destino, apuntando al punto más lejano del camino al que llega derecho (sin rozar los
+   bordes). Un grande sin camino por su tamaño (un paso angosto) sigue el de los chicos achicándose
+   mientras rodea (squeeze), así llega cualquiera. */
+#define CHASE_R     40
 #define CHASE_W     (2 * CHASE_R + 1)
 #define CHASE_TICKS 4
+#define CHASE_NEAR  6.0f /* el destino a menos de esto de un blanco: se usa su camino */
 typedef struct {
     int      x0, y0;
-    uint32_t built;  /* s_unit_ticks + 1 de cuando se armó (0 = nunca) */
-    uint16_t steps[CHASE_W * CHASE_W];
+    uint32_t built;          /* s_unit_ticks + 1 de cuando se leyó la colisión (0 = nunca) */
+    uint32_t foot_built[4];  /* lo mismo, de los pasos de cada tamaño */
+    uint8_t  open[CHASE_W * CHASE_W];
+    uint8_t  ok[4][CHASE_W * CHASE_W];     /* entra un monstruo de ese tamaño con el centro ahí */
+    uint16_t steps[4][CHASE_W * CHASE_W];
 } ChaseField;
 static ChaseField s_chase[TICK_PLAYERS];
 
-static const ChaseField *chase_field(const Map *m, int k)
+static const ChaseField *chase_field(const Map *m, int k, int foot)
 {
     ChaseField *f = &s_chase[k];
-    if (f->built && s_unit_ticks + 1 - f->built < CHASE_TICKS)
+    foot = foot < 1 ? 1 : foot > 3 ? 3 : foot;
+    if (!f->built || s_unit_ticks + 1 - f->built >= CHASE_TICKS) { /* la colisión alrededor del blanco */
+        f->x0 = (int)floorf(s_tick_pl[k].x) - CHASE_R;
+        f->y0 = (int)floorf(s_tick_pl[k].y) - CHASE_R;
+        f->built = s_unit_ticks + 1;
+        memset(f->foot_built, 0, sizeof f->foot_built);
+        for (int y = 0, c = 0; y < CHASE_W; y++)
+            for (int x = 0; x < CHASE_W; x++, c++)
+                f->open[c] = !(map_coll(m, f->x0 + x, f->y0 + y) & COLL_MASK_MONSTER_PATH);
+    }
+    if (f->foot_built[foot] == f->built)
         return f;
-    static int     queue[CHASE_W * CHASE_W];
-    static uint8_t open[CHASE_W * CHASE_W]; /* (la colisión, leída una vez) */
-    int px = (int)floorf(s_tick_pl[k].x), py = (int)floorf(s_tick_pl[k].y), qh = 0, qt = 0;
-    f->x0 = px - CHASE_R;
-    f->y0 = py - CHASE_R;
-    f->built = s_unit_ticks + 1;
+    f->foot_built[foot] = f->built;
+    uint8_t *ok = f->ok[foot];
+    uint16_t *steps = f->steps[foot];
     for (int y = 0, c = 0; y < CHASE_W; y++)
         for (int x = 0; x < CHASE_W; x++, c++) {
-            f->steps[c] = 0xffff;
-            open[c] = !(map_coll(m, f->x0 + x, f->y0 + y) & COLL_MASK_MONSTER_PATH);
+            int fits = 1;
+            for (int dy = -1; dy <= 1 && fits; dy++)
+                for (int dx = -1; dx <= 1 && fits; dx++) {
+                    if ((dx != 0) + (dy != 0) >= foot)
+                        continue;
+                    int nx = x + dx, ny = y + dy;
+                    fits = nx >= 0 && ny >= 0 && nx < CHASE_W && ny < CHASE_W && f->open[ny * CHASE_W + nx];
+                }
+            ok[c] = (uint8_t)fits;
+            steps[c] = 0xffff;
         }
-    f->steps[CHASE_R * CHASE_W + CHASE_R] = 0;
-    queue[qt++] = CHASE_R * CHASE_W + CHASE_R;
+    static int queue[CHASE_W * CHASE_W];
+    int qh = 0, qt = 0, home = CHASE_R * CHASE_W + CHASE_R;
+    steps[home] = 0; /* (el blanco, aunque su lugar no entre: se sale de él) */
+    queue[qt++] = home;
     static const int k_d8[8][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 }, { -1, 1 }, { 1, -1 }, { -1, -1 } };
-#define CHASE_OPEN(cx, cy) (open[(cy) * CHASE_W + (cx)])
     while (qh < qt) {
         int c = queue[qh++], x = c % CHASE_W, y = c / CHASE_W;
-        unsigned v = f->steps[c] + 1u;
+        unsigned v = steps[c] + 1u;
         for (int d = 0; d < 8; d++) {
             int nx = x + k_d8[d][0], ny = y + k_d8[d][1], nc = ny * CHASE_W + nx;
-            if (nx < 0 || ny < 0 || nx >= CHASE_W || ny >= CHASE_W || f->steps[nc] <= v || !CHASE_OPEN(nx, ny))
+            if (nx < 0 || ny < 0 || nx >= CHASE_W || ny >= CHASE_W || steps[nc] <= v || !ok[nc])
                 continue;
-            if (d >= 4 && (!CHASE_OPEN(nx, y) || !CHASE_OPEN(x, ny))) /* (en diagonal, sin cortar la esquina) */
+            if (d >= 4 && (!ok[y * CHASE_W + nx] || !ok[ny * CHASE_W + x])) /* (en diagonal, sin cortar la esquina) */
                 continue;
-            f->steps[nc] = (uint16_t)v;
+            steps[nc] = (uint16_t)v;
             queue[qt++] = nc;
         }
     }
-#undef CHASE_OPEN
     return f;
 }
 
-/* Si va hacia un blanco y viene trabado, el destino pasa a ser tres pasos adelante en el camino hasta él */
+/* ¿Llega derecho de (x0, y0) a (x1, y1) un monstruo de ese tamaño? (cada cuarto de subtile, con el centro
+   en un lugar donde entra; fuera del cuadrado, no) */
+static int chase_line(const ChaseField *f, int foot, float x0, float y0, float x1, float y1)
+{
+    float dx = x1 - x0, dy = y1 - y0, d = sqrtf(dx * dx + dy * dy);
+    int n = (int)(d / 0.25f) + 1;
+    for (int i = 1; i <= n; i++) {
+        float t = (float)i / (float)n;
+        int cx = (int)floorf(x0 + dx * t) - f->x0, cy = (int)floorf(y0 + dy * t) - f->y0;
+        if (cx < 0 || cy < 0 || cx >= CHASE_W || cy >= CHASE_W || !f->ok[foot][cy * CHASE_W + cx])
+            return 0;
+    }
+    return 1;
+}
+
+/* Con una pared entre él y su destino (cerca de un blanco), el destino pasa a ser el punto más lejano
+   del camino hasta el blanco al que llega derecho; se repiensa cada 3 ticks o al llegar a ese punto. Sin
+   pared en el medio, termina el rodeo. */
 static void chase_steer(Unit *u, const Map *m, float *tx, float *ty)
 {
     int walker = u->move_mask == COLL_MASK_MONSTER_PATH || u->move_mask == (uint16_t)(COLL_MASK_MONSTER_PATH & ~COLL_DOOR);
@@ -3232,7 +3282,7 @@ static void chase_steer(Unit *u, const Map *m, float *tx, float *ty)
         return; /* (los que vuelan y el espectro pasan por arriba de casi todo) */
     u->detour--;
     int best = -1;
-    float best_d = 3.0f * 3.0f;
+    float best_d = CHASE_NEAR * CHASE_NEAR;
     for (int k = 0; k < s_tick_npl; k++) {
         float dx = s_tick_pl[k].x - *tx, dy = s_tick_pl[k].y - *ty;
         if (s_tick_pl[k].alive && dx * dx + dy * dy < best_d) {
@@ -3242,8 +3292,78 @@ static void chase_steer(Unit *u, const Map *m, float *tx, float *ty)
     }
     if (best < 0)
         return;
-    const ChaseField *f = chase_field(m, best);
-    steps_steer(f->steps, f->x0, f->y0, CHASE_W, CHASE_W, u, tx, ty);
+    int foot = u->foot < 1 ? 1 : u->foot > 3 ? 3 : u->foot;
+    const ChaseField *f = chase_field(m, best, foot);
+    int cx = (int)floorf(u->x) - f->x0, cy = (int)floorf(u->y) - f->y0;
+    if (cx < 0 || cy < 0 || cx >= CHASE_W || cy >= CHASE_W)
+        return;
+    if (foot > 1 && (u->squeeze > 0 || f->steps[foot][cy * CHASE_W + cx] == 0xffff)) {
+        /* por su tamaño no hay camino (o ya se estaba achicando): el de los chicos, achicándose */
+        f = chase_field(m, best, 1);
+        if (f->steps[1][cy * CHASE_W + cx] != 0xffff) {
+            foot = 1;
+            u->squeeze = TICK_RATE;
+        }
+    }
+    if (chase_line(f, foot, u->x, u->y, *tx, *ty)) { /* ya ve derecho a dónde va */
+        u->detour = 0;
+        return;
+    }
+    if (u->detour < 6) /* (sigue mientras haya pared en el medio) */
+        u->detour = 6;
+    float wx = u->wp_x - u->x, wy = u->wp_y - u->y;
+    if ((int)(s_unit_ticks - u->wp_tick) < 0 && wx * wx + wy * wy > 0.3f * 0.3f) {
+        *tx = u->wp_x; /* (el punto que eligió hace poco, hasta llegar) */
+        *ty = u->wp_y;
+        return;
+    }
+    const uint16_t *steps = f->steps[foot];
+    if (steps[cy * CHASE_W + cx] == 0xffff) {
+        /* (encimado a una pared o en un lugar que no entra: el paso de al lado que sí está en el camino) */
+        unsigned bv = 0xffff;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++) {
+                int nx = cx + dx, ny = cy + dy;
+                if (nx >= 0 && ny >= 0 && nx < CHASE_W && ny < CHASE_W && steps[ny * CHASE_W + nx] < bv) {
+                    bv = steps[ny * CHASE_W + nx];
+                    *tx = (float)(f->x0 + nx) + 0.5f;
+                    *ty = (float)(f->y0 + ny) + 0.5f;
+                }
+            }
+        return;
+    }
+    /* Bajando por el camino hasta 12 pasos: el más lejano al que llega derecho */
+    int px = cx, py = cy, pick_x = -1, pick_y = -1;
+    for (int step = 0; step < 12; step++) {
+        int bx = px, by = py;
+        unsigned bv = steps[py * CHASE_W + px];
+        for (int k = 0; k < 8; k++) {
+            static const int8_t k_d[8][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 }, { -1, 1 }, { 1, -1 }, { -1, -1 } };
+            int nx = px + k_d[k][0], ny = py + k_d[k][1];
+            if (nx < 0 || ny < 0 || nx >= CHASE_W || ny >= CHASE_W)
+                continue;
+            unsigned v = steps[ny * CHASE_W + nx];
+            if (v < bv) {
+                bv = v;
+                bx = nx;
+                by = ny;
+            }
+        }
+        if (bx == px && by == py)
+            break;
+        px = bx;
+        py = by;
+        float qx = (float)(f->x0 + px) + 0.5f, qy = (float)(f->y0 + py) + 0.5f;
+        if (pick_x < 0 || chase_line(f, foot, u->x, u->y, qx, qy)) {
+            pick_x = px;
+            pick_y = py;
+        }
+    }
+    if (pick_x < 0)
+        return;
+    u->wp_x = *tx = (float)(f->x0 + pick_x) + 0.5f;
+    u->wp_y = *ty = (float)(f->y0 + pick_y) + 0.5f;
+    u->wp_tick = s_unit_ticks + 3;
 }
 
 /* ¿Una pared entre él y (tx, ty) en los próximos `ahead` subtiles? (cada medio subtile) */
@@ -3259,36 +3379,66 @@ static int wall_ahead(const Map *m, const Unit *u, float tx, float ty, float ahe
     return 0;
 }
 
+/* ¿Llega derecho de (x0, y0) a (x1, y1) con su huella? (cada cuarto de subtile) */
+static int line_walkable(const Map *m, const Unit *u, float x0, float y0, float x1, float y1)
+{
+    float dx = x1 - x0, dy = y1 - y0, d = sqrtf(dx * dx + dy * dy);
+    int n = (int)(d / 0.25f) + 1;
+    for (int i = 1; i <= n; i++) {
+        float t = (float)i / (float)n;
+        if (wall_foot(m, x0 + dx * t, y0 + dy * t, u->foot, u->move_mask))
+            return 0;
+    }
+    return 1;
+}
+
 static void move_towards(Unit *u, const Map *m, float tx, float ty)
 {
+    int foot = u->foot;
+    if (u->squeeze > 0) { /* rodeando achicado (chase_steer): pasa con la huella de un subtile */
+        u->squeeze--;
+        u->foot = 1;
+    }
+    int ghost = u->blocked_ticks >= TICK_RATE / 2; /* (otro monstruo le tapa el paso hace rato: pasa encimándose) */
     if (u->hunt && s_flow) {
         flow_steer(u, &tx, &ty);
     } else {
         /* Cada 6 ticks (repartidos entre los monstruos): con una pared adelante, a rodearla */
         if (u->detour <= 0 && (s_unit_ticks + (uint32_t)(u - s_units)) % 6 == 0 && wall_ahead(m, u, tx, ty, 4.0f))
-            u->detour = 2 * TICK_RATE;
+            u->detour = TICK_RATE;
         chase_steer(u, m, &tx, &ty);
     }
     float dx = tx - u->x, dy = ty - u->y, d = sqrtf(dx * dx + dy * dy);
-    if (d < 0.01f)
+    if (d < 0.01f) {
+        u->foot = foot;
         return;
+    }
     float step = u->speed / TICK_RATE;
     if (step > d)
         step = d;
     float nx = u->x + dx / d * step, ny = u->y + dy / d * step, ox = u->x, oy = u->y;
-    if (unit_step_ok(m, u, nx, u->y) && !crowded(u, nx, u->y))
+    if (unit_step_ok(m, u, nx, u->y) && !crowded_by(u, nx, u->y, ghost))
         u->x = nx;
-    if (unit_step_ok(m, u, u->x, ny) && !crowded(u, u->x, ny))
+    if (unit_step_ok(m, u, u->x, ny) && !crowded_by(u, u->x, ny, ghost))
         u->y = ny;
-    if (u->x == ox && u->y == oy && unit_step_ok(m, u, nx, ny) && !crowded(u, nx, ny)) { /* en diagonal (las escaleras angostas) */
+    if (u->x == ox && u->y == oy && unit_step_ok(m, u, nx, ny) && !crowded_by(u, nx, ny, ghost)) { /* en diagonal (las escaleras angostas) */
         u->x = nx;
         u->y = ny;
     }
-    /* Casi no se acercó (una pared, una casa, otros monstruos en el medio): dos segundos siguiendo el
-       camino hasta su blanco (chase_steer; si no va hacia un blanco, no cambia nada) */
-    float ndx = tx - u->x, ndy = ty - u->y;
-    if (u->detour <= 0 && d - sqrtf(ndx * ndx + ndy * ndy) < step * 0.3f)
-        u->detour = 2 * TICK_RATE;
+    u->foot = foot;
+    /* Lo que se acercó a donde va: si casi nada y lo frena otro (no la pared), cuenta como trabado aunque se
+       haya corrido de costado (dos que se tapan entre sí se deslizaban un poco y nunca pasaban) */
+    float ndx = tx - u->x, ndy = ty - u->y, gain = d - sqrtf(ndx * ndx + ndy * ndy);
+    if (gain >= step * 0.3f)
+        u->blocked_ticks = 0;
+    else if (unit_step_ok(m, u, nx, ny) && (crowded(u, nx, ny) || crowded(u, nx, oy) || crowded(u, ox, ny)))
+        u->blocked_ticks++;
+    else if (u->x != ox || u->y != oy)
+        u->blocked_ticks = 0;
+    /* Casi no se acercó (una pared, una casa, otros monstruos en el medio): a mirar si hay que rodear
+       (chase_steer: si no hay pared en el medio o no va hacia un blanco, no cambia nada) */
+    if (u->detour <= 0 && gain < step * 0.3f)
+        u->detour = TICK_RATE;
     grid_moved(u);
     u->walking = u->x != u->prev_x || u->y != u->prev_y;
     u->sector = sector_from_world(dx, dy);
@@ -3334,6 +3484,8 @@ static int surround_spot(Unit *u, const Map *m, const UnitTarget *t, float *ox, 
         float a = base + (float)((k + 1) / 2) * (k % 2 ? 1.0f : -1.0f) * (PI_F / 6.0f);
         float x = t->x + cosf(a) * ring, y = t->y + sinf(a) * ring;
         if (wall_foot(m, x, y, u->foot, u->move_mask) || !spot_free(u, x, y))
+            continue;
+        if (!line_walkable(m, u, t->x, t->y, x, y)) /* (del otro lado de una pared: iba a atravesarla) */
             continue;
         u->slot_x = *ox = x;
         u->slot_y = *oy = y;

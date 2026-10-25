@@ -86,6 +86,7 @@ typedef struct ItemType {
     int         socket_filler;  /* gema, runa o joya: se engarza */
     char        better_gem[5];  /* la gema de la calidad que sigue (BetterGem de misc.txt; "" = ninguna) */
     int         charm;          /* talismán: sirve en la mochila */
+    int         quest;          /* de una misión (columna quest: el nombre va dorado) */
 } ItemType;
 
 enum { VENDOR_AKARA, VENDOR_CHARSI, VENDOR_GHEED, VENDOR_FARA, VENDOR_LYSANDER, VENDOR_DROGNAN, VENDOR_ELZIX,

@@ -711,11 +711,16 @@ static int ai_tick(Unit *u, const Map *m, UnitTarget *pl, int t, float d)
             u->speed = (u->ai_run ? u->run_speed : speed) * (float)u->ai_spd / 100.0f;
             move_towards(u, m, tx, ty);
             u->speed = speed;
-            if (u->x == u->prev_x && u->y == u->prev_y) { /* trabado: otro le tapa el paso */
-                u->ai_move = 0;
-                if (u->ai_follow && t >= 0) { /* da un rodeo y busca otro lugar alrededor del jugador */
+            if (u->x == u->prev_x && u->y == u->prev_y) { /* trabado */
+                if (u->ai_follow && t >= 0 && wall_ahead(m, u, tx, ty, 3.0f)) {
+                    u->detour = u->detour > TICK_RATE ? u->detour : TICK_RATE; /* una pared: sigue el camino (chase_steer) */
                     u->has_slot = 0;
-                    ai_circle(u, &pl[t], d);
+                } else {
+                    u->ai_move = 0;
+                    if (u->ai_follow && t >= 0) { /* otro le tapa el paso: da un rodeo y busca otro lugar alrededor del jugador */
+                        u->has_slot = 0;
+                        ai_circle(u, &pl[t], d);
+                    }
                 }
             }
             u->anim_acc += u->gfx->anim[current_anim(u)].speed;

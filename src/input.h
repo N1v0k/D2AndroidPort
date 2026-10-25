@@ -54,6 +54,7 @@ typedef struct {
     int start;   /* botón Start */
     int escape;  /* tecla Esc */
     int quit;    /* cerrar la ventana o Select + Start */
+    int any_press; /* se apretó una tecla, un botón del joystick o del mouse (saltear una cinemática) */
 } InputState;
 
 void input_poll(InputState *in);

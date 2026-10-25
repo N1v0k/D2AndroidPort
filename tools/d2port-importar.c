@@ -424,12 +424,16 @@ static int extract_one(HANDLE storage, const char *casc_name, const char *out_pa
    las pasa a lo que lee el port (src/cinema.c): MPEG-1 de 640x288 (sin las
    franjas negras) con el sonido MP2 del idioma elegido. Las de la expansión:
    d2x_intro (la presentación de la expansión) y d2x_out (el final, después
-   de Baal). */
+   de Baal). Los logos del arranque: los dos clásicos vienen mudos, así que
+   va también el video de logos del Resurrected (los mismos dos, con su
+   sonido, que no depende del idioma), recortado a 4:3 y en 640x480. */
 static const struct {
     const char *name, *video, *audio;
+    int logo; /* 4:3 a 640x480 (los logos) */
 } k_movies[] = {
-    { "new_bliz", "data/global/video/new_bliz.webm", NULL },
-    { "bliznorth", "data/global/video/bliznorth.webm", NULL },
+    { "new_bliz", "data/global/video/new_bliz.webm", NULL, 1 },
+    { "bliznorth", "data/global/video/bliznorth.webm", NULL, 1 },
+    { "blizzardlogos", "data/hd/global/video/blizzardlogos.webm", "data/hd/local/video/blizzardlogos.flac", 1 },
     { "d2intro", "data/global/video/d2intro.webm", "data/local/video/d2intro.flac" },
     { "act02start", "data/global/video/act2/act02start.webm", "data/local/video/act2/act02start.flac" },
     { "act03start", "data/global/video/act3/act03start.webm", "data/local/video/act3/act03start.flac" },
@@ -502,7 +506,7 @@ static void import_movies(HANDLE storage, const char *pkg, const char *lang)
         snprintf(file, sizeof file, "%s.mpg", k_movies[i].name);
         join(out, sizeof out, dir, file);
         /* ya convertida (con el sonido de este idioma): no hace falta otra vez */
-        if (exists(out) && (!k_movies[i].audio || strcmp(old, lang) == 0)) {
+        if (exists(out) && (!k_movies[i].audio || k_movies[i].logo || strcmp(old, lang) == 0)) {
             printf(T("  %s: ya estaba\n", "  %s: already there\n"), k_movies[i].name);
             continue;
         }
@@ -521,7 +525,13 @@ static void import_movies(HANDLE storage, const char *pkg, const char *lang)
         join(tmp_out, sizeof tmp_out, dir, file);
         int ok = extract_stream(storage, s_movie_video[i], tmp_video) == 0 &&
                  (!k_movies[i].audio || extract_stream(storage, s_movie_audio[i], tmp_audio) == 0);
-        if (ok && k_movies[i].audio)
+        if (ok && k_movies[i].audio && k_movies[i].logo) /* el de logos del Resurrected: 1080p, al medio el 4:3 */
+            snprintf(cmd, sizeof cmd,
+                     "ffmpeg -v error -y -i \"%s\" -i \"%s\" -map 0:v -map 1:a"
+                     " -vf crop=1440:1080:240:0,scale=640:480:flags=bicubic -r 24"
+                     " -c:v mpeg1video -q:v 4 -g 24 -bf 2 -c:a mp2 -b:a 128k -ac 2 -ar 44100 -f mpeg \"%s\"",
+                     tmp_video, tmp_audio, tmp_out);
+        else if (ok && k_movies[i].audio)
             snprintf(cmd, sizeof cmd,
                      "ffmpeg -v error -y -i \"%s\" -i \"%s\" -map 0:v -map 1:a"
                      " -vf crop=1920:864:0:108,scale=640:288:flags=bicubic -r 24"

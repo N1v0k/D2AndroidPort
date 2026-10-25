@@ -949,3 +949,15 @@
 { "Baal se fue a la Cámara de la Piedra del Mundo", "バールはワールドストーン・チェンバーへ向かった" },
 { "Liberaste a los 15 soldados: hablá con Qual-Kehk", "15人の兵士を解放した：クアル＝ケックと話そう" },
 { "Liberaste a %d soldados", "%d人の兵士を解放した" },
+
+/* La comparación con lo equipado (en el inventario, como en Diablo IV) */
+{ "EQUIPADO", "装備中" },
+{ "Contra lo equipado:", "装備中のアイテムとの比較:" },
+{ "Daño: %+d a %+d", "ダメージ: %+d～%+d" },
+{ "Defensa: %+d", "防御力: %+d" },
+{ "Bloqueo: %+d%%", "ブロック率: %+d%%" },
+{ "X: ponértelo (lo cambia por lo equipado)", "X: 装備する（装備中のものと入れ替え）" },
+
+/* Los engarces (en el inventario) */
+{ "A: levantarla para engarzarla", "A: 持ち上げてはめ込む" },
+{ "A: engarzarla", "A: はめ込む" },

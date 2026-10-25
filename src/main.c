@@ -1177,13 +1177,22 @@ int main(int argc, char **argv)
         return r < 0 ? 1 : 0;
     }
     /* Al arrancar, como el original: los logos de Blizzard y la presentación
-       (cada una se saltea con A, B, Start o Esc). No en las pruebas ni si se
-       entra directo a jugar (--players). */
+       (cada una se saltea con cualquier tecla o botón). Los logos, con su
+       sonido: el video de logos del Resurrected (la misma animación de los
+       dos del original; los clásicos que trae vienen mudos); si no se
+       importó, los clásicos. No en las pruebas ni si se entra directo a
+       jugar (--players). */
     int quit = 0;
     if (!o.headless && !o.players && !o.demo && !getenv("D2_NO_CINEMA")) {
-        static const char *const k_start[] = { "new_bliz", "bliznorth", "d2intro" };
-        for (int i = 0; i < 3 && !quit; i++)
-            quit = cinema_play(k_start[i]) == 1;
+        int r = cinema_play("blizzardlogos");
+        quit = r == 1;
+        if (r < 0) {
+            quit = cinema_play("new_bliz") == 1;
+            if (!quit)
+                quit = cinema_play("bliznorth") == 1;
+        }
+        if (!quit)
+            quit = cinema_play("d2intro") == 1;
     }
 
     int rc = quit ? 0 : 1;

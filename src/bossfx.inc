@@ -2,9 +2,11 @@
    (se incluye desde game.c)
 
    Blood Raven (brdeathcontrol de missiles.txt): unos 15 segundos de rayos
-   que salen de alrededor (brdeathlightningbolt: no se ven, solo alumbran),
-   van hacia el cuerpo y caen sobre él (brdeathlightninghit), con su
-   chasquido y truenos, mientras suben el humo y los espíritus
+   (brdeathlightningbolt: no se ven, solo alumbran) que salen del cuerpo
+   hacia cualquier lado, recorren hasta sus 20 cuadros a Vel 32 (unos 20
+   subtiles) o hasta chocar con una pared (ClientCol, LastCollide), y caen
+   donde terminan (brdeathlightninghit): por todo el cementerio, no solo
+   sobre ella; con su chasquido y truenos, mientras suben el humo y los espíritus
    (brdeathsmoke* y brdeathspirit*, encadenados: empieza, sigue y termina,
    con los sonidos de la niebla).
    Andariel (andycontrol0): unos 14 segundos de columnas de fuego sobre el
@@ -12,16 +14,30 @@
    techo de las catacumbas.
    Los demás jefes del Acto 1 mueren sin nada especial, como en el original.
 
-   Y las Piedras Cairn (cairnstones): al tocar la quinta en orden caen rayos
-   grandes sobre las piedras (cairn stones bolt) y corren rayos por el piso
-   hacia el centro (cairnstonesground, que suelta lightninghit); recién
-   después se abre el portal rojo a Tristram. */
+   Y las Piedras Cairn (cairnstones, 300 cuadros): al tocar la quinta en
+   orden la escena se oscurece en 40 cuadros (Fade Frames), corren rayos por
+   el piso de cada piedra a la segunda de al lado, una estrella que se cruza
+   como un pentagrama (cairnstonesground, que deja su rastro de
+   lightninghit), y caen rayos grandes (cairn stones bolt) cada 2 cuadros por
+   todos lados, a menos de 17 subtiles del centro (Param3), del cuadro 40 al
+   260. El portal rojo se abre a los 160: el contador del original baja desde
+   300 y lo abre al llegar a Param1 + Param5 = 140. Al final la escena vuelve
+   a aclararse en otros 40.
+   La Guarida del Mal al limpiarla (QUESTS_TriggerFX del cliente): haces de
+   luz que bajan del techo alrededor (denofevillight: LightBeams, 12
+   segundos) mientras la cueva se ilumina. */
 
-enum { BFX_NONE, BFX_RAVEN, BFX_ANDY, BFX_CAIRN };
+enum { BFX_NONE, BFX_RAVEN, BFX_ANDY, BFX_CAIRN, BFX_DEN };
 
-#define BFX_MAX        3
-#define BFX_CAIRN_TIME 150 /* los rayos de las piedras (el original sigue con luz hasta 300) */
-#define BFX_CAIRN_OPEN 60  /* a los 2,4 s se abre el portal */
+#define BFX_MAX        4
+#define BFX_CAIRN_TIME 300  /* Range de cairnstones */
+#define BFX_CAIRN_FADE 40   /* Fade Frames: se oscurece y al final se aclara */
+#define BFX_CAIRN_OPEN 160  /* a los 6,4 s se abre el portal */
+#define BFX_CAIRN_SKY  17.0f /* Param3: hasta dónde caen los rayos grandes */
+#define BFX_CAIRN_DARK 15   /* cuánto se oscurece (de los 31 niveles de luz) */
+#define BFX_GROUND_SPEED (20.0f * 5.0f / 6.0f / TICK_RATE) /* Vel de cairnstonesground */
+#define BFX_DEN_TIME   60   /* los haces de la Guarida aparecen en 2,4 s (y duran su Range: 300) */
+#define BFX_DEN_EVERY  5
 #define BFX_RAYS       6
 #define BFX_RAVEN_TIME 375 /* Range de brdeathcontrol */
 #define BFX_ANDY_TIME  350 /* Range de andycontrol0 */
@@ -36,8 +52,10 @@ typedef struct {
     float ray_x[BFX_RAYS], ray_y[BFX_RAYS], ray_dx[BFX_RAYS], ray_dy[BFX_RAYS];
     int   ray_on[BFX_RAYS], ray_age;
     float stone_x[5], stone_y[5]; /* las Piedras Cairn */
-    int   bolt_at[BFX_BOLTS];         /* Blood Raven: cuándo llega cada rayo al cuerpo (0 = libre) */
-    int   zone;
+    int   ring[5];                    /* (en orden alrededor del centro: la estrella une cada una con la segunda de al lado) */
+    int   bolt_at[BFX_BOLTS];         /* Blood Raven: cuándo cae cada rayo (0 = libre) */
+    float bolt_x[BFX_BOLTS], bolt_y[BFX_BOLTS]; /* y dónde */
+    int   zone, who;
 } BossFx;
 
 static void cairn_portal_open(int zone); /* game.c: abre el portal a Tristram */
@@ -56,6 +74,7 @@ static void bossfx_clear(void)
 {
     memset(s_bfx, 0, sizeof s_bfx);
     s_flash = 0;
+    s_bfx_rng = 12345u; /* (cada partida igual: en red, las dos máquinas tiran los mismos rayos) */
 }
 
 static Missile *bfx_effect(const char *name, float x, float y, int chain)
@@ -96,6 +115,8 @@ static void bossfx_start(int kind, float x, float y)
     if (kind == BFX_CAIRN) {
         audio_play_name("event_thunder_1", AUDIO_NOPOS, AUDIO_NOPOS);
         s_flash = 4;
+    } else if (kind == BFX_DEN) {
+        /* (los haces aparecen en bfx_den_tick) */
     } else if (kind == BFX_RAVEN) {
         bfx_effect("brdeathsmokes1", x, y, 1);
         bfx_effect("brdeathspirits1", x, y, 1);
@@ -117,32 +138,38 @@ static int bfx_seen(const BossFx *fx)
 
 static void bfx_raven_tick(BossFx *fx)
 {
-    /* Un rayo cada 5 o 6 ticks al principio, después cada vez menos: sale de
-       un lugar al azar alrededor y va hacia el cuerpo (como el original, que
-       lo reapunta cada 3 cuadros); al llegar cae sobre el cuerpo */
-    int chance = fx->age < 200 ? 18 : fx->age < 320 ? 9 : 0;
+    /* Un rayo cada 4 o 5 ticks al principio, después cada vez menos: sale del
+       cuerpo hacia cualquier lado y cae donde termina, a sus 20 cuadros o
+       donde choca con una pared (uno de cada cuatro, enseguida: sobre el
+       cuerpo) */
+    int chance = fx->age < 200 ? 24 : fx->age < 320 ? 12 : 0;
     if ((int)(bfx_rand() * 100.0f) < chance) {
         int k = 0;
         while (k < BFX_BOLTS && fx->bolt_at[k])
             k++;
         if (k < BFX_BOLTS) {
-            float a = bfx_rand() * 6.2832f, r = 3.0f + bfx_rand() * 5.0f;
-            float sx = fx->x + cosf(a) * r, sy = fx->y + sinf(a) * r;
-            Missile *b = missiles_spawn("brdeathlightningbolt", sx, sy, fx->x - sx, fx->y - sy);
+            float a = bfx_rand() * 6.2832f, near = bfx_rand();
+            float r = near < 0.25f ? near * 4.0f : 3.0f + bfx_rand() * (BFX_BOLT_SPEED * 20.0f - 3.0f);
+            float ca = cosf(a), sa = sinf(a), d = 0.0f;
+            while (d + 0.5f <= r &&
+                   !map_blocked(&s_map, (int)floorf(fx->x + ca * (d + 0.5f)), (int)floorf(fx->y + sa * (d + 0.5f))))
+                d += 0.5f;
+            Missile *b = missiles_spawn("brdeathlightningbolt", fx->x, fx->y, ca, sa);
             if (b) { /* no se ve: alumbra al pasar */
                 b->flags |= MF_NOHIT;
                 b->owner = 0;
-                b->life = (int)(r / BFX_BOLT_SPEED) + 1;
+                b->life = (int)(d / BFX_BOLT_SPEED) + 1;
             }
-            fx->bolt_at[k] = fx->age + (int)(r / BFX_BOLT_SPEED) + 1;
+            fx->bolt_x[k] = fx->x + ca * d;
+            fx->bolt_y[k] = fx->y + sa * d;
+            fx->bolt_at[k] = fx->age + (int)(d / BFX_BOLT_SPEED) + 1;
         }
     }
     for (int k = 0; k < BFX_BOLTS; k++) {
         if (!fx->bolt_at[k] || fx->age < fx->bolt_at[k])
             continue;
         fx->bolt_at[k] = 0;
-        float sx = fx->x + (bfx_rand() - 0.5f) * 1.2f, sy = fx->y + (bfx_rand() - 0.5f) * 1.2f;
-        bfx_effect("brdeathlightninghit", sx, sy, 0); /* (el chasquido es el del rayo al salir: su TravelSound) */
+        bfx_effect("brdeathlightninghit", fx->bolt_x[k], fx->bolt_y[k], 0); /* (el chasquido es el del rayo al salir: su TravelSound) */
         if (bfx_seen(fx) && bfx_rand() < 0.25f && s_flash < 2)
             s_flash = 2; /* uno de cada cuatro rayos destella apenas */
     }
@@ -200,29 +227,70 @@ static void bfx_andy_tick(BossFx *fx)
     }
 }
 
+/* Un rayo grande que cae (cairn stones bolt; con su chasquido si sound) */
+static void bfx_bolt(const BossFx *fx, float x, float y, int sound)
+{
+    Missile *m = bfx_effect("cairn stones bolt", x, y, 0);
+    if (m) {
+        m->glow = 1;
+        if (!sound)
+            audio_stop(m->sound);
+    }
+    if (sound && bfx_seen(fx) && s_flash < 2 && bfx_rand() < 0.5f)
+        s_flash = 2;
+}
+
+/* Un rayo que corre por el piso de (x0, y0) a (x1, y1) (cairnstonesground:
+   sale de al lado de la piedra y llega a la otra) */
+static void bfx_ground(float x0, float y0, float x1, float y1)
+{
+    float dx = x1 - x0, dy = y1 - y0, d = sqrtf(dx * dx + dy * dy);
+    if (d < 3.0f)
+        return;
+    dx /= d;
+    dy /= d;
+    Missile *g = missiles_spawn("cairnstonesground", x0 + dx, y0 + dy, dx, dy);
+    if (g) {
+        g->flags |= MF_NOHIT;
+        g->owner = 0;
+        g->glow = 1;
+        g->life = (int)((d - 2.0f) / BFX_GROUND_SPEED) + 1;
+    }
+}
+
 static void bfx_cairn_tick(BossFx *fx)
 {
-    /* Un rayo grande sobre una piedra al azar cada 5 ticks */
-    if (fx->age % 5 == 0 && fx->age < 120) {
-        int k = (int)(bfx_rand() * 5.0f) % 5;
-        bfx_effect("cairn stones bolt", fx->stone_x[k], fx->stone_y[k], 0);
-        if (bfx_seen(fx) && fx->age % 15 == 0)
-            s_flash = 2;
+    int t = fx->age;
+    /* Los rayos por el piso: de cada piedra a la segunda de al lado, la
+       estrella del pentagrama (con uno grande sobre una de las piedras),
+       mientras se oscurece y hasta que se abre el portal en su centro */
+    if (t >= 4 && t < BFX_CAIRN_OPEN - 10 && (t - 4) % 26 == 0) {
+        for (int k = 0; k < 5; k++) {
+            int a = fx->ring[k], b = fx->ring[(k + 2) % 5];
+            bfx_ground(fx->stone_x[a], fx->stone_y[a], fx->stone_x[b], fx->stone_y[b]);
+        }
+        int k = fx->ring[((t - 4) / 26) % 5];
+        bfx_bolt(fx, fx->stone_x[k], fx->stone_y[k], 1);
     }
-    /* Rayos por el piso de una piedra hacia el centro */
-    if (fx->age % 7 == 3 && fx->age < 120) {
-        int k = (int)(bfx_rand() * 5.0f) % 5;
-        float t = 0.2f + bfx_rand() * 0.6f;
-        bfx_effect("lightninghit", fx->stone_x[k] + (fx->x - fx->stone_x[k]) * t,
-                   fx->stone_y[k] + (fx->y - fx->stone_y[k]) * t, 0);
-    }
-    if (fx->age == 40)
-        audio_play_name("event_thunder_2", AUDIO_NOPOS, AUDIO_NOPOS);
-    if (fx->age == BFX_CAIRN_OPEN) {
-        bfx_effect("cairn stones bolt", fx->x, fx->y, 0); /* el último, en el centro */
+    /* Los rayos grandes que caen por todos lados, cada 2 cuadros (donde se
+       puede pisar: CreateMissileWithCollisionCheck) */
+    if (t >= BFX_CAIRN_FADE && t < BFX_CAIRN_TIME - BFX_CAIRN_FADE && t % 2 == 0)
+        for (int tries = 0; tries < 4; tries++) {
+            float a = bfx_rand() * 6.2832f, r = sqrtf(bfx_rand()) * BFX_CAIRN_SKY;
+            float x = fx->x + cosf(a) * r, y = fx->y + sinf(a) * r;
+            if (!map_blocked(&s_map, (int)floorf(x), (int)floorf(y))) {
+                bfx_bolt(fx, x, y, t % 8 == 0);
+                break;
+            }
+        }
+    if (t == BFX_CAIRN_FADE || t == 120 || t == 210)
+        audio_play_name(t == 120 ? "event_thunder_3" : "event_thunder_2", AUDIO_NOPOS, AUDIO_NOPOS);
+    if (t == BFX_CAIRN_OPEN) {
+        bfx_bolt(fx, fx->x, fx->y, 1); /* el último, en el centro */
         if (bfx_seen(fx))
             s_flash = 4;
-        cairn_portal_open(fx->zone);
+        if (fx->zone != -2) /* (-2: la prueba D2_FXTEST, sin portal) */
+            cairn_portal_open(fx->zone);
     }
 }
 
@@ -232,12 +300,64 @@ static void bossfx_cairn(const float *sx, const float *sy, float cx, float cy, i
     bossfx_start(BFX_CAIRN, cx, cy);
     for (int i = 0; i < BFX_MAX; i++)
         if (s_bfx[i].kind == BFX_CAIRN && s_bfx[i].age == 0) {
-            memcpy(s_bfx[i].stone_x, sx, sizeof s_bfx[i].stone_x);
-            memcpy(s_bfx[i].stone_y, sy, sizeof s_bfx[i].stone_y);
-            s_bfx[i].zone = zone;
+            BossFx *fx = &s_bfx[i];
+            memcpy(fx->stone_x, sx, sizeof fx->stone_x);
+            memcpy(fx->stone_y, sy, sizeof fx->stone_y);
+            fx->zone = zone;
+            /* las piedras en orden alrededor del centro (los rayos de una a la de al lado) */
+            float ang[5];
+            for (int k = 0; k < 5; k++) {
+                ang[k] = atan2f(sy[k] - cy, sx[k] - cx);
+                fx->ring[k] = k;
+            }
+            for (int a = 1; a < 5; a++)
+                for (int b = a; b > 0 && ang[fx->ring[b]] < ang[fx->ring[b - 1]]; b--) {
+                    int tmp = fx->ring[b];
+                    fx->ring[b] = fx->ring[b - 1];
+                    fx->ring[b - 1] = tmp;
+                }
             return;
         }
-    cairn_portal_open(zone); /* sin lugar para el efecto: igual se abre */
+    if (zone != -2)
+        cairn_portal_open(zone); /* sin lugar para el efecto: igual se abre */
+}
+
+/* Que un efecto de 4 direcciones se dibuje con la d (dcc_dir: los sectores
+   impares de 8; los efectos no se mueven, vx y vy son solo para el dibujo) */
+static void bfx_face4(Missile *m, int d)
+{
+    float a = (float)(2 * d + 1) * 6.2832f / 8.0f, sx = -sinf(a), sy = cosf(a);
+    m->vx = (sx + 2.0f * sy) * 0.5f;
+    m->vy = (2.0f * sy - sx) * 0.5f;
+}
+
+/* Los haces de luz de la Guarida del Mal: uno cada 5 ticks alrededor de
+   quien la limpió, donde se puede pisar */
+static void bfx_den_tick(BossFx *fx)
+{
+    if (fx->age % BFX_DEN_EVERY != 0)
+        return;
+    const Player *p = &s_pl[fx->who];
+    for (int tries = 0; tries < 6; tries++) {
+        float x = p->x + (bfx_rand() - 0.5f) * 22.0f, y = p->y + (bfx_rand() - 0.5f) * 22.0f;
+        if (map_blocked(&s_map, (int)floorf(x), (int)floorf(y)))
+            continue;
+        Missile *m = bfx_effect("denofevillight", x, y, 0);
+        if (m) {
+            m->unlit = 1;
+            bfx_face4(m, (int)(bfx_rand() * 4.0f) & 3);
+            m->age = (int)(bfx_rand() * 21.0f); /* (cada uno en otro momento de su titilar) */
+        }
+        break;
+    }
+}
+
+static void bossfx_den(int who)
+{
+    bossfx_start(BFX_DEN, s_pl[who].x, s_pl[who].y);
+    for (int i = 0; i < BFX_MAX; i++)
+        if (s_bfx[i].kind == BFX_DEN && s_bfx[i].age == 0)
+            s_bfx[i].who = who;
 }
 
 static void bossfx_tick(void)
@@ -252,9 +372,12 @@ static void bossfx_tick(void)
             bfx_andy_tick(fx);
         else if (fx->kind == BFX_CAIRN)
             bfx_cairn_tick(fx);
+        else if (fx->kind == BFX_DEN)
+            bfx_den_tick(fx);
         else
             continue;
-        int time = fx->kind == BFX_RAVEN ? BFX_RAVEN_TIME : fx->kind == BFX_ANDY ? BFX_ANDY_TIME : BFX_CAIRN_TIME;
+        int time = fx->kind == BFX_RAVEN ? BFX_RAVEN_TIME : fx->kind == BFX_ANDY ? BFX_ANDY_TIME
+                 : fx->kind == BFX_DEN ? BFX_DEN_TIME : BFX_CAIRN_TIME;
         if (++fx->age >= time)
             fx->kind = BFX_NONE;
     }
@@ -271,10 +394,63 @@ int game_debug_fx(int *kind)
     return -1;
 }
 
-/* El destello de los rayos (va debajo de la barra de control) */
+/* ¿Están cayendo los rayos de las Piedras Cairn? (entonces los rayos se
+   dibujan después de oscurecer la escena: bossfx_shade) */
+static int bossfx_glow_late(void)
+{
+    for (int i = 0; i < BFX_MAX; i++)
+        if (s_bfx[i].kind == BFX_CAIRN)
+            return 1;
+    return 0;
+}
+
+/* Cuánto se oscurece la escena (de 0 a BFX_CAIRN_DARK niveles de luz), si
+   el jugador owner está cerca: en 40 cuadros, y al final se aclara en otros
+   40; el destello de un rayo la aclara un momento */
+static int bossfx_dark(int owner)
+{
+    int dark = 0;
+    for (int i = 0; i < BFX_MAX; i++) {
+        const BossFx *fx = &s_bfx[i];
+        if (fx->kind != BFX_CAIRN || owner < 0 || fabsf(s_pl[owner].x - fx->x) > 40.0f ||
+            fabsf(s_pl[owner].y - fx->y) > 40.0f)
+            continue;
+        int t = fx->age, f = t < BFX_CAIRN_FADE ? t : t > BFX_CAIRN_TIME - BFX_CAIRN_FADE ? BFX_CAIRN_TIME - t : BFX_CAIRN_FADE;
+        int d = BFX_CAIRN_DARK * f / BFX_CAIRN_FADE;
+        if (d > dark)
+            dark = d;
+    }
+    if (dark > 0 && s_flash > 0)
+        dark -= s_flash * 3;
+    return dark < 0 ? 0 : dark;
+}
+
+/* Después de dibujar el mundo de una vista (y su oscuridad): la escena
+   oscurecida y encima, sin oscurecer, los rayos */
+static void bossfx_shade(float cam_x, float cam_y, float alpha, int owner)
+{
+    if (!bossfx_glow_late())
+        return;
+    int dark = bossfx_dark(owner);
+    if (dark > 0) /* (el mundo: la barra de abajo se dibuja encima) */
+        fb_shade_rect(0, 0, SCREEN_W, SCREEN_H - 49, LIGHT_LEVELS - 1 - dark);
+    int ox = SCREEN_W / 2 - (int)lroundf(cam_x), oy = SCREEN_H / 2 - (int)lroundf(cam_y);
+    for (int i = 0; i < missiles_capacity(); i++) {
+        const Missile *mi = missiles_get(i);
+        if (!mi || !mi->glow)
+            continue;
+        float mx, my, sx, sy;
+        missiles_position(i, alpha, &mx, &my);
+        iso_to_screen(mx, my, &sx, &sy);
+        missiles_draw(i, ox + (int)lroundf(sx), oy + (int)lroundf(sy));
+    }
+}
+
+/* El destello de los rayos (va debajo de la barra de control; con la escena
+   oscurecida, en cambio, la aclara: bossfx_dark) */
 static void bossfx_draw(void)
 {
-    if (s_flash > 0)
+    if (s_flash > 0 && !bossfx_glow_late())
         fb_brighten_rect(0, 0, SCREEN_W, SCREEN_H, s_flash > 2 ? 2 : 1);
 }
 

@@ -949,3 +949,15 @@
 { "Baal se fue a la Cámara de la Piedra del Mundo", "Baal è entrato nella Camera della Pietra del Mondo" },
 { "Liberaste a los 15 soldados: hablá con Qual-Kehk", "Hai liberato i 15 soldati: parla con Qual-Kehk" },
 { "Liberaste a %d soldados", "Hai liberato %d soldati" },
+
+/* La comparación con lo equipado (en el inventario, como en Diablo IV) */
+{ "EQUIPADO", "EQUIPAGGIATO" },
+{ "Contra lo equipado:", "Rispetto all'oggetto equipaggiato:" },
+{ "Daño: %+d a %+d", "Danni: da %+d a %+d" },
+{ "Defensa: %+d", "Difesa: %+d" },
+{ "Bloqueo: %+d%%", "Parata: %+d%%" },
+{ "X: ponértelo (lo cambia por lo equipado)", "X: equipaggia (scambia con quello equipaggiato)" },
+
+/* Los engarces (en el inventario) */
+{ "A: levantarla para engarzarla", "A: prendila per incastonarla" },
+{ "A: engarzarla", "A: incastonala" },

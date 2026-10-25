@@ -260,6 +260,13 @@ static const Sprite *def_sprite(MissileDef *m)
     return job_flag_get(&m->gfx_state) == 1 ? &m->sprite : NULL;
 }
 
+void missiles_preload(const char *name)
+{
+    MissileDef *def = find_def(name);
+    if (def)
+        def_sprite(def);
+}
+
 static Missile *spawn_def(MissileDef *def, float x, float y, float dx, float dy, int sound)
 {
     int slot = -1;
@@ -314,6 +321,8 @@ void missiles_trail(int i)
     Missile *mi = missiles_get(i);
     if (!mi || mi->is_trail || mi->def->clt_do != 8 || (mi->flags & MF_EFFECT) || mi->def->speed <= 0.0f)
         return;
+    if (mi->glow && (mi->age & 3)) /* (los de las Piedras Cairn, de a cinco a la vez: un pedazo cada cuatro ticks) */
+        return;
     MissileDef *def = (MissileDef *)mi->def;
     Missile *t = spawn_def(def, s_prev[i][0], s_prev[i][1], 0.0f, 0.0f, 0);
     if (!t)
@@ -324,6 +333,7 @@ void missiles_trail(int i)
     t->life = mi->life + TRAIL_FADE < 2 * TRAIL_FADE ? mi->life + TRAIL_FADE : 2 * TRAIL_FADE; /* (si choca antes, no queda colgado) */
     t->age = mi->age * 3; /* (el cuadro de la animación de cada pedazo) */
     t->is_trail = 1;
+    t->glow = mi->glow;
 }
 
 /* El Meteoro (pCltDoFunc 9 de su centro): la piedra y su cola
@@ -362,7 +372,7 @@ Missile *missiles_effect(const char *name, float x, float y)
 
 int missiles_light(const Missile *mi)
 {
-    return mi->is_trail ? 0 : mi->def->light;
+    return mi->is_trail || mi->unlit ? 0 : mi->def->light;
 }
 
 const char *missiles_prog_overlay(const Missile *mi)

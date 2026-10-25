@@ -949,3 +949,15 @@
 { "Baal se fue a la Cámara de la Piedra del Mundo", "巴尔进入了世界之石大殿" },
 { "Liberaste a los 15 soldados: hablá con Qual-Kehk", "你解救了15名士兵：去找夸尔凯克谈谈" },
 { "Liberaste a %d soldados", "你解救了%d名士兵" },
+
+/* La comparación con lo equipado (en el inventario, como en Diablo IV) */
+{ "EQUIPADO", "已装备" },
+{ "Contra lo equipado:", "与已装备物品相比：" },
+{ "Daño: %+d a %+d", "伤害：%+d 至 %+d" },
+{ "Defensa: %+d", "防御：%+d" },
+{ "Bloqueo: %+d%%", "格挡：%+d%%" },
+{ "X: ponértelo (lo cambia por lo equipado)", "X：装备（与已装备物品交换）" },
+
+/* Los engarces (en el inventario) */
+{ "A: levantarla para engarzarla", "A：拿起以镶嵌" },
+{ "A: engarzarla", "A：镶嵌" },

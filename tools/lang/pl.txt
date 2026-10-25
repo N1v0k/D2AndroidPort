@@ -876,3 +876,11 @@
 875	Baal wszedł do Komnaty Kamienia Świata
 876	Uwolniłeś 15 żołnierzy: porozmawiaj z Qual-Kehkiem
 877	Uwolniłeś %d żołnierzy
+878	ZAŁOŻONE
+879	W porównaniu z założonym:
+880	Obrażenia: od %+d do %+d
+881	Obrona: %+d
+882	Blok: %+d%%
+883	X: załóż (zamienia z założonym)
+884	A: podnieś, aby osadzić
+885	A: osadź

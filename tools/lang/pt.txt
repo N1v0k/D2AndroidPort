@@ -876,3 +876,11 @@
 875	Baal entrou na Câmara da Pedra do Mundo
 876	Você libertou os 15 soldados: fale com Qual-Kehk
 877	Você libertou %d soldados
+878	EQUIPADO
+879	Comparado ao equipado:
+880	Dano: %+d a %+d
+881	Defesa: %+d
+882	Bloqueio: %+d%%
+883	X: equipar (troca pelo equipado)
+884	A: pegar para engastar
+885	A: engastar

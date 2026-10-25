@@ -80,6 +80,9 @@ typedef struct {
     float travel;     /* lo que recorrió (para D2_MISS_DEBUG) */
     float lob_h;      /* y qué tan alto llega, en píxeles */
     int   is_trail;   /* un pedazo del rastro de un rayo (missiles_trail): solo se ve, sin luz */
+    int   glow;       /* se dibuja después de oscurecer la escena (los rayos de las Piedras Cairn) */
+    int   unlit;      /* no alumbra (los haces de la Guarida: la cueva ya se ilumina entera, y en la Pi tantas
+                         luces en la oscuridad trababan la conversión del cuadro) */
     int   fall;       /* el Meteoro (missiles_meteor): cae en diagonal en sus últimos `fall` cuadros */
     float fall_speed; /* (píxeles por cuadro) */
     float zx;         /* lo que se corre en pantalla mientras cae (píxeles; a la izquierda < 0) */
@@ -89,6 +92,8 @@ typedef struct {
 
 int  missiles_init(void);
 int  missiles_exists(const char *name);
+/* Que su dibujo se vaya leyendo (en el otro hilo) antes de que haga falta */
+void missiles_preload(const char *name);
 /* El que está n filas después en missiles.txt (la calavera de cada Caballero: SrvDo148) */
 const char *missiles_after(const char *name, int n);
 /* Daño que trae el proyectil en missiles.txt (las púas, la bola de fuego del chamán) */

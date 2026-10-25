@@ -949,3 +949,15 @@
 { "Baal se fue a la Cámara de la Piedra del Mundo", "Baal wszedł do Komnaty Kamienia Świata" },
 { "Liberaste a los 15 soldados: hablá con Qual-Kehk", "Uwolniłeś 15 żołnierzy: porozmawiaj z Qual-Kehkiem" },
 { "Liberaste a %d soldados", "Uwolniłeś %d żołnierzy" },
+
+/* La comparación con lo equipado (en el inventario, como en Diablo IV) */
+{ "EQUIPADO", "ZAŁOŻONE" },
+{ "Contra lo equipado:", "W porównaniu z założonym:" },
+{ "Daño: %+d a %+d", "Obrażenia: od %+d do %+d" },
+{ "Defensa: %+d", "Obrona: %+d" },
+{ "Bloqueo: %+d%%", "Blok: %+d%%" },
+{ "X: ponértelo (lo cambia por lo equipado)", "X: załóż (zamienia z założonym)" },
+
+/* Los engarces (en el inventario) */
+{ "A: levantarla para engarzarla", "A: podnieś, aby osadzić" },
+{ "A: engarzarla", "A: osadź" },

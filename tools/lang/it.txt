@@ -876,3 +876,11 @@
 875	Baal è entrato nella Camera della Pietra del Mondo
 876	Hai liberato i 15 soldati: parla con Qual-Kehk
 877	Hai liberato %d soldati
+878	EQUIPAGGIATO
+879	Rispetto all'oggetto equipaggiato:
+880	Danni: da %+d a %+d
+881	Difesa: %+d
+882	Parata: %+d%%
+883	X: equipaggia (scambia con quello equipaggiato)
+884	A: prendila per incastonarla
+885	A: incastonala

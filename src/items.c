@@ -233,6 +233,7 @@ static void load_kind(const TxtTable *t, ItemKind kind)
         it->spawnable = txt_get_int(t, r, "spawnable", 0);
         it->req_str = txt_get_int(t, r, "reqstr", 0);
         it->req_dex = txt_get_int(t, r, "reqdex", 0);
+        it->quest = txt_col(t, "quest") >= 0 ? txt_get_int(t, r, "quest", 0) : 0;
         it->inv_w = txt_get_int(t, r, "invwidth", 1);
         it->inv_h = txt_get_int(t, r, "invheight", 1);
         copy_lower(it->flippy, sizeof it->flippy, txt_get(t, r, txt_col(t, "flippyfile")));
@@ -2203,10 +2204,12 @@ static uint8_t text_col(int c)
     return g_text_shift[c][COL(R_GRAY, 15)];
 }
 
+/* Como el original (los colores de _profilehd.json del Resurrected: DefaultColor, MagicColor...): los
+   comunes, las pociones y el oro blancos; mágicos azules; raros amarillos; de set verdes; únicos, palabras
+   rúnicas y los de las misiones dorados; artesanales y runas anaranjados; un común con engarces, gris (en uno
+   mágico o mejor manda el color de su calidad) */
 uint8_t items_label_color(const Item *it)
 {
-    if (it->type && strcmp(it->type->code, "gld") == 0)
-        return COL(R_GOLD, 14);
     switch (it->quality) {
     case QUALITY_MAGIC:    return COL(R_BLUE, 15); /* azul, como en el original */
     case QUALITY_RARE:     return text_col(9);      /* amarillo */
@@ -2214,8 +2217,17 @@ uint8_t items_label_color(const Item *it)
     case QUALITY_SET:      return text_col(2);      /* verde */
     case QUALITY_UNIQUE:
     case QUALITY_RUNEWORD: return text_col(4);      /* dorado */
-    default:               return it->sockets ? COL(R_GRAY, 11) : COL(R_GRAY, 15);
+    default:
+        break;
     }
+    const ItemType *t = it->type;
+    if (t && t->quest)
+        return text_col(4); /* QuestColor: dorado */
+    if (t && strcmp(t->type, "rune") == 0)
+        return text_col(8); /* RuneColor: anaranjado */
+    if (it->sockets)
+        return text_col(5); /* SocketedColor: gris */
+    return COL(R_GRAY, 15); /* blanco (también el oro: GoldColor) */
 }
 
 /* Para guardar: "#2 código defensa cantidad calidad nivel dibujo fila

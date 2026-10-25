@@ -949,3 +949,15 @@
 { "Baal se fue a la Cámara de la Piedra del Mundo", "Баал ушёл в Палату Камня Мира" },
 { "Liberaste a los 15 soldados: hablá con Qual-Kehk", "Ты освободил 15 солдат: поговори с Куал-Кехком" },
 { "Liberaste a %d soldados", "Освобождено солдат: %d" },
+
+/* La comparación con lo equipado (en el inventario, como en Diablo IV) */
+{ "EQUIPADO", "НАДЕТО" },
+{ "Contra lo equipado:", "По сравнению с надетым:" },
+{ "Daño: %+d a %+d", "Урон: от %+d до %+d" },
+{ "Defensa: %+d", "Защита: %+d" },
+{ "Bloqueo: %+d%%", "Блок: %+d%%" },
+{ "X: ponértelo (lo cambia por lo equipado)", "X: надеть (заменяет надетое)" },
+
+/* Los engarces (en el inventario) */
+{ "A: levantarla para engarzarla", "A: взять, чтобы вставить" },
+{ "A: engarzarla", "A: вставить" },

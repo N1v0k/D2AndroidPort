@@ -205,7 +205,7 @@ int cinema_play(const char *name)
             quit = 1;
             break;
         }
-        if (in.confirm || in.start || in.escape || in.menu_back)
+        if (in.confirm || in.start || in.escape || in.menu_back || in.any_press) /* (cualquier tecla o botón) */
             break;
         input_clear_events(&in);
 
