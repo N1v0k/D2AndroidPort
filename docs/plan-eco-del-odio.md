@@ -50,12 +50,27 @@ según el nivel promedio de los personajes, como los rangos de las áreas del
 original: hasta 39 Normal, de 40 a 64 Pesadilla, 65 o más Infierno. Se elige
 al empezar y no cambia en la corrida.
 
-**Las oleadas.** Cada oleada es un grado: el nivel de los monstruos es el
-del personaje (el promedio, en dos jugadores) más la oleada menos uno; los
+**Las oleadas.** El nivel de los monstruos es el del personaje (el
+promedio, en dos jugadores) y sube medio nivel por oleada (uno cada dos: la
+"etapa", `eco_stage`, la oleada que era cuando había cinco por acto); los
 jefes de cada oleada, como siempre, 3 más. Pasado el 99 ya no sube el nivel:
-cada oleada de más les da +10 % de vida y +5 % de daño. Una oleada se pasa
-matando su cuota (20 + 3 por oleada; con dos jugadores, una vez y media);
-entre oleada y oleada hay 4 segundos de respiro (lo que quedó vivo sigue).
+cada oleada de más les da +10 % de vida y +5 % de daño. Una oleada tiene su
+cuota (20 + 3 por etapa; con dos jugadores, una vez y media): cumplida ya no
+salen más, y se pasa cuando no queda ninguno vivo, también el jefe con nombre
+(26/10/2026, el usuario: "la oleada no termina hasta que matás a todos los
+monstruos"); arriba dice cuántos quedan. Si en dos minutos no muere ninguno
+(alguno trabado donde no se llega), se pasa igual.
+
+**El respiro** (26/10/2026, pedido del usuario: "para que la persona tenga
+tiempo de ponerse los stats o equiparse lo que encontró"): al pasar una
+oleada hay 8 segundos con una cuenta grande arriba ("Siguiente oleada en N", y "Lo que
+quede en el suelo se borra"). Al terminar la cuenta se borra todo lo que
+quedó en el piso. Son siempre 8 segundos (no van con el ritmo).
+
+**Las pociones** (26/10/2026): en el Eco cae un 35 % más de pociones que en
+la historia (de lo que deja el recorte del 35 % de la historia: un 88 % de
+las del original; `ECO_POTION_BONUS`, `items_set_potion_bonus`), de los
+monstruos y del cofre.
 
 Los monstruos salen en manadas (de 3 a 6 del mismo tipo) a 14..24 subtiles de
 un jugador, fuera de su pantalla si se puede, y van a buscarlo (no esperan a
@@ -64,24 +79,29 @@ casas de Tristram ni en las columnas del Trono). Con la oleada sube la
 probabilidad de campeones (5 % + 1 % por oleada) y de jefes al azar con
 escolta (2 % + 0,5 % por oleada).
 
-**Los temas.** Las oleadas van de a cinco por acto, como la campaña: la 1 a
-la 5 con monstruos del Acto 1 (sus niveles de levels.txt), la 6 a la 10 del
-Acto 2, y así hasta la 25; después vuelve a empezar. Cada oleada elige 3 o 4
+**Los temas.** Las oleadas van de a diez por acto (`ECO_ACT_WAVES`; eran
+cinco hasta el 26/10/2026, el usuario: "son pocas oleadas y no alcanza el
+tiempo para subir bien"): la 1 a la 10 con monstruos del Acto 1 (sus niveles
+de levels.txt), la 11 a la 20 del Acto 2, y así hasta la 50; después vuelve
+a empezar. Lo que sube con las oleadas (la cuota, el nivel, las manadas, los
+campeones, el tiempo entre manadas) va por etapas de a dos oleadas: en cada
+acto sube lo mismo que antes, en el doble de oleadas. Cada oleada elige 3 o 4
 tipos del acto (así no se cargan los gráficos de todos a la vez, que en la
 Pi pesa).
 
 **Los jefes (lo que pidió el usuario).**
-- **Cada 5 oleadas, un jefe de acto**, en el orden de la campaña: la 5
-  Andariel, la 10 Duriel, la 15 Mefisto, la 20 Diablo y la 25 Baal.
-- **De la 26 a la 50, los del evento Pandemonium:** la 30 Lilith, la 35 Duriel
-  uber, la 40 Izual uber, la 45 el Diablo uber (el clon) y la 50 los tres de
-  Uber Tristram juntos. Después se repiten los dos ciclos, con el nivel
-  siguiendo la oleada.
-- **En la tercera de cada cinco (3, 8, 13, 18, 23...), un jefe con nombre
+- **Cada 10 oleadas, un jefe de acto**, en el orden de la campaña: la 10
+  Andariel, la 20 Duriel, la 30 Mefisto, la 40 Diablo y la 50 Baal.
+- **De la 51 a la 100, los del evento Pandemonium:** la 60 Lilith, la 70
+  Duriel uber, la 80 Izual uber, la 90 el Diablo uber (el clon) y la 100 los
+  tres de Uber Tristram juntos. Después se repiten los dos ciclos, con el
+  nivel siguiendo la oleada.
+- **En la sexta de cada diez (6, 16, 26, 36, 46...), un jefe con nombre
   propio de ese acto** (los de superuniques.txt: Blood Raven, la Condesa,
   Radament, el Invocador, Izual, Nihlathak...), con su escolta. Sale más
   cerca (algunos no se mueven de su lugar, como el Invocador en su
-  plataforma) y no hace falta matarlo para pasar la oleada.
+  plataforma); desde el 26/10/2026 hay que matarlo para pasar la oleada
+  (como a todos).
 - El nivel del jefe es el de la oleada más 3 (como los jefes del original
   sobre su área). El de acto sale lejos y viene caminando, con un cartel. En
   una oleada de jefe de acto los monstruos comunes siguen saliendo, pero con
@@ -101,8 +121,9 @@ quiere jugar la historia y quiere jugar el Eco, que pueda"). Un personaje
 de nivel bajo mata despacio, así que los tiempos van por escalones del
 nivel (el promedio de los personajes, mirado en cada oleada: suben
 jugando), de 5 en 5 hasta el 20, de 10 en 10 hasta el 40 y de 20 en 20
-después (lo pidió así): el tiempo entre manadas, la cuenta del desborde y
-el respiro entre oleadas son el 250 % de lo de siempre del 1 al 5, el 220 %
+después (lo pidió así): el tiempo entre manadas y la cuenta del desborde
+(el respiro, desde el 26/10/2026, siempre 8 segundos) son el 250 % de lo de
+siempre del 1 al 5, el 220 %
 del 6 al 10, el 190 % del 11 al 15, el 165 % del 16 al 20, el 140 % del 21
 al 30, el 120 % del 31 al 40, lo de siempre del 41 al 60, el 85 % del 61 al
 80 y el 70 % del 81 en adelante; desde el 61, además, las manadas traen uno
@@ -111,8 +132,9 @@ más (`k_eco_pace` y `eco_set_pace` en `src/eco.inc`).
 **Más fácil en niveles bajos** (24/10/2026: "así llegan a oleadas más
 lejos"): con el ritmo de más (hasta el nivel 40) los monstruos tienen menos
 vida y daño (`eco_soft_pct`: -40 % con 250, nada con 100; `hunt_power`
-acepta porcentajes negativos), su nivel sube uno cada tres oleadas hasta el
-15 y cada dos hasta el 30 (`grow6`, en sextos de nivel), nunca más de uno
+acepta porcentajes negativos), su nivel sube uno cada tres etapas hasta el
+15 y cada dos hasta el 30 (`grow12`, en doceavos de nivel; una etapa son dos
+oleadas desde el 26/10/2026), nunca más de uno
 por debajo de los personajes, los jefes tienen 0, 1 o 2 niveles de más en
 lugar de 3 y salen menos manadas de campeones. Con los bots de la
 demostración (`D2_ECO_DEMO=1`, que reparten puntos, aprenden y usan

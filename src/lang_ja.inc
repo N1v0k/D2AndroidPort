@@ -961,3 +961,16 @@
 /* Los engarces (en el inventario) */
 { "A: levantarla para engarzarla", "A: 持ち上げてはめ込む" },
 { "A: engarzarla", "A: はめ込む" },
+
+/* El respiro entre oleadas del Eco del Odio */
+{ "Siguiente oleada en %d", "次のウェーブまで%d" },
+{ "Lo que quede en el suelo se borra", "地面に残った物は消えます" },
+{ "Quedan: %d", "残り: %d" },
+
+/* La pantalla de las partidas con los dos jugadores a la vez */
+{ "JUGADORES: ELIJAN SUS PERSONAJES", "プレイヤー: キャラクターを選択" },
+{ "Ese personaje ya lo eligió el jugador %d", "そのキャラクターはプレイヤー%dが選んだ" },
+{ "Lo eligió el jugador %d", "プレイヤー%dが選択中" },
+{ "J%d", "P%d" },
+{ "LISTO", "準備完了" },
+{ "Esperando al jugador %d", "プレイヤー%dを待っています" },

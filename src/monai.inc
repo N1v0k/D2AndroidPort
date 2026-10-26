@@ -330,12 +330,22 @@ static int ai_think(Unit *u, const Map *m, UnitTarget *pl, int t, float d)
         ai_stall(u, u->aip[2]);
         return 1;
     case AI_VULTURE: /* aip: ataque, quieto, herido, rodear, moverse */
-        if (u->ai_p[0] > 0) { /* volando: baja al lado del jugador */
+        if (u->airborne == 2) { /* terminó de bajar: otra vez en el suelo */
+            u->airborne = 0;
+            u->hidden = 0;
+            u->solid = 1;
+            ai_stall(u, 12);
+            return 1;
+        }
+        if (u->ai_p[0] > 0) { /* volando (S1): baja al lado del jugador */
             if (!tp || --u->ai_p[0] <= 0 || dist_to(u, u->ai_tx, u->ai_ty) < 1.0f) {
+                /* el aterrizaje (S2, MONMODE_SKILL2), quieto lo que dura su animación */
+                const CharAnim *s2 = &u->gfx->anim[ANIM_SKILL2];
+                int ticks = s2->ok && s2->speed > 0 ? (charanim_frames(s2) * 256 + s2->speed - 1) / s2->speed : 1;
                 u->ai_p[0] = 0;
-                u->hidden = 0;
-                u->solid = 1;
-                ai_stall(u, 12);
+                u->airborne = 2;
+                u->anim_acc = 0;
+                ai_stall(u, ticks);
                 return 1;
             }
             ai_go(u, u->ai_tx, u->ai_ty, 4, 250, 0);
@@ -343,11 +353,15 @@ static int ai_think(Unit *u, const Map *m, UnitTarget *pl, int t, float d)
         }
         if (!tp)
             return 0;
-        if (d > 12.0f && rnd(u) % 100 < 60) { /* se va volando y baja cerca del jugador */
+        static int fly_test = -1; /* (D2_VULTURE_FLY=1: siempre se van volando, para ver el vuelo) */
+        if (fly_test < 0)
+            fly_test = getenv("D2_VULTURE_FLY") != NULL;
+        if ((d > 12.0f || fly_test) && rnd(u) % 100 < 60) { /* se va volando y baja cerca del jugador */
             float a = rndf(u) * 2.0f * PI_F, r = 3.0f + rndf(u) * 3.0f;
             float lx = tp->x + cosf(a) * r, ly = tp->y + sinf(a) * r;
             if (!m || !wall_foot(m, lx, ly, u->foot, u->move_mask)) {
-                u->hidden = 1;
+                u->hidden = 1; /* (en el aire no se lo puede atacar, pero se ve: airborne) */
+                u->airborne = 1;
                 u->solid = 0;
                 u->ai_p[0] = 24 + (int)(rnd(u) % 8);
                 ai_go(u, lx, ly, 4, 250, 0);

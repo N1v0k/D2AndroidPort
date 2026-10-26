@@ -79,3 +79,4 @@
 876	Has liberado a los 15 soldados: habla con Qual-Kehk
 877	Has liberado a %d soldados
 884	A: cogerla para engarzarla
+889	JUGADORES: ELEGID VUESTROS PERSONAJES

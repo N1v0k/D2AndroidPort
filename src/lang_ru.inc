@@ -961,3 +961,16 @@
 /* Los engarces (en el inventario) */
 { "A: levantarla para engarzarla", "A: взять, чтобы вставить" },
 { "A: engarzarla", "A: вставить" },
+
+/* El respiro entre oleadas del Eco del Odio */
+{ "Siguiente oleada en %d", "Следующая волна через %d" },
+{ "Lo que quede en el suelo se borra", "Всё, что осталось на земле, исчезнет" },
+{ "Quedan: %d", "Осталось: %d" },
+
+/* La pantalla de las partidas con los dos jugadores a la vez */
+{ "JUGADORES: ELIJAN SUS PERSONAJES", "ИГРОКИ: ВЫБЕРИТЕ ПЕРСОНАЖЕЙ" },
+{ "Ese personaje ya lo eligió el jugador %d", "Этого персонажа уже выбрал игрок %d" },
+{ "Lo eligió el jugador %d", "Выбран игроком %d" },
+{ "J%d", "И%d" },
+{ "LISTO", "ГОТОВ" },
+{ "Esperando al jugador %d", "Ждём игрока %d" },

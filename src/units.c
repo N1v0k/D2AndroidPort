@@ -358,6 +358,7 @@ typedef struct {
 
     /* Mercenaria de un jugador (y la Valquiria, `pet`: pelea cuerpo a cuerpo) */
     int       merc, pet, owner, hidden;
+    int       airborne; /* en el aire (los buitres): no se lo puede atacar (hidden) pero se ve; 1 volando (S1), 2 bajando (S2) */
     int       turret, shot_delay; /* la Hidra: dispara quieta cada shot_delay ticks */
     int       running;
     float     run_speed;
@@ -1012,7 +1013,7 @@ static int mon_row(const TxtTable *t, const char *id)
    unidades y corta si difiere. */
 #define GRID_SHIFT      2    /* celdas de 4 subtiles */
 #define GRID_SIDE       64
-#define GRID_CANDS      256  /* más que esto en el recuadro: se miran todas */
+#define GRID_CANDS      UNITS_NEAR_MAX /* más que esto en el recuadro: se miran todas */
 #define GRID_SLACK      0.05f /* lo que puede correrse units_position(i, 1) del lugar, y el redondeo */
 #define UNIT_RADIUS_MAX 1.0f /* el de los grandes (SizeX 3: 0.25 + 0.25 * 3) */
 static int   s_grid_ok;
@@ -1469,7 +1470,8 @@ static void monster_look(int ms, int ms2, int enemy, int merc, CharLook *out, ch
     /* S2..S4: los hechizos de Diablo (el frío, los muros, la prisión), las maldiciones del Caballero del
        Olvido y las almas atrapadas */
     int need_s234 = enemy && (strcmp(ai_name, "Diablo") == 0 || strcmp(ai_name, "OblivionKnight") == 0 ||
-                              strcmp(ai_name, "TrappedSoul") == 0 || a5_needs_mode(ai_name, ANIM_SKILL2));
+                              strcmp(ai_name, "TrappedSoul") == 0 || strcmp(ai_name, "Vulture") == 0 || /* (su aterrizaje) */
+                              a5_needs_mode(ai_name, ANIM_SKILL2));
     for (int a = 1; a < ANIM_COUNT; a++)
         if ((a == ANIM_WALK || enemy || merc) && (a != ANIM_SKILL || need_s1) && (a != ANIM_RUN || need_rn) &&
             (a != ANIM_CAST || need_sc) && (a < ANIM_SKILL2 || need_s234) &&
@@ -2997,6 +2999,11 @@ static int current_anim(const Unit *u)
 {
     const UnitGfx *g = u->gfx;
     int a;
+    if (u->airborne && u->state < ST_DYING) { /* el buitre en el aire: volando (S1) o bajando (S2) */
+        a = u->airborne == 2 ? ANIM_SKILL2 : ANIM_SKILL;
+        if (g->anim[a].ok)
+            return a;
+    }
     switch (u->state) {
     case ST_ATTACK: a = u->attack_anim ? u->attack_anim : ANIM_ATTACK; break;
     case ST_RISE:   a = ANIM_SKILL; break;
@@ -3004,6 +3011,22 @@ static int current_anim(const Unit *u)
     case ST_DYING:  a = ANIM_DEATH; break;
     case ST_DEAD:   a = g->anim[ANIM_DEAD].ok ? ANIM_DEAD : ANIM_DEATH; break;
     default:        a = !u->walking ? ANIM_IDLE : u->running && g->anim[ANIM_RUN].ok ? ANIM_RUN : ANIM_WALK; break;
+    }
+    static int check = -1; /* D2_ANIM_MISSING=1: avisa (una vez por monstruo y modo) cuando falta la animación que toca */
+    if (check < 0)
+        check = getenv("D2_ANIM_MISSING") != NULL;
+    if (check && !g->anim[a].ok && a != ANIM_IDLE && gfx_ready(u->gfx)) {
+        static char seen[256][24];
+        static int nseen;
+        char key[24];
+        snprintf(key, sizeof key, "%.18s/%d", u->base, a);
+        int k = 0;
+        while (k < nseen && strcmp(seen[k], key) != 0)
+            k++;
+        if (k == nseen && nseen < 256) {
+            snprintf(seen[nseen++], sizeof seen[0], "%s", key);
+            printf("ANIM falta: %s (%s) modo %d en el estado %d\n", u->base, u->gfx->key, a, u->state);
+        }
     }
     return g->anim[a].ok ? a : ANIM_IDLE;
 }
@@ -3013,6 +3036,23 @@ static void set_state(Unit *u, int state)
     if (state == ST_DYING && u->state < ST_DYING && u->hunt) {
         s_hunt_deaths++;
         u->died_at = s_unit_ticks;
+    }
+    static int trace = -1; /* D2_ATTACK_TRACE=1: cada ataque de un monstruo, con lo que dura su animación y lo que duró */
+    static uint32_t t0[MAX_UNITS];
+    if (trace < 0)
+        trace = getenv("D2_ATTACK_TRACE") != NULL;
+    if (trace && u->enemy && u->gfx) {
+        int i = (int)(u - s_units);
+        if (state == ST_ATTACK && u->state != ST_ATTACK)
+            t0[i] = s_unit_ticks;
+        else if (u->state == ST_ATTACK && state != ST_ATTACK && i < MAX_UNITS) {
+            int an = u->attack_anim ? u->attack_anim : ANIM_ATTACK;
+            const CharAnim *ca = &u->gfx->anim[an];
+            int frames = ca->ok ? charanim_frames(ca) : 0, sp = ca->ok ? ca->speed : 0;
+            printf("ATAQUE %s modo %d%s cuadros %d vel %d golpe %d esperado %d ticks duró %u golpeó %d -> estado %d (tick %u)\n",
+                   u->base, an, u->jab && u->seq ? " (secuencia)" : "", frames, sp, ca->hit_frame,
+                   sp > 0 ? (frames * 256 + sp - 1) / sp : -1, s_unit_ticks - t0[i], u->hit_done, state, s_unit_ticks);
+        }
     }
     u->state = state;
     u->anim_acc = 0;
@@ -3805,6 +3845,8 @@ static void seq_attack(Unit *u, const Map *m, UnitTarget *pl)
                     egg->wander = 0.0f;
                 }
             }
+        } else if (strcmp(sk, "DeathMaul") == 0) { /* las garras bajo tierra, donde está el jugador */
+            a5_death_maul(u, &pl[u->target]);
         } else if (strcmp(sk, "MonLeap") != 0 && strcmp(sk, "Submerge") != 0) { /* (sumergirse no pega) */
             /* La estocada y el golpe de fuego pegan con su modo (el de fuego, con el daño y el elemento de S1); la carga, más fuerte */
             int mode = strcmp(sk, "Fire Hit") == 0 ? ANIM_SKILL : q->anim[u->hit_done];
@@ -5907,7 +5949,7 @@ int units_count(void)
 
 int units_visible(int i)
 {
-    return s_units[i].zone != ZONE_FREE && !s_units[i].hidden;
+    return s_units[i].zone != ZONE_FREE && (!s_units[i].hidden || s_units[i].airborne);
 }
 
 int units_zone(int i)
@@ -6034,7 +6076,7 @@ int units_riding(int i)
 void units_draw(int i, int x, int y)
 {
     const Unit *u = &s_units[i];
-    if (u->hidden || !gfx_ready(u->gfx) || (u->pshift && job_flag_get(&u->pshift->state) == PS_LOADING))
+    if ((u->hidden && !u->airborne) || !gfx_ready(u->gfx) || (u->pshift && job_flag_get(&u->pshift->state) == PS_LOADING))
         return;
     int anim = current_anim(u);
     const CharAnim *a = &u->gfx->anim[anim];
@@ -6119,6 +6161,12 @@ int units_blocking_at(float x, float y, float radius, float *ux, float *uy)
 int units_blocking(float x, float y, float radius)
 {
     return units_blocking_at(x, y, radius, NULL, NULL);
+}
+
+int units_near(float x, float y, float range, int *out)
+{
+    float h = fabsf(range) + GRID_SLACK;
+    return grid_box(x - h, y - h, x + h, y + h, out);
 }
 
 int units_find_all(const char *name, int *out, int max)
@@ -6835,9 +6883,10 @@ void units_consume_corpse(int i)
 
 int units_find_npc(float x, float y, float range)
 {
-    int best = -1;
+    int best = -1, c[GRID_CANDS], nc = units_near(x, y, range, c); /* (solo las de alrededor: los carteles lo piden en cada cuadro) */
     float best_d = range * range;
-    for (int i = 0; i < s_num_units; i++) {
+    for (int k = 0; k < (nc >= 0 ? nc : s_num_units); k++) {
+        int i = nc >= 0 ? c[k] : k;
         const Unit *u = &s_units[i];
         if (!u->npc)
             continue;

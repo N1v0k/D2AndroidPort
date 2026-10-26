@@ -141,6 +141,10 @@ int  units_blocking_at(float x, float y, float radius, float *ux, float *uy);
    de monstats.txt, por ejemplo "RogueBonfire" o "akara"); 0 si la encontró */
 int  units_find(const char *name, float *x, float *y);
 int  units_find_all(const char *name, int *out, int max); /* índices de todas las que se llaman así */
+/* Las unidades a menos de `range` de (x, y) en cada eje (más un poco), de menor a mayor índice, en out (lugar para
+   UNITS_NEAR_MAX); -1 si son demasiadas: hay que mirar todas (las de 0 a units_count() - 1) */
+#define UNITS_NEAR_MAX 256
+int  units_near(float x, float y, float range, int *out);
 void units_set_lit(int i, int lit); /* waypoints: encendido o apagado */
 
 /* Objetos de las misiones: crear uno por su clase de objects.txt (el

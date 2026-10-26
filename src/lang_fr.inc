@@ -961,3 +961,16 @@
 /* Los engarces (en el inventario) */
 { "A: levantarla para engarzarla", "A : la prendre pour l'enchâsser" },
 { "A: engarzarla", "A : l'enchâsser" },
+
+/* El respiro entre oleadas del Eco del Odio */
+{ "Siguiente oleada en %d", "Prochaine vague dans %d" },
+{ "Lo que quede en el suelo se borra", "Ce qui reste au sol va disparaître" },
+{ "Quedan: %d", "Restants : %d" },
+
+/* La pantalla de las partidas con los dos jugadores a la vez */
+{ "JUGADORES: ELIJAN SUS PERSONAJES", "JOUEURS : CHOISISSEZ VOS PERSONNAGES" },
+{ "Ese personaje ya lo eligió el jugador %d", "Le joueur %d a déjà choisi ce personnage" },
+{ "Lo eligió el jugador %d", "Choisi par le joueur %d" },
+{ "J%d", "J%d" },
+{ "LISTO", "PRÊT" },
+{ "Esperando al jugador %d", "En attente du joueur %d" },

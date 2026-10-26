@@ -245,23 +245,39 @@ static int ai_dead_fetish(const Unit *u, float range)
 /* MonTeleport: aparece en (x, y) o cerca, si ahí se puede pisar (primero
    en el lugar mismo: antes empezaba por la esquina de arriba a 2 subtiles,
    que podía quedar del otro lado de una pared) */
-static int ai_teleport(Unit *u, const Map *m, float x, float y)
+static int teleport_spot(const Unit *u, const Map *m, float x, float y, float *ox, float *oy)
 {
     static const int k_order[9] = { 4, 1, 3, 5, 7, 0, 2, 6, 8 }; /* el centro, la cruz y las esquinas */
     for (int k = 0; k < 9; k++) {
         int tries = k_order[k];
         float tx = x + (float)(tries % 3 - 1) * 2.0f, ty = y + (float)(tries / 3 - 1) * 2.0f;
         if (m && !wall_foot(m, tx, ty, u->foot, u->move_mask)) {
-            missiles_effect("teleport", u->x, u->y);
-            u->x = u->prev_x = tx;
-            u->y = u->prev_y = ty;
-            grid_moved(u);
-            missiles_effect("teleport", tx, ty);
-            ai_stall(u, 6);
+            *ox = tx;
+            *oy = ty;
             return 1;
         }
     }
     return 0;
+}
+
+/* Pasa a (tx, ty), con el destello del teletransporte en los dos lugares */
+static void teleport_move(Unit *u, float tx, float ty)
+{
+    missiles_effect("teleport", u->x, u->y);
+    u->x = u->prev_x = tx;
+    u->y = u->prev_y = ty;
+    grid_moved(u);
+    missiles_effect("teleport", tx, ty);
+}
+
+static int ai_teleport(Unit *u, const Map *m, float x, float y)
+{
+    float tx, ty;
+    if (!teleport_spot(u, m, x, y, &tx, &ty))
+        return 0;
+    teleport_move(u, tx, ty);
+    ai_stall(u, 6);
+    return 1;
 }
 
 /* Las cabezas de la Hidra del Consejo (Hydra: tres alrededor del jugador,

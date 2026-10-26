@@ -884,3 +884,12 @@
 883	X: equipar (troca pelo equipado)
 884	A: pegar para engastar
 885	A: engastar
+886	Próxima onda em %d
+887	O que ficar no chão vai sumir
+888	Restam: %d
+889	JOGADORES: ESCOLHAM SEUS PERSONAGENS
+890	O jogador %d já escolheu esse personagem
+891	Escolhido pelo jogador %d
+892	J%d
+893	PRONTO
+894	Esperando o jogador %d

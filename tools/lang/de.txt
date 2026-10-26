@@ -884,3 +884,12 @@
 883	X: Anlegen (tauscht mit dem Ausgerüsteten)
 884	A: aufnehmen, um sie einzusetzen
 885	A: einsetzen
+886	Nächste Welle in %d
+887	Was am Boden liegt, verschwindet
+888	Übrig: %d
+889	SPIELER: WÄHLT EURE CHARAKTERE
+890	Diesen Charakter hat Spieler %d schon gewählt
+891	Von Spieler %d gewählt
+892	S%d
+893	BEREIT
+894	Warte auf Spieler %d

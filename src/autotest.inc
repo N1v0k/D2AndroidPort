@@ -369,23 +369,23 @@ static const AtStep k_act5_steps[] = {
     { AT_TOUCH, "NotKiddingLastPortal", 0, "end5", "Entrar al portal de Tyrael: el final", 0 },
     { AT_SAVE, NULL, 0, "saved", "Guardar y revisar la partida", 0 },
 };
-/* --autotest eco (con D2_ECO): las oleadas con sus jefes, el final, el cofre y el portal (D2_ECO_WAVE=26
+/* --autotest eco (con D2_ECO): las oleadas con sus jefes, el final, el cofre y el portal (D2_ECO_WAVE=51
    empieza en la segunda vuelta: los del evento Pandemonium) */
 static const AtStep k_eco_steps[] = {
-    { AT_ECO, NULL, 0, "eco=3", "Oleadas 1 y 2", 0 },
-    { AT_ECO, NULL, 0, "eco=4", "Oleada 3: un jefe con nombre propio", 0 },
-    { AT_ECO, NULL, 0, "eco=6", "Oleada 5: el jefe del Acto 1", 0 },
-    { AT_ECO, NULL, 0, "eco=9", "Oleada 8: un jefe con nombre del Acto 2", 0 },
-    { AT_ECO, NULL, 0, "eco=11", "Oleada 10: el jefe del Acto 2", 0 },
-    { AT_ECO, NULL, 0, "eco=16", "Oleada 15: el jefe del Acto 3", 0 },
-    { AT_ECO, NULL, 0, "eco=21", "Oleada 20: el jefe del Acto 4", 0 },
-    { AT_ECO, NULL, 0, "eco=26", "Oleada 25: el jefe del Acto 5", 0 },
-    /* (la segunda vuelta, solo si se empieza en ella: D2_ECO_WAVE=26 o más) */
-    { AT_ECO, NULL, 0, "eco2=31", "Oleada 30: Lilith", 0 },
-    { AT_ECO, NULL, 0, "eco2=36", "Oleada 35: Duriel uber", 0 },
-    { AT_ECO, NULL, 0, "eco2=41", "Oleada 40: Izual uber", 0 },
-    { AT_ECO, NULL, 0, "eco2=46", "Oleada 45: el Diablo uber", 0 },
-    { AT_ECO, NULL, 0, "eco2=51", "Oleada 50: los tres de Uber Tristram", 0 },
+    { AT_ECO, NULL, 0, "eco=3", "Oleadas 1 y 2 (con el respiro: el piso se borra)", 0 },
+    { AT_ECO, NULL, 0, "eco=7", "Oleada 6: un jefe con nombre propio", 0 },
+    { AT_ECO, NULL, 0, "eco=11", "Oleada 10: el jefe del Acto 1", 0 },
+    { AT_ECO, NULL, 0, "eco=17", "Oleada 16: un jefe con nombre del Acto 2", 0 },
+    { AT_ECO, NULL, 0, "eco=21", "Oleada 20: el jefe del Acto 2", 0 },
+    { AT_ECO, NULL, 0, "eco=31", "Oleada 30: el jefe del Acto 3", 0 },
+    { AT_ECO, NULL, 0, "eco=41", "Oleada 40: el jefe del Acto 4", 0 },
+    { AT_ECO, NULL, 0, "eco=51", "Oleada 50: el jefe del Acto 5", 0 },
+    /* (la segunda vuelta, solo si se empieza en ella: D2_ECO_WAVE=51 o más) */
+    { AT_ECO, NULL, 0, "eco2=61", "Oleada 60: Lilith", 0 },
+    { AT_ECO, NULL, 0, "eco2=71", "Oleada 70: Duriel uber", 0 },
+    { AT_ECO, NULL, 0, "eco2=81", "Oleada 80: Izual uber", 0 },
+    { AT_ECO, NULL, 0, "eco2=91", "Oleada 90: el Diablo uber", 0 },
+    { AT_ECO, NULL, 0, "eco2=101", "Oleada 100: los tres de Uber Tristram", 0 },
     { AT_ECO_QUIT, NULL, 0, "ecoend", "Terminar el Eco desde la pausa", 0 },
     { AT_TOUCH, "ConsolationChest", 0, "ecochest", "Abrir el cofre del Eco", 0 },
     { AT_ECO_PORTAL, NULL, 0, "ecoexit", "Volver por el portal", 0 },
@@ -854,7 +854,7 @@ static int at_check(const char *check, char *why, size_t cap)
     }
     if (strcmp(name, "eco") == 0 || strcmp(name, "eco2") == 0 || strcmp(name, "ecoend") == 0 || strcmp(name, "ecochest") == 0 ||
         strcmp(name, "ecoexit") == 0) {
-        int second = getenv("D2_ECO_WAVE") && atoi(getenv("D2_ECO_WAVE")) >= 26;
+        int second = getenv("D2_ECO_WAVE") && atoi(getenv("D2_ECO_WAVE")) >= 5 * ECO_ACT_WAVES + 1;
         int ok = name[3] == 0 ? s_er.wave >= want
                : name[3] == '2' ? !second || s_er.wave >= want
                : name[3] == 'e' ? s_er.phase == EP_LOOT
@@ -1001,7 +1001,7 @@ static int at_step_timeout(const AtStep *st)
     case AT_GOTO_LEVEL: return 60 * 60 * TICK_RATE; /* hasta una hora de juego caminando */
     case AT_CLEAR:      return 30 * 60 * TICK_RATE;
     case AT_WAYPOINT:   return 10 * 60 * TICK_RATE;
-    case AT_ECO:        return 40 * 60 * TICK_RATE; /* (hasta cinco oleadas) */
+    case AT_ECO:        return 80 * 60 * TICK_RATE; /* (hasta diez oleadas) */
     default:            return 8 * 60 * TICK_RATE;
     }
 }
@@ -1911,9 +1911,12 @@ static int autotest_input_fill(InputState *in, double last_tick_ms)
         s_at.iv_tick_max = last_tick_ms;
     if (perf_every > 0 && s_at.iv_ticks >= perf_every) {
         const Player *p = &s_pl[0];
-        printf("  rendimiento t%u %-26s lógica %.2f ms (peor %.1f), dibujo %.2f ms (peor %.1f), %d unidades, paso %d\n", s_ticks,
-               p->level ? p->level->name : "?", s_at.iv_tick_sum / s_at.iv_ticks, s_at.iv_tick_max,
-               s_at.iv_renders ? s_at.iv_render_sum / s_at.iv_renders : 0.0, s_at.iv_render_max, units_count(), s_at.step + 1);
+        char parts[256] = "";
+        game_bench_parts(parts, sizeof parts); /* (lo de cada parte del dibujo en el tramo) */
+        printf("  rendimiento t%u %-26s lógica %.2f ms (peor %.1f), dibujo %.2f ms (peor %.1f), %d unidades, paso %d [%s]\n",
+               s_ticks, p->level ? p->level->name : "?", s_at.iv_tick_sum / s_at.iv_ticks, s_at.iv_tick_max,
+               s_at.iv_renders ? s_at.iv_render_sum / s_at.iv_renders : 0.0, s_at.iv_render_max, units_count(), s_at.step + 1,
+               parts);
         s_at.iv_tick_sum = s_at.iv_tick_max = s_at.iv_render_sum = s_at.iv_render_max = 0.0;
         s_at.iv_ticks = s_at.iv_renders = 0;
     }

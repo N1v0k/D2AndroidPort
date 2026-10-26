@@ -12,14 +12,23 @@
      (world_set_arena: también Uber Tristram y la Colossal Summit fuera de
      Infierno), sin sus monstruos ni sus salidas. Se empieza en el lugar más
      abierto del pedazo más grande que se camina.
-   - La oleada N: monstruos del nivel del personaje + N - 1 (pasado el 99,
-     vida y daño de más), de los niveles del acto del tema (de a cinco
-     oleadas por acto, como la campaña). Salen en manadas fuera de la
-     pantalla y cazan (units_set_hunt: van por el mapa de pasos). Se pasa
-     matando la cuota.
-   - Cada cinco, un jefe de acto (Andariel... Baal; en la vuelta siguiente
-     los del evento Pandemonium), del nivel de la oleada + 3; en la tercera
-     de cada cinco, uno con nombre propio de ese acto.
+   - La oleada N: monstruos del nivel del personaje, que suben medio nivel
+     por oleada (pasado el 99, vida y daño de más), de los niveles del acto
+     del tema (de a diez oleadas por acto: ECO_ACT_WAVES). Salen en manadas
+     fuera de la pantalla y cazan (units_set_hunt: van por el mapa de
+     pasos). Cumplida la cuota no salen más, y se pasa cuando no queda
+     ninguno vivo (26/10/2026, el usuario: "la oleada no termina hasta que
+     matás a todos los monstruos").
+   - Cada diez, un jefe de acto (Andariel... Baal; en la vuelta siguiente
+     los del evento Pandemonium), del nivel de la oleada + 3; en la sexta
+     de cada diez, uno con nombre propio de ese acto. Eran cinco por acto
+     (26/10/2026, el usuario: "son pocas oleadas y no alcanza el tiempo
+     para subir"): la dificultad (la cuota, las manadas, los campeones, el
+     nivel de los monstruos) sube por acto lo mismo que antes (eco_stage).
+   - Entre oleadas, 8 segundos con la cuenta en pantalla (para repartir puntos
+     y equiparse tranquilo) y al terminar se borra todo lo que quedó en el
+     piso.
+   - Pociones: un 35 % más que en la historia (ECO_POTION_BONUS).
    - El desborde: con la arena llena (s_er.cap vivos) diez segundos, se
      termina. También al morir (los dos, con dos jugadores).
    - El ritmo según el nivel de los personajes (eco_pace): un personaje
@@ -39,7 +48,11 @@
      portal que vuelve al menú; el récord de cada personaje se guarda. */
 
 #define ECO_ARENAS  4
-#define ECO_BREAK   (4 * TICK_RATE)  /* el respiro entre oleadas */
+#define ECO_BREAK   (8 * TICK_RATE)  /* el respiro entre oleadas (con la cuenta; al final se borra el piso) */
+#define ECO_ACT_WAVES  10 /* las oleadas de cada acto: la última con su jefe */
+#define ECO_NAMED_WAVE 6  /* y la del jefe con nombre propio, dentro de las del acto */
+#define ECO_POTION_BONUS 35 /* % más pociones que en la historia */
+#define ECO_STUCK (120 * TICK_RATE) /* cumplida la cuota, si en esto no muere ninguno (trabado donde no se llega), se pasa */
 #define ECO_OVERRUN (10 * TICK_RATE) /* lo que se aguanta la arena llena */
 #define ECO_FLOW    10               /* cada cuántos ticks se rehace el mapa de pasos */
 #define ECO_NOSTEP  0xffff
@@ -94,8 +107,10 @@ typedef struct {
     int          boss_due;       /* el tick de la oleada en que salen (-1 = ya salieron) */
     int          spawn_cd, alive, cap;
     int          pace;           /* el ritmo según el nivel de los personajes (eco_set_pace), en % de los tiempos */
-    int          grow6;          /* lo que subió el nivel de los monstruos desde el primero, en sextos de nivel */
+    int          grow12;         /* lo que subió el nivel de los monstruos desde el primero, en doceavos de nivel */
     int          over;           /* ticks con la arena llena */
+    int          last_kill;      /* el tick de la oleada en que murió el último (la cuota cumplida, ECO_STUCK) */
+    int          kills_seen;
     int          dead_ticks;     /* ticks con todos muertos */
     int          end;            /* EE_*: por qué terminó */
     int          best;           /* la oleada a la que se llegó */
@@ -115,6 +130,13 @@ static int eco_pace_for(int lvl)
     while (k < n - 1 && lvl > k_eco_pace[k].upto)
         k++;
     return k_eco_pace[k].pace;
+}
+
+/* La etapa de la oleada w: la oleada que era con cinco por acto (la 1 y la 2 son la 1, ... la 9 y la 10 la 5): la
+   dificultad (la cuota, las manadas, los campeones) sube por acto lo mismo que antes, en el doble de oleadas */
+static int eco_stage(int w)
+{
+    return w > 0 ? (w - 1) * 5 / ECO_ACT_WAVES + 1 : 1;
 }
 
 /* El nivel de los personajes ahora (el promedio: suben jugando) */
@@ -157,6 +179,7 @@ static int eco_loot_level(void)
 
 static void eco_loot(const char **tc, int *lvl)
 {
+    items_set_potion_bonus(ECO_POTION_BONUS); /* (drop_loot lo vuelve a 0) */
     int want = eco_loot_level();
     *tc = items_tc_at_level(*tc, want);
     *lvl = *lvl < want ? *lvl : want;
@@ -531,7 +554,7 @@ static void eco_pick_kinds(void)
     for (int k = 0; k < n; k++)
         if (eco_kind_ok(all[k]))
             ok[m++] = all[k];
-    int want = s_er.wave >= 10 ? 4 : 3;
+    int want = eco_stage(s_er.wave) >= 10 ? 4 : 3;
     s_er.nkinds = 0;
     for (int t = 0; t < 60 && s_er.nkinds < want && m > 0; t++) {
         const char *id = ok[rnd() % (uint32_t)m];
@@ -553,7 +576,7 @@ static int eco_act_bosses(int wave, const char **ids, const char **tcs)
     static const char *const k_uber[4][2] = {
         { "uberandariel", "andariel" }, { "uberduriel", "duriel" }, { "uberizual", "izual" }, { "diabloclone", "diablo" }
     };
-    int act = (wave - 1) / 5 % 5, cycle = (wave - 1) / 25 % 2;
+    int act = (wave - 1) / ECO_ACT_WAVES % 5, cycle = (wave - 1) / (5 * ECO_ACT_WAVES) % 2;
     if (!cycle) {
         ids[0] = k_story[act];
         tcs[0] = NULL;
@@ -642,6 +665,15 @@ static int eco_bosses_left(void)
     return n;
 }
 
+/* ¿Se cumplió la oleada? (la de jefe de acto al matarlos; las otras con la cuota): ya no salen más y se pasa
+   cuando no queda ninguno */
+static int eco_goal(void)
+{
+    int kills = units_hunt_deaths() - s_er.deaths0;
+    return s_er.boss_due < 0 &&
+           (s_er.boss_kind == 1 ? eco_bosses_left() == 0 && (s_er.nboss > 0 || kills >= s_er.quota) : kills >= s_er.quota);
+}
+
 /* El primero de los jefes de la oleada que sigue vivo (-1 = ninguno) */
 static int eco_boss_alive(void)
 {
@@ -659,12 +691,13 @@ static void eco_spawn_pack(void)
         return;
     int k = (int)(rnd() % (uint32_t)s_er.nkinds), made = 0;
     const char *id = s_er.kinds[k];
-    int boss_pct = (4 + s_er.wave * 3 / 2) * 100 / (s_er.pace > 100 ? s_er.pace : 100); /* (menos en niveles bajos) */
+    int stage = eco_stage(s_er.wave);
+    int boss_pct = (4 + stage * 3 / 2) * 100 / (s_er.pace > 100 ? s_er.pace : 100); /* (menos en niveles bajos) */
     units_zone_begin(s_er.zone);
     if ((int)(rnd() % 100) < (boss_pct < 40 ? boss_pct : 40)) {
         made = units_spawn_level_boss(id, x, y, s_er.mlvl);
     } else {
-        int n = 3 + (int)(rnd() % 3) + (s_er.wave >= 15) + (s_er.pace <= ECO_PACE_BIG);
+        int n = 3 + (int)(rnd() % 3) + (stage >= 15) + (s_er.pace <= ECO_PACE_BIG);
         for (int i = 0; i < n; i++) {
             float mx = x, my = y;
             if (i > 0 && !eco_near(x, y, 2, 1, &mx, &my))
@@ -712,20 +745,22 @@ static void eco_wave_begin(void)
 {
     int w = ++s_er.wave;
     eco_set_pace();
-    /* Los monstruos, un nivel más por oleada; en los niveles bajos más despacio (uno cada tres oleadas
-       hasta el 15, cada dos hasta el 30), pero nunca más de uno por debajo de los personajes */
+    /* Los monstruos, un nivel más por etapa (medio por oleada); en los niveles bajos más despacio (uno cada
+       tres etapas hasta el 15, cada dos hasta el 30), pero nunca más de uno por debajo de los personajes */
     if (w > 1)
-        s_er.grow6 += s_er.pace >= 190 ? 2 : s_er.pace >= 140 ? 3 : 6;
-    int raw = s_er.base + s_er.grow6 / 6, floor = eco_party_level() - 1;
+        s_er.grow12 += (s_er.pace >= 190 ? 4 : s_er.pace >= 140 ? 6 : 12) * 5 / ECO_ACT_WAVES;
+    int raw = s_er.base + s_er.grow12 / 12, floor = eco_party_level() - 1;
     raw = raw < floor ? floor : raw;
     int over = raw > 99 ? raw - 99 : 0;
     s_er.mlvl = raw > 99 ? 99 : raw < 1 ? 1 : raw;
     units_set_hunt(s_er.zone, over * 10 + eco_soft_pct(), over * 5 + eco_soft_pct());
-    s_er.act = (w - 1) / 5 % 5 + 1;
-    s_er.quota = (20 + 3 * w) * (s_num_players > 1 ? 3 : 2) / 2;
+    s_er.act = (w - 1) / ECO_ACT_WAVES % 5 + 1;
+    s_er.quota = (20 + 3 * eco_stage(w)) * (s_num_players > 1 ? 3 : 2) / 2;
     s_er.deaths0 = units_hunt_deaths();
+    s_er.kills_seen = 0;
+    s_er.last_kill = 0;
     s_er.nboss = 0;
-    s_er.boss_kind = w % 5 == 0 ? 1 : w % 5 == 3 ? 2 : 0;
+    s_er.boss_kind = w % ECO_ACT_WAVES == 0 ? 1 : w % ECO_ACT_WAVES == ECO_NAMED_WAVE ? 2 : 0;
     s_er.boss_due = s_er.boss_kind ? 3 * TICK_RATE : -1;
     s_er.phase = EP_WAVE;
     s_er.ticks = 0;
@@ -756,6 +791,9 @@ static void eco_wave_clear(void)
 {
     s_er.phase = EP_BREAK;
     s_er.ticks = 0;
+    units_hunters_kill(); /* (los que no se contaban: enterrados o volando; o trabados, ECO_STUCK) */
+    s_er.alive = 0;
+    s_er.over = 0;
     eco_set_pace(); /* (el respiro, con el nivel de después de la oleada) */
     eco_shrines_clear();
     char msg[64];
@@ -843,12 +881,14 @@ static int eco_chest_open(Player *p, int u)
     int best = s_er.best, n = 2 + best / 2;
     n = n > 16 ? 16 : n;
     int mf = (p ? p->bonus[STAT_MAGIC_FIND] : 0) + best * 5, got = 0;
+    items_set_potion_bonus(ECO_POTION_BONUS);
     for (int k = 0; k < n; k++) {
         Item out[6];
         int m = items_roll_drop_quality(tc, ilvl, mf, k < best / 5 ? QUALITY_MAGIC : 0, out, 6);
         obj_drop_items(u, out, m);
         got += m;
     }
+    items_set_potion_bonus(0);
     const ItemType *gt = items_find("gld");
     for (int k = 0; gt && k < 3; k++) {
         Item g = items_make(gt);
@@ -940,7 +980,7 @@ static void eco_enter(void)
     units_set_hunt(s_er.zone, 0, 0);
     s_er.wave = getenv("D2_ECO_WAVE") ? atoi(getenv("D2_ECO_WAVE")) - 1 : 0;
     s_er.wave = s_er.wave < 0 ? 0 : s_er.wave;
-    s_er.grow6 = s_er.wave * 6; /* (empezando más adelante, como si hubieran subido de a uno) */
+    s_er.grow12 = s_er.wave * 12 * 5 / ECO_ACT_WAVES; /* (empezando más adelante, como si hubieran subido de a medio) */
     s_er.phase = EP_START;
     s_er.ticks = 0;
     char msg[96];
@@ -976,26 +1016,41 @@ static void eco_tick(void)
             s_er.boss_due = -1;
             eco_spawn_bosses();
         }
-        int kills = units_hunt_deaths() - s_er.deaths0, left = eco_bosses_left();
+        int kills = units_hunt_deaths() - s_er.deaths0;
         int cap = s_er.boss_kind == 1 ? s_er.cap / 3 : s_er.cap;
         if (eco_debug() && s_er.ticks % (5 * TICK_RATE) == 0)
             printf("ECO: t%u oleada %d: %d vivos, %d de %d muertos, %d unidades\n", s_ticks, s_er.wave, s_er.alive, kills, s_er.quota,
                    units_count());
-        if (s_er.alive < cap && --s_er.spawn_cd <= 0) { /* (siguen saliendo: si no se los mata, la arena se llena) */
-            int every = 120 - 3 * s_er.wave; /* (de casi 5 segundos a 1,6 desde la oleada 27; por el ritmo) */
+        /* Cumplida ya no salen más, y se pasa cuando no queda ninguno vivo (también el jefe con nombre) */
+        int goal = eco_goal();
+        if (!goal && s_er.alive < cap && --s_er.spawn_cd <= 0) { /* (siguen saliendo: si no se los mata, la arena se llena) */
+            int every = 120 - 3 * eco_stage(s_er.wave); /* (de casi 5 segundos a 1,6 desde la etapa 27; por el ritmo) */
             every = (every < 40 ? 40 : every) * s_er.pace / 100;
             s_er.spawn_cd = s_num_players > 1 ? every * 7 / 10 : every;
             eco_spawn_pack();
+            s_er.alive = units_hunters_alive(); /* (contados ya: si no, con la cuota recién cumplida parecía vacía) */
         }
-        /* (la de jefe de acto se pasa al matarlos; las otras con la cuota: el jefe con nombre no hace falta) */
-        int done = s_er.boss_due < 0 && (s_er.boss_kind == 1 ? left == 0 && (s_er.nboss > 0 || kills >= s_er.quota) : kills >= s_er.quota);
-        if (done)
+        if (kills != s_er.kills_seen) {
+            s_er.kills_seen = kills;
+            s_er.last_kill = s_er.ticks;
+        }
+        if (goal && (s_er.alive == 0 || s_er.ticks - s_er.last_kill > ECO_STUCK)) {
+            if (s_er.alive > 0 && eco_debug())
+                printf("ECO: oleada %d: %d no se dejan matar en dos minutos, se pasa igual\n", s_er.wave, s_er.alive);
             eco_wave_clear();
+        }
         break;
     }
     case EP_BREAK:
-        if (s_er.ticks >= ECO_BREAK * s_er.pace / 100)
+        if (s_er.ticks >= ECO_BREAK) {
+            int n = 0;
+            for (int i = 0; i < items_ground_count(); i++)
+                n += items_ground_item(i, NULL, NULL) != NULL;
+            items_ground_clear(); /* (lo que no se levantó en el respiro se va) */
+            if (eco_debug())
+                printf("ECO: se borran %d objetos del piso\n", n);
             eco_wave_begin();
+        }
         break;
     case EP_END:
         if (s_er.ticks >= 3 * TICK_RATE)
@@ -1088,6 +1143,8 @@ static void eco_draw(void)
         snprintf(t, sizeof t, "%s", tr("¡Oleada superada!"));
     else if (left > 0)
         snprintf(t, sizeof t, tr("Jefe: %s"), units_display_name(eco_boss_alive()));
+    else if (s_er.phase == EP_WAVE && eco_goal()) /* (ya no salen: los que quedan) */
+        snprintf(t, sizeof t, tr("Quedan: %d"), s_er.alive);
     else if (s_er.phase == EP_WAVE)
         snprintf(t, sizeof t, tr("Muertos: %d / %d"), kills < s_er.quota ? kills : s_er.quota, s_er.quota);
     else
@@ -1100,6 +1157,13 @@ static void eco_draw(void)
     if (s_er.over > 0 && s_er.phase <= EP_BREAK) {
         snprintf(t, sizeof t, tr("¡Desborde! %d"), (eco_overrun_ticks() - s_er.over) / TICK_RATE + 1);
         eco_note(x + w / 2, y + h + 4, t, 2, COL(R_RED, 15));
+    }
+    if (s_er.phase == EP_BREAK) { /* la cuenta del respiro, grande en el medio de arriba */
+        int left_s = (ECO_BREAK - s_er.ticks + TICK_RATE - 1) / TICK_RATE;
+        snprintf(t, sizeof t, tr("Siguiente oleada en %d"), left_s > 0 ? left_s : 1);
+        int ty = SCREEN_H / 4;
+        eco_note(SCREEN_W / 2, ty, t, 3, COL(R_GOLD, 15));
+        eco_note(SCREEN_W / 2, ty + font_height(3) + 8, tr("Lo que quede en el suelo se borra"), 1, COL(R_GRAY, 14));
     }
     if (s_er.phase == EP_LOOT)
         eco_note(x + w / 2, y + h + 4, "Abrí el cofre; el portal vuelve al menú", 1, COL(R_GRAY, 14));

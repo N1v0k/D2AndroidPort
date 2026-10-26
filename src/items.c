@@ -159,6 +159,7 @@ static int         s_num_gems;
 static Ratio       s_ratio[2][2]; /* [uber][de clase] */
 static TxtTable    s_tc;
 static int         s_drop_players = 1; /* items_set_drop_players: los jugadores que cuentan para el NoDrop */
+static int         s_potion_bonus;     /* items_set_potion_bonus: % más pociones (el Eco del Odio) */
 static GroundItem  s_ground[MAX_GROUND];
 static uint32_t    s_ground_now; /* los ticks de items_ground_tick */
 static int         s_ground_top; /* uno más que el último lugar usado: los recorridos llegan hasta acá */
@@ -2035,8 +2036,10 @@ static void add_drop(const char *code, int mlvl, const TcMods *m, Item *out, int
         t = items_find(code);
     if (!t || !supported(t))
         return;
-    if (items_is_potion(t) && (int)(rnd() % 100) < POTION_DROP_CUT)
-        return; /* menos pociones que el original (cada una tiene varios tragos) */
+    /* menos pociones que el original (cada una tiene varios tragos); en el Eco, de esas un s_potion_bonus % más */
+    int cut = 100 - (100 - POTION_DROP_CUT) * (100 + s_potion_bonus) / 100;
+    if (items_is_potion(t) && (int)(rnd() % 100) < cut)
+        return;
     Item it = items_make(t);
     it.ilvl = (uint8_t)(mlvl > 0 && mlvl < 256 ? mlvl : 1);
     /* la calidad pedida (los cofres brillantes, los estantes) si el objeto la puede tener */
@@ -2484,6 +2487,11 @@ void items_reset_rng(uint32_t seed)
 void items_set_drop_players(int n)
 {
     s_drop_players = n < 1 ? 1 : n > 8 ? 8 : n;
+}
+
+void items_set_potion_bonus(int pct)
+{
+    s_potion_bonus = pct < 0 ? 0 : pct > 300 ? 300 : pct;
 }
 
 int items_ground_add(const Item *it, float x, float y)

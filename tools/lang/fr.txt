@@ -884,3 +884,12 @@
 883	X : équiper (échange avec l'objet équipé)
 884	A : la prendre pour l'enchâsser
 885	A : l'enchâsser
+886	Prochaine vague dans %d
+887	Ce qui reste au sol va disparaître
+888	Restants : %d
+889	JOUEURS : CHOISISSEZ VOS PERSONNAGES
+890	Le joueur %d a déjà choisi ce personnage
+891	Choisi par le joueur %d
+892	J%d
+893	PRÊT
+894	En attente du joueur %d

@@ -383,32 +383,36 @@ can also be played over the local network:
 - The arena is chosen at random: the Throne of Destruction, the Arreat
   Summit, Uber Tristram or the Colossal Summit, without their monsters or
   their exits (no town portals either).
-- Wave 1 has monsters of your level, and each wave is one level higher
-  (past 99, they get more life and damage). They come in packs from every
-  side and hunt you down; a wave is cleared by killing its quota. Every five
-  waves the monsters come from another act, like the campaign.
-- **The bosses:** every five waves an act boss of the story at the wave's
-  level (Andariel, Duriel, Mephisto, Diablo and Baal; from wave 30 the
+- Wave 1 has monsters of your level, and every two waves they are one level
+  higher (past 99, they get more life and damage). They come in packs from
+  every side and hunt you down; once its quota is killed no more come, and
+  the wave is cleared when every monster is dead.
+  Every ten waves the monsters come from another act, like the campaign.
+- **The bosses:** every ten waves an act boss of the story at the wave's
+  level (Andariel, Duriel, Mephisto, Diablo and Baal; from wave 60 the
   Pandemonium ones: Lilith, Uber Duriel, Uber Izual, Uber Diablo and the
-  three of Uber Tristram together), and on the third wave of each five a
+  three of Uber Tristram together), and on the sixth wave of each ten a
   named boss of that act (Blood Raven, the Countess, the Summoner, Izual,
   Nihlathak...).
+- **Between waves** there are 8 seconds (with a countdown) to spend points
+  and equip what you found; then whatever is still on the ground vanishes.
+- **More potions:** 35% more potions drop than in the story.
 - **Overrun:** if the arena fills up (40 monsters alive, 50 with two
   players) for ten seconds, the run is over. Dying also ends it (with two
   players, the one who died comes back on the next wave).
 - **The pace follows your level**, so a new character can play the Echo
-  instead of the story. The time between packs, the overrun countdown and
-  the break between waves are 2.5 times longer up to level 5, then 2.2
+  instead of the story. The time between packs and the overrun countdown
+  are 2.5 times longer up to level 5, then 2.2
   (6-10), 1.9 (11-15), 1.65 (16-20), 1.4 (21-30) and 1.2 times (31-40);
   from 41 to 60 it is the normal pace; from 61 to 80 it is 15% faster and
   from 81, 30% faster, with one more monster in each pack (with two or more
   players, their average level).
 - **Easier at low levels**, so a new character can go further: up to level
   40 the monsters have less life and damage (40% less at level 1), their
-  level rises one every three waves up to level 15 and one every two up to
+  level rises one every six waves up to level 15 and one every four up to
   30 (never more than one below yours), the bosses have fewer extra levels
-  and champion packs are rarer. Two bots starting at level 1 reach waves 9
-  to 12 (before, wave 2).
+  and champion packs are rarer. With five waves per act, two bots starting
+  at level 1 went from wave 2 to waves 9-12 with these changes.
 - **The loot matches your level:** monsters and the Echo chest drop from
   the treasure class of your level (+2), and items are no higher than that
   (Act 5 monsters in an early wave drop Act 1 items).
@@ -599,6 +603,10 @@ wave 8.</sub>
 ### Two players
 
 - Two players on the same screen, each with a gamepad (or the keyboard).
+- With two gamepads connected, both choose their characters at the same
+  time on the character screen, each with its own cursor (and a new
+  character's class is chosen in its own box); the game starts when both
+  are ready. With one gamepad, they choose one after the other.
 - A single camera while they are close; when they move apart, the screen
   splits along a line perpendicular to the one joining them, and joins
   again when they get together. Each player's inventory and other panels
@@ -791,7 +799,8 @@ purpose, to play comfortably on a Raspberry Pi with a gamepad.
 - **Potions:**
   - each belt potion has **3 sips** (the drunk part of the liquid darkens
     and the belt shows how many are left);
-  - **35% fewer potions** drop from monsters and chests;
+  - **35% fewer potions** drop from monsters and chests (in the Echo of
+    Hatred, 35% more than that);
   - they **stack up to 10** per backpack slot (the original does not stack
     them); they go to the belt and the cube one at a time;
   - when a belt potion runs out, **one from the backpack takes its place**;

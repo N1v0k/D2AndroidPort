@@ -50,6 +50,8 @@ struct MissileDef {
     int    collide_kill; /* CollideKill: 0 = al pegarle a alguien sigue de largo */
     int    hit_func;     /* pSrvHitFunc */
     int    param1, param2; /* Param1 y Param2 */
+    int    activate;     /* Activate: los cuadros desde que sale hasta que puede pegar */
+    int    anim_rate;    /* animrate (1024 = un cuadro por tick): solo para los que esperan (Missile.wake) */
     int    lob;          /* una poción: vuela en arco */
     char   hit_sub2[32]; /* HitSubMissile1: lo que suelta al pegar (el gas) */
     char   clt_hit[32];  /* CltHitSubMissile1: lo que se ve al pegar (la explosión) */
@@ -142,6 +144,8 @@ int missiles_init(void)
         m->hit_func = txt_get_int(&t, r, "pSrvHitFunc", 0);
         m->param1 = txt_get_int(&t, r, "Param1", 0);
         m->param2 = txt_get_int(&t, r, "Param2", 0);
+        m->activate = txt_get_int(&t, r, "Activate", 0);
+        m->anim_rate = txt_get_int(&t, r, "animrate", 1024);
         lower_copy(m->hit_sub2, sizeof m->hit_sub2, txt_get(&t, r, txt_col(&t, "HitSubMissile1")));
         lower_copy(m->clt_hit, sizeof m->clt_hit, txt_get(&t, r, txt_col(&t, "CltHitSubMissile1")));
         /* El arco de las pociones no es una columna: el original lo hace con
@@ -372,7 +376,20 @@ Missile *missiles_effect(const char *name, float x, float y)
 
 int missiles_light(const Missile *mi)
 {
-    return mi->is_trail || mi->unlit ? 0 : mi->def->light;
+    return mi->is_trail || mi->unlit || mi->age < mi->wake ? 0 : mi->def->light;
+}
+
+void missiles_set_frames(Missile *mi, int frames)
+{
+    int active = mi->def->range - mi->def->activate; /* (MISSILE_SetActivateFrame al crearlo) */
+    mi->life = frames > 1 ? frames : 1;
+    mi->wake = frames > active ? frames - active : 0;
+}
+
+int missiles_param(const char *name, int k)
+{
+    const MissileDef *def = find_def(name);
+    return !def ? 0 : k == 1 ? def->param1 : k == 2 ? def->param2 : 0;
 }
 
 const char *missiles_prog_overlay(const Missile *mi)
@@ -660,10 +677,13 @@ static void draw_def(const Missile *mi, const MissileDef *def, int sx, int sy)
     const Sprite *sp = def_sprite((MissileDef *)def);
     if (!sp || sp->frames_per_dir <= 0)
         return;
-    int dir = dcc_dir(mi->vx, mi->vy, sp->directions);
+    int dir = mi->vx == 0.0f && mi->vy == 0.0f ? dcc_dir(mi->face_x, mi->face_y, sp->directions)
+                                               : dcc_dir(mi->vx, mi->vy, sp->directions);
     if (dir >= sp->directions)
         dir = 0;
     int frame = mi->age;
+    if (mi->wake > 0) /* (desde que aparece, con su AnimRate: las garras del Death Mauler salen despacio) */
+        frame = (mi->age - mi->wake) * (def->anim_rate > 0 ? def->anim_rate : 1024) / 1024;
     if (def->loop)
         frame %= sp->frames_per_dir;
     else if (frame >= sp->frames_per_dir)
@@ -680,7 +700,7 @@ static void draw_def(const Missile *mi, const MissileDef *def, int sx, int sy)
 void missiles_draw(int i, int sx, int sy)
 {
     Missile *mi = &s_missiles[i];
-    if (mi->fall > 0 && mi->life >= mi->fall) /* el Meteoro todavía no se ve */
+    if ((mi->fall > 0 && mi->life >= mi->fall) || mi->age < mi->wake) /* el Meteoro todavía no se ve; lo que espera, tampoco */
         return;
     sx += (int)mi->zx;
     sy -= (int)mi->z;

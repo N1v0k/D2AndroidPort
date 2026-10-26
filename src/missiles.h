@@ -87,6 +87,9 @@ typedef struct {
     float fall_speed; /* (píxeles por cuadro) */
     float zx;         /* lo que se corre en pantalla mientras cae (píxeles; a la izquierda < 0) */
     const MissileDef *also; /* otro dibujo en el mismo lugar (la cola del Meteoro) */
+    int   wake;       /* los primeros `wake` ticks no se ve ni pega (las garras del Death Mauler: hasta que llega el
+                         rastro; missiles_set_frames); después su animación va con su AnimRate */
+    float face_x, face_y; /* hacia dónde mira el dibujo de uno que no se mueve (las garras: desde el Death Mauler) */
     int   used;
 } Missile;
 
@@ -105,6 +108,11 @@ void missiles_level_damage(const char *name, int lvl, int *emin, int *emax);
    completar el daño y el dueño; NULL si no existe o no hay lugar */
 Missile *missiles_spawn(const char *name, float x, float y, float dx, float dy);
 Missile *missiles_effect(const char *name, float x, float y); /* explosión que solo se ve */
+/* MISSILE_SetTotalFrames y SetCurrentFrame del original: le quedan `frames` cuadros y pega (y se ve) recién cuando le
+   quedan Range - Activate (Activate de missiles.txt, que al crearlo cuenta desde su Range) */
+void missiles_set_frames(Missile *mi, int frames);
+/* Param1 o Param2 (k = 1, 2) de missiles.txt de ese (0 si no existe) */
+int  missiles_param(const char *name, int k);
 /* Los rayos (pCltDoFunc 8): deja detrás los pedazos que forman el rayo largo (cada tick, después de moverlo) */
 void missiles_trail(int i);
 /* El Meteoro de ese centro ("meteorcenter"): escondido hasta los últimos cuadros y después cae en diagonal con su cola */

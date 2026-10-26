@@ -706,6 +706,18 @@ static int run_headless(const Options *o)
             in.confirm = c == 'a';
             in.menu_back = c == 'b';
             in.menu_delete = c == 'x';
+            /* (y las de cada jugador, para la pantalla de los dos a la vez: minúsculas el 1, mayúsculas el 2) */
+            for (int k = 0; k < 2; k++) {
+                PlayerInput *pi = &in.player[k];
+                char lc = k ? (char)(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : 0) : (c >= 'a' && c <= 'z' ? c : 0);
+                pi->nav_up = lc == 'u';
+                pi->nav_down = lc == 'd';
+                pi->nav_left = lc == 'l';
+                pi->nav_right = lc == 'r';
+                pi->action = lc == 'a';
+                pi->back = lc == 'b';
+                pi->drop = lc == 'x';
+            }
             if (getenv("D2_MENU_DELAY")) /* (pruebas de la red: ticks de verdad, para que la otra máquina conteste) */
                 SDL_Delay((Uint32)atoi(getenv("D2_MENU_DELAY")));
             MenuResult r = menu_tick(&in);

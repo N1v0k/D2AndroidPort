@@ -884,3 +884,12 @@
 883	X: equipaggia (scambia con quello equipaggiato)
 884	A: prendila per incastonarla
 885	A: incastonala
+886	Prossima ondata tra %d
+887	Ciò che resta a terra sparirà
+888	Rimasti: %d
+889	GIOCATORI: SCEGLIETE I PERSONAGGI
+890	Il giocatore %d ha già scelto quel personaggio
+891	Scelto dal giocatore %d
+892	G%d
+893	PRONTO
+894	In attesa del giocatore %d

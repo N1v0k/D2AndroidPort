@@ -68,6 +68,29 @@ static int      s_play_sel;     /* historia, Eco del Odio o volver */
 static int      s_play_net;     /* ese menú es el de crear una partida en red */
 static int      s_count_sel;    /* en la red: uno o dos jugadores en esta máquina, o volver */
 static int      s_eco_game;     /* se juega el Eco del Odio (también en red: el que crea lo elige, el que se une lo ve) */
+
+/* Con dos jugadores en esta máquina eligen los dos a la vez, cada uno con su joystick (o su lado del teclado: WASD,
+   Espacio, Retroceso y Q; las flechas, Enter, Suprimir y M): su cursor en las partidas, la clase de una vacía en el
+   mismo cuadro y LISTO. Cuando están los dos, se sigue. */
+enum { PK_SLOT, PK_CLASS, PK_READY };
+static struct {
+    int sel;   /* la partida marcada (0..5) */
+    int stage; /* PK_*: eligiendo partida, la clase de la nueva o listo */
+    int cls;
+} s_pk[MAX_LOCAL];
+static int s_dual; /* la pantalla de las partidas es la de los dos a la vez */
+
+/* Lo que dice cada clase (en la elección de la clase y en el cuadro de la partida nueva) */
+static const char *const k_class_desc[NUM_CLASSES][2] = {
+    { "Pega duro", "y grita" },
+    { "Arcos y", "jabalinas" },
+    { "Fuego, rayos", "y frío" },
+    { "Auras", "y escudo" },
+    { "Maldiciones", "y muertos" },
+    { "Garras, trampas", "y sombras" },
+    { "Bestias, fuego", "y viento" },
+    { "Demonios, maleficios", "y caos" },
+};
 static const char *const k_diffs[3] = { "NORMAL", "PESADILLA", "INFIERNO" };
 
 static void read_slots(void)
@@ -187,16 +210,9 @@ void menu_net_failed(const char *why)
     s_state = MS_NET;
 }
 
-/* El jugador que estaba eligiendo ya tiene partida: sigue el otro o se arranca */
-static MenuResult picked(int slot, int cls)
+/* Ya eligieron todos (s_slots y s_classes): la dificultad, la red o a jugar */
+static MenuResult picks_done(void)
 {
-    s_slots[s_picking] = slot;
-    s_classes[s_picking] = cls;
-    if (s_picking + 1 < s_players) {
-        s_picking++;
-        s_state = MS_SLOTS;
-        return MENU_NONE;
-    }
     if (s_mode == MODE_ECO) /* el Eco del Odio: la dificultad la da el nivel de los personajes */
         return MENU_START;
     if (s_mode == MODE_NET_HOST || s_mode == MODE_NET_JOIN) /* (la dificultad, en la sala de espera) */
@@ -216,6 +232,124 @@ static MenuResult picked(int slot, int cls)
         return MENU_NONE;
     }
     return MENU_START;
+}
+
+/* El jugador que estaba eligiendo ya tiene partida: sigue el otro o se arranca */
+static MenuResult picked(int slot, int cls)
+{
+    s_slots[s_picking] = slot;
+    s_classes[s_picking] = cls;
+    if (s_picking + 1 < s_players) {
+        s_picking++;
+        s_state = MS_SLOTS;
+        return MENU_NONE;
+    }
+    return picks_done();
+}
+
+/* Se entra a las partidas: con dos jugadores, un cursor para cada uno */
+static void slots_enter(void)
+{
+    s_picking = 0;
+    /* (con un joystick, o solo el teclado, como antes: de a uno, así un solo control elige por los dos;
+       D2_DUAL_PICK=1 lo fuerza, para las pruebas) */
+    s_dual = s_players == 2 && (input_num_pads() >= 2 || getenv("D2_DUAL_PICK"));
+    s_pk[0].sel = s_slot_sel;
+    s_pk[1].sel = s_slot_sel ^ 1; /* (el otro, en la otra columna) */
+    s_pk[0].stage = s_pk[1].stage = PK_SLOT;
+    s_state = MS_SLOTS;
+}
+
+/* ¿Esa partida (0..5) ya la tomó el jugador k? (la eligió o está creando ahí su personaje) */
+static int pk_taken(int k, int sel)
+{
+    return s_pk[k].stage != PK_SLOT && s_pk[k].sel == sel;
+}
+
+static void note_player(const char *fmt, int player)
+{
+    snprintf(s_note, sizeof s_note, tr(fmt), player);
+    s_note_ticks = 2 * 25;
+}
+
+/* La pantalla de los dos a la vez: lo de cada jugador con lo suyo (in->player[k]) */
+static MenuResult slots_dual_tick(const InputState *in)
+{
+    for (int k = 0; k < 2; k++) {
+        const PlayerInput *p = &in->player[k];
+        int other = 1 - k, *sel = &s_pk[k].sel;
+        const SlotInfo *info = &s_info[*sel];
+        switch (s_pk[k].stage) {
+        case PK_SLOT:
+            if (p->back) { /* (afuera, como con uno) */
+                click();
+                if (s_mode == MODE_NET_JOIN) {
+                    net_discover_start();
+                    s_state = MS_FIND;
+                } else {
+                    s_state = MS_PLAY;
+                }
+                return MENU_NONE;
+            }
+            if (p->nav_left || p->nav_right)
+                *sel ^= 1;
+            if (p->nav_up)
+                *sel = (*sel + SAVE_SLOTS - 2) % SAVE_SLOTS;
+            if (p->nav_down)
+                *sel = (*sel + 2) % SAVE_SLOTS;
+            info = &s_info[*sel];
+            if (p->drop && info->used && !pk_taken(other, *sel)) {
+                click();
+                s_slot_sel = *sel;
+                s_delete_sel = 1; /* arranca en "no", por las dudas */
+                s_state = MS_DELETE;
+                return MENU_NONE;
+            }
+            if (!p->action)
+                break;
+            if (pk_taken(other, *sel)) {
+                note_player("Ese personaje ya lo eligió el jugador %d", other + 1);
+            } else if (!info->used && s_eco_game) {
+                note("En el Eco del Odio se juega con un personaje que ya existe");
+            } else if (!info->used) {
+                click();
+                s_pk[k].stage = PK_CLASS;
+                s_pk[k].cls = 0;
+            } else {
+                class_sound(info->cls);
+                s_pk[k].cls = info->cls;
+                s_pk[k].stage = PK_READY;
+            }
+            break;
+        case PK_CLASS: /* la clase de la nueva, en su cuadro: izquierda y derecha (o arriba y abajo) */
+            if (p->nav_left || p->nav_up)
+                s_pk[k].cls = (s_pk[k].cls + NUM_CLASSES - 1) % NUM_CLASSES;
+            if (p->nav_right || p->nav_down)
+                s_pk[k].cls = (s_pk[k].cls + 1) % NUM_CLASSES;
+            if (p->back) {
+                click();
+                s_pk[k].stage = PK_SLOT;
+            } else if (p->action) {
+                class_sound(s_pk[k].cls);
+                s_pk[k].stage = PK_READY;
+            }
+            break;
+        default: /* listo: B lo deja elegir de nuevo */
+            if (p->back) {
+                click();
+                s_pk[k].stage = PK_SLOT;
+            }
+            break;
+        }
+    }
+    if (s_pk[0].stage != PK_READY || s_pk[1].stage != PK_READY)
+        return MENU_NONE;
+    for (int k = 0; k < 2; k++) {
+        s_slots[k] = s_pk[k].sel + 1;
+        s_classes[k] = s_pk[k].cls;
+    }
+    s_picking = 1;
+    return picks_done();
 }
 
 static int taken_by_other(int slot)
@@ -285,9 +419,8 @@ MenuResult menu_tick(const InputState *in)
             click();
             s_eco_game = s_play_sel == 1;
             s_mode = s_play_net ? MODE_NET_HOST : s_eco_game ? MODE_ECO : MODE_STORY;
-            s_picking = 0;
-            s_state = MS_SLOTS;
             read_slots();
+            slots_enter();
         }
         return MENU_NONE;
 
@@ -310,6 +443,8 @@ MenuResult menu_tick(const InputState *in)
         return MENU_NONE;
 
     case MS_SLOTS: {
+        if (s_dual)
+            return slots_dual_tick(in);
         /* Dos columnas de tres, como la pantalla de selección del original */
         if (in->menu_left || in->menu_right)
             s_slot_sel ^= 1;
@@ -455,7 +590,7 @@ MenuResult menu_tick(const InputState *in)
             snprintf(s_net_ip, sizeof s_net_ip, "%s", s_net_found[s_net_find_sel]);
             s_eco_game = s_net_found_mode[s_net_find_sel] == 1;
             net_discover_stop();
-            s_state = MS_SLOTS;
+            slots_enter();
         }
         return MENU_NONE;
     }
@@ -527,6 +662,7 @@ MenuResult menu_tick(const InputState *in)
         if (back) {
             click();
             s_state = MS_SLOTS;
+            s_pk[0].stage = s_pk[1].stage = PK_SLOT; /* (con los dos a la vez: eligen de nuevo) */
             return MENU_NONE;
         }
         if (in->confirm || in->start) {
@@ -614,8 +750,106 @@ static void slot_box(int i, int *x, int *y)
     *y = 133 + (i / 2) * 95;
 }
 
+/* Las partidas con los dos a la vez: el cursor de cada jugador (J1 dorado, J2 azul), LISTO, y en la vacía que se
+   está creando, la clase que se elige */
+static void draw_slots_dual(void)
+{
+    ui_grid("charselect/characterselectscreenexp", 0, 12, 4, 0, 0);
+    char text[96];
+    font_draw_centered(317, 34, "JUGADORES: ELIJAN SUS PERSONAJES", FONT_EXOCET, COL(R_GOLD, 15));
+    if (s_eco_game)
+        font_draw_centered(317, 90, "ECO DEL ODIO", FONT_EXOCET, COL(R_RED, 14));
+    int bw = 272, bh = 90, w0, h0, w1, h1;
+    if (ui_frame_size("charselect/charselectbox", 0, &w0, &h0) && ui_frame_size("charselect/charselectbox", 1, &w1, &h1)) {
+        bw = 256 + w1;
+        bh = h0;
+    }
+    static const int k_col[2] = { R_GOLD, R_BLUE };
+    for (int i = 0; i < SAVE_SLOTS; i++) {
+        int x, y, owner = -1, mine = 0;
+        slot_box(i, &x, &y);
+        const SlotInfo *info = &s_info[i];
+        for (int k = 0; k < 2; k++) {
+            mine |= s_pk[k].sel == i;
+            if (pk_taken(k, i))
+                owner = k;
+        }
+        if (mine) {
+            ui_frame("charselect/charselectbox", 0, x, y);
+            ui_frame("charselect/charselectbox", 1, x + 256, y);
+        }
+        if (owner >= 0 && !info->used) { /* la nueva: la clase que se elige (o la elegida) */
+            int c = s_pk[owner].cls, choosing = s_pk[owner].stage == PK_CLASS;
+            game_draw_class_hero(c, x + 44, y + 84, (int)s_ticks);
+            if (choosing)
+                snprintf(text, sizeof text, "<  %s  >", game_class_name(c));
+            else
+                snprintf(text, sizeof text, "%s", game_class_name(c));
+            font_draw(x + 92, y + 12, text, 2, COL(k_col[owner], 15));
+            font_draw(x + 92, y + 34, k_class_desc[c][0], 1, COL(R_GRAY, 14));
+            font_draw(x + 92, y + 46, k_class_desc[c][1], 1, COL(R_GRAY, 14));
+            if (choosing)
+                font_draw(x + 92, y + 64, "A: crear     B: volver", 1, COL(R_STONE, 13));
+        } else if (info->used) {
+            game_draw_slot_hero(i + 1, x + 44, y + 84, (int)s_ticks);
+            font_draw(x + 92, y + 16, game_class_name(info->cls), 2, COL(R_GOLD, 15));
+            snprintf(text, sizeof text, tr("Nivel %d  %s"), info->level, game_class_name(info->cls));
+            font_draw(x + 92, y + 36, text, 2, COL(R_GRAY, 15));
+            if (owner >= 0)
+                snprintf(text, sizeof text, tr("Lo eligió el jugador %d"), owner + 1);
+            else
+                snprintf(text, sizeof text, tr("Partida %d"), i + 1);
+            font_draw(x + 92, y + 56, text, 2, owner >= 0 ? COL(k_col[owner], 15) : COL(R_GRASS, 13));
+            if (s_eco_game) {
+                if (info->eco_best > 0)
+                    snprintf(text, sizeof text, tr("Mejor oleada: %d"), info->eco_best);
+                else
+                    snprintf(text, sizeof text, "%s", tr("Sin corridas en el Eco"));
+                font_draw(x + 92, y + 74, text, 1, COL(R_RED, 13));
+            }
+        } else {
+            snprintf(text, sizeof text, tr("Partida %d vacía"), i + 1);
+            font_draw(x + 92, y + 26, text, 2, COL(R_STONE, 13));
+            font_draw(x + 92, y + 46, "A: crear un personaje", 1, COL(R_STONE, 12));
+        }
+        /* Los cursores: el marco de cada uno (si están los dos, el del J2 adentro) y su marca arriba a la derecha */
+        int tag_x = x + bw - 8;
+        for (int k = 1; k >= 0; k--) {
+            if (s_pk[k].sel != i)
+                continue;
+            int inset = s_pk[1 - k].sel == i && k == 1 ? 4 : 0;
+            uint8_t c = COL(k_col[k], 15);
+            fb_fill_rect(x + 2 + inset, y + 2 + inset, bw - 4 - 2 * inset, 2, c);
+            fb_fill_rect(x + 2 + inset, y + bh - 4 - inset, bw - 4 - 2 * inset, 2, c);
+            fb_fill_rect(x + 2 + inset, y + 2 + inset, 2, bh - 4 - 2 * inset, c);
+            fb_fill_rect(x + bw - 4 - inset, y + 2 + inset, 2, bh - 4 - 2 * inset, c);
+            char tag[32], label[48];
+            snprintf(tag, sizeof tag, tr("J%d"), k + 1);
+            if (s_pk[k].stage == PK_READY)
+                snprintf(label, sizeof label, "%s  %s", tag, tr("LISTO"));
+            else
+                snprintf(label, sizeof label, "%s", tag);
+            int lw = font_width(label, 2);
+            font_draw(tag_x - lw, y + 8, label, 2, c);
+            tag_x -= lw + 10;
+        }
+    }
+    font_draw_centered(317, 530, "A: jugar     X: borrar     B: volver", 2, COL(R_GRAY, 14));
+    int ready = (s_pk[0].stage == PK_READY) + (s_pk[1].stage == PK_READY);
+    if (ready == 1 && s_note_ticks <= 0) { /* (el aviso va en el mismo lugar) */
+        snprintf(text, sizeof text, tr("Esperando al jugador %d"), s_pk[0].stage == PK_READY ? 2 : 1);
+        font_draw_centered(317, 112, text, 2, COL(R_GRAY, 15));
+    }
+    if (s_note_ticks > 0)
+        font_draw_centered(317, 112, s_note, font_fit(s_note, 2, 600), COL(R_RED, 13));
+}
+
 static void draw_slots(void)
 {
+    if (s_dual) {
+        draw_slots_dual();
+        return;
+    }
     ui_grid("charselect/characterselectscreenexp", 0, 12, 4, 0, 0);
     char text[96];
     if (s_players > 1)
@@ -689,16 +923,7 @@ static void draw_class_choice(void)
 {
     ui_grid("charselect/characterselectscreenexp", 0, 12, 4, 0, 0);
     font_draw_centered(317, 34, "ELEGÍ LA CLASE DEL PERSONAJE", FONT_EXOCET, COL(R_GOLD, 15));
-    static const char *const desc[NUM_CLASSES][2] = {
-        { "Pega duro", "y grita" },
-        { "Arcos y", "jabalinas" },
-        { "Fuego, rayos", "y frío" },
-        { "Auras", "y escudo" },
-        { "Maldiciones", "y muertos" },
-        { "Garras, trampas", "y sombras" },
-        { "Bestias, fuego", "y viento" },
-        { "Demonios, maleficios", "y caos" },
-    };
+    const char *const(*desc)[2] = k_class_desc;
     /* Dentro del marco (de 46 a 591): hasta 5 en una fila; si son más, en
        dos filas (la de abajo centrada) */
     int per_row = NUM_CLASSES <= 5 ? NUM_CLASSES : (NUM_CLASSES + 1) / 2;

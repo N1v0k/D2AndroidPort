@@ -1183,8 +1183,9 @@ static void dark_apply_row(const DarkJob *j, int y, uint8_t *row, int neon, int 
     dark_walk(j, y, xa, xb, DW_DARKEN, row, neon, NULL, NULL);
 }
 
-/* Marca como ya resueltos los píxeles a..b de la fila y */
-static void umark(int y, int a, int b)
+/* Marca como ya resueltos los píxeles a..b de la fila y (en línea: las letras, las líneas y los tramos la llaman
+   miles de veces por cuadro) */
+DW_INLINE void umark(int y, int a, int b)
 {
     uint8_t *m = s_umask[y];
     int ba = a >> 3, bb = b >> 3;
@@ -1226,6 +1227,20 @@ static void dark_resolve_slow(int y, int a, int b)
         int c0 = j->x0[y] > a ? j->x0[y] : a, c1 = j->x1[y] < b ? j->x1[y] : b;
         if (c0 > c1)
             continue;
+        /* Lo común: nada del tramo estaba marcado: directo en la fila (sin la copia ni mirar cada píxel) */
+        int ba = c0 >> 3, bb = c1 >> 3, any = 0;
+        if (ba == bb)
+            any = m[ba] & (uint8_t)((0xFF << (c0 & 7)) & (0xFF >> (7 - (c1 & 7))));
+        else {
+            any = (m[ba] & (uint8_t)(0xFF << (c0 & 7))) | (m[bb] & (uint8_t)(0xFF >> (7 - (c1 & 7))));
+            for (int k = ba + 1; k < bb && !any; k++)
+                any = m[k];
+        }
+        if (!any) {
+            dark_apply_row(j, y, row, 0, c0, c1);
+            umark(y, c0, c1);
+            continue;
+        }
         memcpy(tmp + c0, row + c0, (size_t)(c1 - c0 + 1));
         dark_apply_row(j, y, tmp, 0, c0, c1);
         for (int x = c0; x <= c1; x++)
@@ -1411,12 +1426,20 @@ void fb_blit_remap(const uint8_t *px, int w, int h, int x, int y, const uint8_t 
         int x0 = x, x1 = x + w - 1;
         if (!clip_span(sy, &x0, &x1))
             continue;
-        dark_resolve(sy, x0, x1);
         const uint8_t *src = px + j * w + (x0 - x);
         uint8_t *dst = &s_px[sy * SCREEN_W + x0];
-        for (int i = 0; i <= x1 - x0; i++)
-            if (src[i])
+        int run = -1; /* (como fb_blit_scaled: se marca lo pintado) */
+        for (int i = 0; i <= x1 - x0; i++) {
+            if (src[i]) {
+                run = run < 0 ? i : run;
                 dst[i] = lut[src[i]];
+            } else if (run >= 0) {
+                dark_cover(sy, x0 + run, x0 + i - 1);
+                run = -1;
+            }
+        }
+        if (run >= 0)
+            dark_cover(sy, x0 + run, x1);
     }
 }
 
@@ -1602,14 +1625,22 @@ void fb_blit_scaled(const uint8_t *px, int w, int h, int x, int y, int dw, int d
         int x0 = x, x1 = x + dw - 1;
         if (!clip_span(sy, &x0, &x1))
             continue;
-        dark_resolve(sy, x0, x1);
+        /* (solo pisa: la oscuridad pendiente de lo transparente queda para la conversión; se marca lo pintado) */
         const uint8_t *src = px + (j * h / dh) * w;
         uint8_t *dst = &s_px[sy * SCREEN_W];
+        int run = -1;
         for (int dx = x0; dx <= x1; dx++) {
             uint8_t c = src[dx - x < ncol ? cols[dx - x] : (dx - x) * w / dw];
-            if (c)
+            if (c) {
+                run = run < 0 ? dx : run;
                 dst[dx] = lut ? lut[c] : c;
+            } else if (run >= 0) {
+                dark_cover(sy, run, dx - 1);
+                run = -1;
+            }
         }
+        if (run >= 0)
+            dark_cover(sy, run, x1);
     }
 }
 
@@ -1625,18 +1656,23 @@ void fb_blit_rotated(const uint8_t *px, int w, int h, int cx, int cy, int size, 
         int x0 = cx - r, x1 = cx + r;
         if (!clip_span(sy, &x0, &x1))
             continue;
-        dark_resolve(sy, x0, x1);
         uint8_t *dst = &s_px[sy * SCREEN_W];
+        int run = -1; /* (como fb_blit_scaled: se marca lo pintado) */
         for (int dx = x0; dx <= x1; dx++) {
             float ox = (float)(dx - cx) + 0.5f, oy = (float)j + 0.5f;
             int u = (int)floorf((ox * c + oy * s) * kx + w * 0.5f);
             int v = (int)floorf((-ox * s + oy * c) * ky + h * 0.5f);
-            if (u < 0 || v < 0 || u >= w || v >= h)
-                continue;
-            uint8_t col = px[v * w + u];
-            if (col)
+            uint8_t col = u < 0 || v < 0 || u >= w || v >= h ? 0 : px[v * w + u];
+            if (col) {
+                run = run < 0 ? dx : run;
                 dst[dx] = col;
+            } else if (run >= 0) {
+                dark_cover(sy, run, dx - 1);
+                run = -1;
+            }
         }
+        if (run >= 0)
+            dark_cover(sy, run, x1);
     }
 }
 

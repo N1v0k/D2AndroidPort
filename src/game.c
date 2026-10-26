@@ -1754,6 +1754,9 @@ static double wall_ms(void)
 
 /* Para el banco de pruebas (D2_BENCH_PARTS): cuánto se va en cada etapa del dibujo */
 static double s_part_ms[4]; /* mundo, oscuridad, HUD, todo el cuadro */
+static double s_part2_ms[6]; /* y dentro del resto: efectos, nombres en el suelo, avisos (A: ...), automapa encima, la
+                                línea de la pantalla partida, los carteles grandes (y el de la demo) */
+#define PART2(k, call) do { double t0_ = wall_ms(); call; s_part2_ms[k] += wall_ms() - t0_; } while (0)
 static int    s_part_frames;
 
 void game_bench_parts(char *out, size_t cap)
@@ -1761,10 +1764,14 @@ void game_bench_parts(char *out, size_t cap)
     if (out && cap) {
         int f = s_part_frames > 0 ? s_part_frames : 1;
         double rest = s_part_ms[3] - s_part_ms[0] - s_part_ms[1] - s_part_ms[2];
-        snprintf(out, cap, "mundo %.2f, oscuridad %.2f, HUD %.2f, resto %.2f ms", s_part_ms[0] / f, s_part_ms[1] / f,
-                 s_part_ms[2] / f, rest / f);
+        snprintf(out, cap,
+                 "mundo %.2f, oscuridad %.2f, HUD %.2f, resto %.2f ms (efectos %.2f, nombres %.2f, avisos %.2f, mapa %.2f, "
+                 "línea %.2f, carteles %.2f)",
+                 s_part_ms[0] / f, s_part_ms[1] / f, s_part_ms[2] / f, rest / f, s_part2_ms[0] / f, s_part2_ms[1] / f,
+                 s_part2_ms[2] / f, s_part2_ms[3] / f, s_part2_ms[4] / f, s_part2_ms[5] / f);
     }
     memset(s_part_ms, 0, sizeof s_part_ms);
+    memset(s_part2_ms, 0, sizeof s_part2_ms);
     s_part_frames = 0;
 }
 
@@ -6643,6 +6650,7 @@ static void drop_loot(int monster, const Player *killer)
         eco_loot(&tc, &lvl);
     int n = items_roll_drop(tc, lvl, killer ? killer->bonus[STAT_MAGIC_FIND] : 0, drops, 6);
     items_set_drop_players(1);
+    items_set_potion_bonus(0); /* (eco_loot lo sube en el Eco) */
     items_drop_from_bovine(0);
     float x, y;
     units_position(monster, 1.0f, &x, &y);
@@ -7639,13 +7647,16 @@ static void tick_missiles(void)
                 /* Los encadenados (el humo y los espíritus de Blood Raven,
                    las piedras que caen) siguen con el que viene */
                 char next[32] = "";
-                float ex = mi->x, ey = mi->y;
+                float ex = mi->x, ey = mi->y, fx = mi->face_x, fy = mi->face_y;
                 if ((mi->flags & MF_CHAIN) && missiles_chain_next(mi))
                     snprintf(next, sizeof next, "%s", missiles_chain_next(mi));
                 missiles_remove(i);
                 Missile *nm = next[0] ? missiles_effect(next, ex, ey) : NULL;
-                if (nm)
+                if (nm) {
                     nm->flags |= MF_CHAIN;
+                    nm->face_x = fx; /* (mirando para el mismo lado: el polvo del rastro del Death Mauler) */
+                    nm->face_y = fy;
+                }
             }
             continue;
         }
@@ -7657,7 +7668,7 @@ static void tick_missiles(void)
             missile_impact(i);
             continue;
         }
-        if (mi->flags & MF_NOHIT) /* solo se ve (las llamas de Infierno, el Orbe) */
+        if ((mi->flags & MF_NOHIT) || mi->age < mi->wake) /* solo se ve (las llamas de Infierno, el Orbe); o todavía espera */
             continue;
         int cells[MISSILE_CELLS][2], nc = missile_cells(i, mi, cells), ms = missiles_size(mi);
         if (mi->owner >= 0) {
@@ -10250,18 +10261,25 @@ static int bots_playing(void); /* la demostración o una prueba automática (aut
    con él; NULL si nada (ya está hecho o todavía no toca) */
 static const char *quest_action(const Player *p, int *unit)
 {
-    int best = -1;
+    /* Solo las unidades de alrededor (antes, cada nombre contra todas: en la Pi eran 7 ms por cuadro con la pantalla
+       partida). Con la misma distancia gana la primera de la lista y, del mismo nombre, la de menor índice. */
+    int best = -1, best_k = 0, c[UNITS_NEAR_MAX], nc = units_near(p->x, p->y, QUEST_RANGE, c);
     float best_d = QUEST_RANGE * QUEST_RANGE;
-    for (unsigned k = 0; k < sizeof k_quest_objects / sizeof k_quest_objects[0]; k++) {
-        int ids[4], n = units_find_all(k_quest_objects[k], ids, 4);
-        for (int i = 0; i < n; i++) {
-            float x, y;
-            units_position(ids[i], 1.0f, &x, &y);
-            float d = (x - p->x) * (x - p->x) + (y - p->y) * (y - p->y);
-            if (d < best_d) {
-                best_d = d;
-                best = ids[i];
-            }
+    for (int n = 0; n < (nc >= 0 ? nc : units_count()); n++) {
+        int i = nc >= 0 ? c[n] : n;
+        float x, y;
+        units_position(i, 1.0f, &x, &y);
+        float d = (x - p->x) * (x - p->x) + (y - p->y) * (y - p->y);
+        if (d > best_d)
+            continue;
+        const char *id = units_id(i);
+        int k = 0, nk = (int)(sizeof k_quest_objects / sizeof k_quest_objects[0]);
+        while (k < nk && strcmp(id, k_quest_objects[k]) != 0)
+            k++;
+        if (k < nk && (d < best_d || (best >= 0 && k < best_k))) {
+            best_d = d;
+            best = i;
+            best_k = k;
         }
     }
     *unit = best;
@@ -17842,9 +17860,13 @@ static void draw_darkness_body(float cam_x, float cam_y, const float *sx, const 
             continue;
         float msx, msy;
         iso_to_screen(mi->x, mi->y, &msx, &msy);
-        lx[n] = SCREEN_W / 2 + (int)lroundf(msx - cam_x);
-        ly[n] = SCREEN_H / 2 + (int)lroundf(msy - cam_y) - 20 - (int)mi->z;
-        lr[n] = l * LIGHT_PX_PER_UNIT;
+        int x = SCREEN_W / 2 + (int)lroundf(msx - cam_x), y = SCREEN_H / 2 + (int)lroundf(msy - cam_y) - 20 - (int)mi->z;
+        int r = l * LIGHT_PX_PER_UNIT;
+        if (x < -r || x > SCREEN_W + r || y < -r || y > SCREEN_H + r) /* (no llega a la pantalla: no ocupa lugar) */
+            continue;
+        lx[n] = x;
+        ly[n] = y;
+        lr[n] = r;
         n++;
     }
     float ox[MAX_LIGHTS], oy[MAX_LIGHTS];
@@ -18182,23 +18204,19 @@ static void render_frame(float alpha)
         float shift = s_pl[la].dialog_npc >= 0 && s_pl[la].shop_open ? 0.0f : s_pl[la].inv_open ? PANEL_W / 2.0f : 0.0f;
         render_world(sx[la] + shift, sy[la], alpha);
         draw_darkness(sx[la] + shift, sy[la], sx, sy, la);
-        bossfx_shade(sx[la] + shift, sy[la], alpha, la);
-        overlays_draw(sx[la] + shift, sy[la], overlay_pos);
+        PART2(0, bossfx_shade(sx[la] + shift, sy[la], alpha, la); overlays_draw(sx[la] + shift, sy[la], overlay_pos));
         draw_coll_debug(sx[la] + shift, sy[la]);
-        draw_item_labels(sx[la] + shift, sy[la]);
-        draw_prompts(sx[la] + shift, sy[la]);
-        draw_npc_news(sx[la] + shift, sy[la]);
-        draw_view_automap(sx[la] + shift, sy[la], la);
+        PART2(1, draw_item_labels(sx[la] + shift, sy[la]));
+        PART2(2, draw_prompts(sx[la] + shift, sy[la]); draw_npc_news(sx[la] + shift, sy[la]));
+        PART2(3, draw_view_automap(sx[la] + shift, sy[la], la));
         s_view_x[la] = SCREEN_W / 2.0f - shift;
         s_view_y[la] = SCREEN_H / 2.0f;
-        bossfx_draw();
+        PART2(0, bossfx_draw());
         draw_hud();
-        draw_banners();
-        if (s_demo && !s_eco)
-            draw_demo_banner();
+        PART2(5, draw_banners(); if (s_demo && !s_eco) draw_demo_banner());
         skilltest_draw();
         if ((s_demo && !s_eco) || s_show_pos || getenv("D2_SHOW_POS"))
-            draw_positions();
+            PART2(5, draw_positions());
         if (s_paused)
             draw_pause();
         return;
@@ -18225,13 +18243,11 @@ static void render_frame(float alpha)
         float cx = (sx[la] + sx[lb]) * 0.5f, cy = (sy[la] + sy[lb]) * 0.5f;
         render_world(cx, cy, alpha);
         draw_darkness(cx, cy, sx, sy, -1);
-        bossfx_shade(cx, cy, alpha, la);
-        overlays_draw(cx, cy, overlay_pos);
+        PART2(0, bossfx_shade(cx, cy, alpha, la); overlays_draw(cx, cy, overlay_pos));
         draw_coll_debug(cx, cy);
-        draw_item_labels(cx, cy);
-        draw_prompts(cx, cy);
-        draw_npc_news(cx, cy);
-        draw_view_automap(cx, cy, -1);
+        PART2(1, draw_item_labels(cx, cy));
+        PART2(2, draw_prompts(cx, cy); draw_npc_news(cx, cy));
+        PART2(3, draw_view_automap(cx, cy, -1));
         for (int i = 0; i < s_num_players; i++) {
             s_view_x[i] = SCREEN_W / 2.0f + sx[i] - cx;
             s_view_y[i] = SCREEN_H / 2.0f + sy[i] - cy;
@@ -18242,38 +18258,34 @@ static void render_frame(float alpha)
         clip_half_plane(SCREEN_W / 2.0f, SCREEN_H / 2.0f, nx, ny, -1);
         render_world(c1x, c1y, alpha);
         draw_darkness(c1x, c1y, sx, sy, la);
-        bossfx_shade(c1x, c1y, alpha, la);
-        overlays_draw(c1x, c1y, overlay_pos);
+        PART2(0, bossfx_shade(c1x, c1y, alpha, la); overlays_draw(c1x, c1y, overlay_pos));
         draw_coll_debug(c1x, c1y);
-        draw_item_labels(c1x, c1y);
-        draw_prompts(c1x, c1y);
-        draw_npc_news(c1x, c1y);
-        draw_view_automap(c1x, c1y, la);
+        PART2(1, draw_item_labels(c1x, c1y));
+        PART2(2, draw_prompts(c1x, c1y); draw_npc_news(c1x, c1y));
+        PART2(3, draw_view_automap(c1x, c1y, la));
         clip_half_plane(SCREEN_W / 2.0f, SCREEN_H / 2.0f, nx, ny, +1);
         render_world(c2x, c2y, alpha);
         draw_darkness(c2x, c2y, sx, sy, lb);
-        bossfx_shade(c2x, c2y, alpha, lb);
-        overlays_draw(c2x, c2y, overlay_pos);
+        PART2(0, bossfx_shade(c2x, c2y, alpha, lb); overlays_draw(c2x, c2y, overlay_pos));
         draw_coll_debug(c2x, c2y);
-        draw_item_labels(c2x, c2y);
-        draw_prompts(c2x, c2y);
-        draw_npc_news(c2x, c2y);
-        draw_view_automap(c2x, c2y, lb);
+        PART2(1, draw_item_labels(c2x, c2y));
+        PART2(2, draw_prompts(c2x, c2y); draw_npc_news(c2x, c2y));
+        PART2(3, draw_view_automap(c2x, c2y, lb));
         clip_reset();
-        draw_divider(nx, ny, dist * 0.5f - k);
+        PART2(4, draw_divider(nx, ny, dist * 0.5f - k));
         s_view_x[la] = SCREEN_W / 2.0f - nx * k;
         s_view_y[la] = SCREEN_H / 2.0f - ny * k;
         s_view_x[lb] = SCREEN_W / 2.0f + nx * k;
         s_view_y[lb] = SCREEN_H / 2.0f + ny * k;
     }
-    bossfx_draw();
+    PART2(0, bossfx_draw());
     draw_hud();
-    draw_banners();
-    if (s_demo && !s_eco) /* (los bots en el Eco, D2_ECO_DEMO: sin el cartel ni las posiciones, que tapan las oleadas) */
-        draw_demo_banner();
+    PART2(5, draw_banners();
+          if (s_demo && !s_eco) /* (los bots en el Eco, D2_ECO_DEMO: sin el cartel ni las posiciones, que tapan las oleadas) */
+              draw_demo_banner());
     skilltest_draw();
     if ((s_demo && !s_eco) || s_show_pos || getenv("D2_SHOW_POS"))
-        draw_positions();
+        PART2(5, draw_positions());
     if (s_show_perf)
         draw_perf();
     if (s_paused)

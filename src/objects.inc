@@ -194,9 +194,22 @@ static float obj_dist2(int u, float x, float y)
 /* El que se usaría desde (x, y): el más cercano al alcance, -1 = ninguno */
 static int obj_near(float x, float y, float reach)
 {
-    int best = -1;
+    /* Solo las de alrededor: el borde a `reach` queda a menos de reach + la mitad del tamaño + 1 del centro (antes
+       todas las unidades, varias veces por jugador y por cuadro para los carteles). El tamaño: el más grande de los
+       que se usan (el ataúd, 5). */
+    static int size = 0;
+    if (!size && s_orows > 1) {
+        size = 1;
+        for (int r = 1; r < s_orows; r++)
+            if (obj_supported(&s_orow[r])) {
+                size = s_orow[r].sx > size ? s_orow[r].sx : size;
+                size = s_orow[r].sy > size ? s_orow[r].sy : size;
+            }
+    }
+    int best = -1, c[UNITS_NEAR_MAX], nc = units_near(x, y, reach + (float)((size > 0 ? size : 32) / 2 + 1), c);
     float best_d = reach * reach;
-    for (int u = 0; u < units_count(); u++) {
+    for (int n = 0; n < (nc >= 0 ? nc : units_count()); n++) {
+        int u = nc >= 0 ? c[n] : n;
         if (!obj_usable(u))
             continue;
         float d = obj_dist2(u, x, y);

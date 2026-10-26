@@ -26,7 +26,7 @@
 
 /* Lo que hacen en el cuadro de golpe (sigue a A4H_* de monai4.inc) */
 enum { A5H_SPAWN = A4H_CURSE + 1, A5H_STOMP, A5H_CORPSE, A5H_TENTACLE, A5H_TAUNT, A5H_CRYHELP, A5H_HEAL, A5H_WHIP, A5H_IMPREGNATE,
-       A5H_SHOW, A5H_CATAPULT, A5H_COLDMAKER, A5H_SHOUT };
+       A5H_SHOW, A5H_CATAPULT, A5H_COLDMAKER, A5H_SHOUT, A5H_TELEPORT };
 
 /* La burla de Baal (SKILLS_SrvDo028: "baal taunt control" donde está el
    jugador). El control no se ve ni se mueve: dura su Range (75 cuadros) y,
@@ -583,6 +583,43 @@ static void a5_skill_phys(const char *skill, int lvl, int *lo, int *hi)
     *hi = (mx << shift) >> 8 > *lo ? (mx << shift) >> 8 : *lo;
 }
 
+/* El zarpazo bajo tierra del Death Mauler (SKILLS_SrvDo136_DeathMaul), en el cuadro de evento de su secuencia: las
+   garras (death mauler) salen donde está el jugador. El original les deja Range * d / 12 cuadros (d >= 10), la mitad
+   más Range * d / 24 (d < 10) o la mitad y un poco (al lado) y pegan en los últimos Range - Activate: más lejos, más
+   demora. Lo que tarda en llegar, la tierra se va levantando de él hasta ahí (el rastro, death mauler trail: lo que
+   dibuja el cliente; uno cada Param2 cuadros, y al terminar su polvo, CltHitSubMissile1). */
+static void a5_death_maul(Unit *u, const UnitTarget *t)
+{
+    Missile *mi = missiles_spawn("death mauler", t->x, t->y, t->x - u->x, t->y - u->y);
+    if (!mi)
+        return;
+    int dx = abs((int)floorf(t->x) - (int)floorf(u->x)), dy = abs((int)floorf(t->y) - (int)floorf(u->y));
+    int d = dx <= dy ? (dx + 2 * dy) / 2 : (dy + 2 * dx) / 2; /* (UNITS_GetDistanceToCoordinates) */
+    int total = mi->life, frames = d < 1 ? total / 2 + total / 24 : d >= 10 ? total * d / 12 : total / 2 + total * d / 24;
+    missiles_set_frames(mi, frames);
+    mi->flags &= ~MF_EFFECT; /* (no se mueve, pero pega) */
+    mi->face_x = t->x - u->x;
+    mi->face_y = t->y - u->y;
+    mi->owner = -1;
+    mi->source = (int)(u - s_units);
+    mi->ar = u->ar;
+    mi->level = u->level;
+    a5_skill_phys("DeathMaul", ai_sklvl(u, u->seq_skill), &mi->dmin, &mi->dmax);
+    int every = missiles_param("death mauler trail", 2);
+    every = every > 0 ? every : 4;
+    for (int k = every; k < mi->wake; k += every) {
+        float f = (float)k / (float)mi->wake;
+        Missile *p = missiles_effect("death mauler trail", u->x + (t->x - u->x) * f, u->y + (t->y - u->y) * f);
+        if (!p)
+            break;
+        p->face_x = t->x - u->x;
+        p->face_y = t->y - u->y;
+        p->wake = k;
+        p->life = k + 8; /* (sus 31 cuadros, de a 4 por tick: animrate 4096) */
+        p->flags |= MF_NOHIT | MF_CHAIN;
+    }
+}
+
 /* Los esbirros (BaseId minion1) vivos a menos de r del capataz */
 static int a5_is_minion(const Unit *u, const Unit *o, float r)
 {
@@ -826,6 +863,9 @@ static void a5_hit_frame(Unit *u, UnitTarget *pl)
     case A5H_SPAWN: /* MinionSpawner y Nest: una cría al lado */
         a5_spawn(u, u->minion, u->a4_x, u->a4_y);
         break;
+    case A5H_TELEPORT: /* el diablillo aparece en el lugar elegido (Imp Teleport, en su S1) */
+        teleport_move(u, u->a4_x, u->a4_y);
+        break;
     case A5H_STOMP: /* el pisotón (SrvDo134): su daño de A2 a todos a menos de 4 subtiles */
         for (int k = 0; k < MAX_PLAYERS; k++)
             if (pl[k].alive && !pl[k].in_town && dist_to(u, pl[k].x, pl[k].y) < 4.0f + pl[k].body)
@@ -1046,6 +1086,23 @@ static int a5_imp_ride(Unit *u, const Map *m, int t, const UnitTarget *tp, float
     return 0;
 }
 
+/* El teletransporte del diablillo (su habilidad k, Imp Teleport): como el original, con su animación (S1) y
+   en el cuadro de golpe aparece en el lugar libre más cerca de (x, y); sin esa animación, de una */
+static int a5_teleport(Unit *u, const Map *m, int t, int k, float x, float y)
+{
+    float tx, ty;
+    if (!teleport_spot(u, m, x, y, &tx, &ty))
+        return 0;
+    if (a5_use(u, t, k, A5H_TELEPORT)) {
+        u->a4_x = tx;
+        u->a4_y = ty;
+        return 1;
+    }
+    teleport_move(u, tx, ty);
+    ai_stall(u, 6);
+    return 1;
+}
+
 /* Los diablillos (Fn122): se teletransportan cerca, se alejan y disparan
    (con los parámetros de imp1..imp4, como el original) */
 static int a5_imp(Unit *u, const Map *m, int t, const UnitTarget *tp, float d, int combat)
@@ -1058,7 +1115,7 @@ static int a5_imp(Unit *u, const Map *m, int t, const UnitTarget *tp, float d, i
     if (combat) {
         if (tele >= 0 && life < a5_aip("imp1", 0)) {
             float a = rndf(u) * 2.0f * PI_F;
-            if (ai_teleport(u, m, tp->x + cosf(a) * range, tp->y + sinf(a) * range))
+            if (a5_teleport(u, m, t, tele, tp->x + cosf(a) * range, tp->y + sinf(a) * range))
                 return 1;
         }
         if ((int)(rnd(u) % 100) < a5_aip("imp3", 1)) {
@@ -1068,7 +1125,7 @@ static int a5_imp(Unit *u, const Map *m, int t, const UnitTarget *tp, float d, i
     }
     if (tele >= 0 && (int)(rnd(u) % 100) < a5_aip("imp1", 2)) {
         float a = rndf(u) * 2.0f * PI_F;
-        if (ai_teleport(u, m, tp->x + cosf(a) * range, tp->y + sinf(a) * range))
+        if (a5_teleport(u, m, t, tele, tp->x + cosf(a) * range, tp->y + sinf(a) * range))
             return 1;
     }
     if (d < (float)a5_aip("imp3", 0) && (int)(rnd(u) % 100) < a5_aip("imp3", 1)) {
@@ -1658,18 +1715,9 @@ static int ai_think5(Unit *u, const Map *m, UnitTarget *pl, int t, float d, int 
                 return 1;
             }
         } else {
-            /* el zarpazo bajo tierra: el proyectil death mauler hasta el jugador */
+            /* el zarpazo bajo tierra (su secuencia seq_deathmaulerdig; las garras salen en su cuadro de evento:
+               a5_death_maul) */
             if (u->skill[0][0] && d < (float)u->aip[2] && ai_roll(u, 3) && missiles_exists("death mauler")) {
-                float dx = tp->x - u->x, dy = tp->y - u->y, l = sqrtf(dx * dx + dy * dy);
-                Missile *mi = missiles_spawn("death mauler", u->x, u->y, dx / (l > 0.01f ? l : 1.0f), dy / (l > 0.01f ? l : 1.0f));
-                if (mi) {
-                    mi->owner = -1;
-                    mi->source = (int)(u - s_units);
-                    mi->ar = u->ar;
-                    mi->level = u->level;
-                    mi->dmin = u->dmg_min;
-                    mi->dmax = u->dmg_max;
-                }
                 if (!ai_skill(u, t, 0))
                     ai_stall(u, 15);
                 return 1;

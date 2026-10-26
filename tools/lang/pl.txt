@@ -884,3 +884,12 @@
 883	X: załóż (zamienia z założonym)
 884	A: podnieś, aby osadzić
 885	A: osadź
+886	Następna fala za %d
+887	To, co zostanie na ziemi, zniknie
+888	Pozostało: %d
+889	GRACZE: WYBIERZCIE POSTACIE
+890	Gracz %d już wybrał tę postać
+891	Wybrana przez gracza %d
+892	G%d
+893	GOTOWY
+894	Czekam na gracza %d

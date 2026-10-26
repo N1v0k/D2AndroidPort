@@ -533,6 +533,40 @@ En la Pi (demo del Acto 5, pareja 9, semilla 7, `D2_ASYNC=1`, de a una):
 Lo que queda: `quest_tick` cuesta 2,5 a 3 ms por tick en el Acto 5 (buscar
 unidades por nombre entre todas).
 
+## Las cuevas heladas del Acto 5 (26/10/2026)
+
+En la Pi, en la Frozen River / Crystalline Passage con dos jugadores y la
+pantalla partida, el dibujo pasaba de ~10 ms afuera a 21-24 ms. Medido con la
+demo (`D2_AUTOTEST_DEMO=1 D2_DEMO_ACT=5 D2_AUTOTEST_FROM=16
+D2_AUTOTEST_STATE=wp=0x1c0000000 D2_AT_PERF=250 D2_RENDER_EVERY=1 D2_ASYNC=1`,
+`--players 2 --autotest act5 --frames 7000`) y el "resto" partido en efectos,
+nombres, avisos, mapa, línea y carteles (`D2_AT_PERF` los muestra), más gprof
+en la Pi:
+
+- **Los avisos ("A: Hablar con...") eran 7 ms**: `quest_action` buscaba cada
+  uno de los 33 objetos de misión por nombre entre todas las unidades (~880:
+  29.000 `strcmp` por llamada), para cada jugador y cada mitad de la pantalla.
+  `obj_near` (cofres, barriles) y `units_find_npc` también recorrían todas.
+  Ahora los tres miran solo las unidades de alrededor (`units_near`, la
+  grilla), con los mismos desempates: 7 ms -> 0,05-0,1 ms.
+- **Oscurecer lo que se dibuja encima de la oscuridad** era ~20% del tiempo en
+  la Pi (`dark_resolve_slow`, `dark_apply_row`, `umark`): un tercio de las filas
+  eran los botones e íconos del HUD (`fb_blit_scaled`), que solo pisan píxeles.
+  Los dibujos que no leen lo de abajo (`fb_blit_scaled`, `fb_blit_remap`,
+  `fb_blit_rotated`) ahora marcan los tramos que pintan (`dark_cover`) en vez de
+  oscurecer la fila entera; `dark_resolve_slow` oscurece directo en la fila
+  cuando nada del tramo estaba marcado, y `umark` va en línea.
+
+Con la pantalla partida en la cueva: dibujo 21,5-23 -> 14-15,5 ms, "resto"
+11,6 -> 4,9 ms; con una sola vista, 13-16 -> 10-12 ms. La imagen, igual byte
+por byte (`cmpdark.sh`: cuevas del Acto 5, catacumbas, cloacas y partidas de
+bots, más `scripts/cmpshots.sh`).
+
+Lo que queda: el mundo dos veces con la pantalla partida (7-8 ms), los efectos
+de los estados sobre los monstruos (Visión interior, Grito de batalla: 1,5-2,5
+ms, mezclados sobre la oscuridad), los carteles de la demo (el "APRETÁ START"
+y las posiciones: 1,5-2,4 ms, solo en la demo) y el HUD (2 ms).
+
 ## Reglas para lo nuevo (Acto 3 en adelante)
 
 1. **Nada se lee ni se decodifica del disco en el hilo del juego mientras
@@ -567,3 +601,8 @@ unidades por nombre entre todas).
    nota y en la Pi son decenas de ms por zona. Buscar por índice o
    recordar lo que ya se buscó. Lo mismo con lo que pasa al matar (el botín:
    cada afijo preguntaba por itemtypes.txt entero).
+9. **Lo que se busca "al lado del jugador" en cada cuadro, con la grilla**
+   (`units_near`, `units_enemies_near`): los carteles se dibujan una vez por
+   jugador y por mitad de la pantalla. Y lo que se dibuja después de la
+   oscuridad sin leer lo de abajo, con `dark_cover` en lo pintado (no
+   `dark_resolve` de la fila entera).

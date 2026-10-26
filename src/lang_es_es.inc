@@ -121,3 +121,6 @@
 
 /* Los engarces (en el inventario) */
 { "A: levantarla para engarzarla", "A: cogerla para engarzarla" },
+
+/* La pantalla de las partidas con los dos jugadores a la vez */
+{ "JUGADORES: ELIJAN SUS PERSONAJES", "JUGADORES: ELEGID VUESTROS PERSONAJES" },
