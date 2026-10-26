@@ -994,6 +994,18 @@ With a single player, any controller moves the character. The first
 gamepad used is player 1's and the second one is player 2's (the order in
 which they were connected does not matter).
 
+Gamepads that misbehave (common on handheld consoles):
+
+- A button or direction that is already pressed when the gamepad connects
+  does not count until it is released.
+- The left stick counts once it has stayed still for a moment, and that
+  spot becomes its center: sticks that do not rest exactly at the center
+  (like the analog sticks of the Anbernic RG35XX / RG40XX family) no longer
+  walk or scroll menus by themselves, and a stick that is not there (an
+  input that reads random values) is ignored.
+- The same controller seen twice (two identical gamepads doing exactly the
+  same thing) counts once: the copy does not take player 2.
+
 ---
 
 ## Credits and legal notice

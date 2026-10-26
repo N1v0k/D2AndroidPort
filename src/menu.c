@@ -275,6 +275,12 @@ static void note_player(const char *fmt, int player)
 /* La pantalla de los dos a la vez: lo de cada jugador con lo suyo (in->player[k]) */
 static MenuResult slots_dual_tick(const InputState *in)
 {
+    if (input_num_pads() < 2 && !getenv("D2_DUAL_PICK")) { /* (un joystick era el eco de otro, o se desconectó: de a uno) */
+        s_dual = 0;
+        s_picking = 0;
+        s_slot_sel = s_pk[0].sel;
+        return MENU_NONE;
+    }
     for (int k = 0; k < 2; k++) {
         const PlayerInput *p = &in->player[k];
         int other = 1 - k, *sel = &s_pk[k].sel;

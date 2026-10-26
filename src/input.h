@@ -62,5 +62,8 @@ int  input_any(const InputState *in); /* ¿se apretó o se movió algo? */
 void input_clear_events(InputState *in);
 int  input_num_pads(void);
 void input_shutdown(void);
+/* D2_FAKE_PAD (pruebas sin ventana): mueve los joysticks virtuales al tick `tick` (los crea la primera vez); 0 si
+   no hay. Ver input.c. */
+int  input_fake_pads(int tick);
 
 #endif

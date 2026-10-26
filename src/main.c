@@ -699,24 +699,26 @@ static int run_headless(const Options *o)
         for (int t = 0; t < ticks; t++) {
             char c = script && t < (int)strlen(script) ? script[t] : '.';
             input_clear_events(&in);
-            in.menu_up = c == 'u';
-            in.menu_down = c == 'd';
-            in.menu_left = c == 'l';
-            in.menu_right = c == 'r';
-            in.confirm = c == 'a';
-            in.menu_back = c == 'b';
-            in.menu_delete = c == 'x';
+            if (input_fake_pads(t)) /* (D2_FAKE_PAD: lo de los joysticks virtuales, y encima lo del guion) */
+                input_poll(&in);
+            in.menu_up |= c == 'u';
+            in.menu_down |= c == 'd';
+            in.menu_left |= c == 'l';
+            in.menu_right |= c == 'r';
+            in.confirm |= c == 'a';
+            in.menu_back |= c == 'b';
+            in.menu_delete |= c == 'x';
             /* (y las de cada jugador, para la pantalla de los dos a la vez: minúsculas el 1, mayúsculas el 2) */
             for (int k = 0; k < 2; k++) {
                 PlayerInput *pi = &in.player[k];
                 char lc = k ? (char)(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : 0) : (c >= 'a' && c <= 'z' ? c : 0);
-                pi->nav_up = lc == 'u';
-                pi->nav_down = lc == 'd';
-                pi->nav_left = lc == 'l';
-                pi->nav_right = lc == 'r';
-                pi->action = lc == 'a';
-                pi->back = lc == 'b';
-                pi->drop = lc == 'x';
+                pi->nav_up |= lc == 'u';
+                pi->nav_down |= lc == 'd';
+                pi->nav_left |= lc == 'l';
+                pi->nav_right |= lc == 'r';
+                pi->action |= lc == 'a';
+                pi->back |= lc == 'b';
+                pi->drop |= lc == 'x';
             }
             if (getenv("D2_MENU_DELAY")) /* (pruebas de la red: ticks de verdad, para que la otra máquina conteste) */
                 SDL_Delay((Uint32)atoi(getenv("D2_MENU_DELAY")));
@@ -872,8 +874,12 @@ static int run_headless(const Options *o)
         for (int t = 0; t < ticks; t++) {
             if (o->demo)
                 demo_input(&in, o, t);
+            else if (input_fake_pads(t)) /* (D2_FAKE_PAD: los joysticks virtuales de las pruebas) */
+                input_poll(&in);
             Uint64 p0 = SDL_GetPerformanceCounter();
             game_tick(&in);
+            if (!o->demo)
+                input_clear_events(&in);
             double pms = (double)(SDL_GetPerformanceCounter() - p0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
             perf_sum += pms;
             perf_max = pms > perf_max ? pms : perf_max;
@@ -1157,7 +1163,8 @@ int main(int argc, char **argv)
         return 2;
     crash_handler_install();
 
-    Uint32 flags = o.headless ? 0 : (SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER);
+    Uint32 flags = o.headless ? (getenv("D2_FAKE_PAD") ? SDL_INIT_GAMECONTROLLER : 0) /* (los joysticks virtuales de las pruebas) */
+                              : (SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER);
     if (SDL_Init(flags) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;

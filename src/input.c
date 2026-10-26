@@ -13,6 +13,11 @@
 #define MENU_STICK 0.6f
 #define LOG_LINES  300   /* renglones de diagnóstico de los controles en el log del juego */
 #define GRACE_MS   500   /* lo que llega apenas se conecta también cuenta como "ya apretado" */
+#define CENTER_MAX 0.5f  /* la palanca que descansa corrida hasta esto (las de ADC baratas): ese lugar es su medio */
+#define CALM_MS    400   /* el stick cuenta recién después de estar quieto esto (uno que flota nunca lo está) */
+#define STEADY     0.08f /* quieto: lo que varía es menos que esto */
+#define MIRROR_MS  40    /* lo mismo en dos joysticks iguales en menos de esto: es un solo control visto dos veces */
+#define CODE_STICK SDL_CONTROLLER_BUTTON_MAX /* (en last_ms: las direcciones del stick, después de los botones) */
 
 /* Lo que se mira en cada tick (no por eventos) */
 enum { ARM_STICK = 1, ARM_DPAD = 2, ARM_RT = 4, ARM_RB = 8, ARM_ALL = 15 };
@@ -31,9 +36,24 @@ typedef struct {
     Uint32 opened_at;
     int   stick_dir, stick_x, ltrigger; /* para navegar menús y el gatillo de la poción */
     int   axis_on[SDL_CONTROLLER_AXIS_MAX]; /* para anotar en el log solo cuando cruza la mitad */
+    float cx, cy;       /* el medio del stick izquierdo: donde descansa (las palancas baratas no dan 0) */
+    float sx, sy;       /* dónde empezó a estar quieto (hasta que cuenta) */
+    Uint32 calm_since;  /* desde cuándo está quieto */
+    char  guid[64];
+    int   mirror;       /* repite lo que hace otro joystick igual: es el mismo control visto dos veces */
+    int   solo;         /* apretó algo que el otro no (dos veces seguidas: era otro control de verdad) */
+    int   pend_code;    /* (el último que apretó siendo eco, para ver si el otro lo repite) */
+    Uint32 pend_ms;
+    Uint32 last_ms[SDL_CONTROLLER_BUTTON_MAX + 4]; /* cuándo apretó cada botón y cada dirección del stick */
 } Pad;
 
 static Pad   s_pads[MAX_PADS];
+static Uint32 s_fake_clock; /* D2_FAKE_PAD: un reloj de 40 ms por tick (las pruebas sin ventana no van en tiempo real) */
+
+static Uint32 now_ms(void)
+{
+    return s_fake_clock ? s_fake_clock : SDL_GetTicks();
+}
 static Uint8 s_key_blocked[SDL_NUM_SCANCODES]; /* teclas apretadas desde antes de arrancar */
 static int   s_keys_checked;
 static int   s_log_left = LOG_LINES;
@@ -70,11 +90,25 @@ static float axis(SDL_GameController *pad, SDL_GameControllerAxis a)
     return v < -1.0f ? -1.0f : v;
 }
 
-/* Qué tiene "apretado" el joystick en este momento (en bits ARM_*) */
-static int pad_active(SDL_GameController *pad)
+/* Un eje del stick izquierdo desde su medio (cx, cy), estirado para que todo el recorrido siga dando -1..1 */
+static float centered(const Pad *pd, int ax, float v)
 {
+    float c = ax == SDL_CONTROLLER_AXIS_LEFTX ? pd->cx : ax == SDL_CONTROLLER_AXIS_LEFTY ? pd->cy : 0.0f;
+    float s = v >= c ? (v - c) / (1.0f - c) : (v - c) / (1.0f + c);
+    return s < -1.0f ? -1.0f : s > 1.0f ? 1.0f : s;
+}
+
+static float stick(const Pad *pd, SDL_GameControllerAxis a)
+{
+    return centered(pd, a, axis(pd->pad, a));
+}
+
+/* Qué tiene "apretado" el joystick en este momento (en bits ARM_*) */
+static int pad_active(const Pad *pd)
+{
+    SDL_GameController *pad = pd->pad;
     int a = 0;
-    float ax = axis(pad, SDL_CONTROLLER_AXIS_LEFTX), ay = axis(pad, SDL_CONTROLLER_AXIS_LEFTY);
+    float ax = stick(pd, SDL_CONTROLLER_AXIS_LEFTX), ay = stick(pd, SDL_CONTROLLER_AXIS_LEFTY);
     if (sqrtf(ax * ax + ay * ay) > DEADZONE)
         a |= ARM_STICK;
     if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_LEFT) ||
@@ -103,11 +137,77 @@ static const char *button_name(int b)
     return s ? s : "?";
 }
 
+/* ¿Es un eco? El mismo control visto dos veces (pasa con algunos joysticks y consolas): dos joysticks del mismo
+   modelo (GUID) que hacen lo mismo (code: un botón o una dirección del stick) con menos de MIRROR_MS. De los dos, el
+   eco es el que no maneja a nadie (o el de después): no se une ni cuenta. Si después hace algo solo dos veces, era
+   otro control. Devuelve 1 si lo de ahora se ignora. */
+static int mirror_check(int i, int code)
+{
+    Pad *pd = &s_pads[i];
+    Uint32 now = now_ms();
+    pd->last_ms[code] = now;
+    for (int k = 0; k < MAX_PADS; k++) {
+        Pad *o = &s_pads[k];
+        if (k == i || !o->pad || strcmp(o->guid, pd->guid) != 0 || !o->last_ms[code] || now - o->last_ms[code] > MIRROR_MS)
+            continue;
+        /* (el eco: el que no maneja a nadie; si los dos o ninguno, el de jugador más alto o el de después) */
+        Pad *echo;
+        if ((pd->player >= 0) != (o->player >= 0))
+            echo = pd->player >= 0 ? o : pd;
+        else if (pd->player >= 0)
+            echo = pd->player > o->player ? pd : o;
+        else
+            echo = k < i ? pd : o;
+        if (!echo->mirror) {
+            echo->mirror = 1;
+            input_log("joystick %d repite lo que hace el joystick %d: es el mismo control visto dos veces, no se usa",
+                      (int)(echo - s_pads) + 1, (int)((echo == pd ? o : pd) - s_pads) + 1);
+            if (echo->player >= 0) {
+                input_log("joystick %d deja al jugador %d", (int)(echo - s_pads) + 1, echo->player + 1);
+                echo->player = -1;
+            }
+        }
+        echo->solo = 0;
+        return echo == pd;
+    }
+    if (pd->mirror) { /* (lo apretó solo: se mira al final de la lectura si el otro lo repite) */
+        pd->pend_code = code;
+        pd->pend_ms = now;
+        return 1;
+    }
+    return 0;
+}
+
+/* Al final de cada lectura: el eco que apretó algo que el otro no repitió en MIRROR_MS (dos veces) era otro control */
+static void mirror_settle(void)
+{
+    Uint32 now = now_ms();
+    for (int i = 0; i < MAX_PADS; i++) {
+        Pad *pd = &s_pads[i];
+        if (!pd->pad || !pd->mirror || !pd->pend_ms || now - pd->pend_ms <= MIRROR_MS)
+            continue;
+        int twin = 0;
+        for (int k = 0; k < MAX_PADS; k++) {
+            const Pad *o = &s_pads[k];
+            Uint32 t = o->last_ms[pd->pend_code];
+            twin |= k != i && o->pad && strcmp(o->guid, pd->guid) == 0 && t &&
+                    (t > pd->pend_ms ? t - pd->pend_ms : pd->pend_ms - t) <= MIRROR_MS;
+        }
+        pd->pend_ms = 0;
+        pd->solo = twin ? 0 : pd->solo + 1;
+        if (pd->solo >= 2) {
+            pd->mirror = 0;
+            pd->solo = 0;
+            input_log("joystick %d se usó solo: es otro control", i + 1);
+        }
+    }
+}
+
 /* Se usó de verdad: si no manejaba a nadie, toma el primer jugador libre */
 static void join(int i)
 {
     Pad *pd = &s_pads[i];
-    if (pd->player >= 0)
+    if (pd->player >= 0 || pd->mirror)
         return;
     for (int p = 0; p < MAX_LOCAL; p++) {
         int taken = 0;
@@ -143,7 +243,8 @@ static void open_pad(int device_index)
     memset(pd, 0, sizeof *pd);
     pd->pad = pad;
     pd->player = -1;
-    pd->opened_at = SDL_GetTicks();
+    pd->opened_at = now_ms();
+    snprintf(pd->guid, sizeof pd->guid, "%s", guid);
     SDL_Log("joystick %d: %s", i + 1, SDL_GameControllerName(pad));
     char *map = SDL_GameControllerMapping(pad);
     input_log("joystick %d: guid %s, mapeo %s", i + 1, guid, map ? map : "-");
@@ -174,13 +275,18 @@ static void open_pad(int device_index)
             input_log("joystick %d: \"%s\" ya está apretado al conectar: no cuenta hasta que se suelte", i + 1,
                       button_name(b));
         }
-    int active = pad_active(pad);
-    pd->armed = ARM_ALL & ~active;
-    for (int bit = 1; bit <= ARM_RB; bit <<= 1)
+    /* (el stick no: cuenta cuando queda quieto, y donde quedó es su medio; corrido no es un "trabado": las
+       palancas de ADC de las portátiles no descansan en 0) */
+    int active = pad_active(pd);
+    pd->armed = ARM_ALL & ~active & ~ARM_STICK;
+    for (int bit = ARM_DPAD; bit <= ARM_RB; bit <<= 1)
         if (active & bit) {
             pd->stuck = 1;
             input_log("joystick %d: %s está activo al conectar: no cuenta hasta que se suelte", i + 1, arm_name(bit));
         }
+    if (active & ARM_STICK)
+        input_log("joystick %d: el stick no está en el medio al conectar (%.2f, %.2f): cuenta cuando quede quieto", i + 1,
+                  axis(pad, SDL_CONTROLLER_AXIS_LEFTX), axis(pad, SDL_CONTROLLER_AXIS_LEFTY));
     pd->ltrigger = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16000;
 }
 
@@ -201,7 +307,7 @@ int input_num_pads(void)
 {
     int n = 0;
     for (int i = 0; i < MAX_PADS; i++)
-        n += s_pads[i].pad && (!s_pads[i].stuck || s_pads[i].player >= 0);
+        n += s_pads[i].pad && !s_pads[i].mirror && (!s_pads[i].stuck || s_pads[i].player >= 0);
     return n;
 }
 
@@ -316,13 +422,15 @@ static void on_button(InputState *in, const SDL_ControllerButtonEvent *b, int do
     }
     if (pd->held[b->button])
         return; /* sigue trabado desde que se conectó */
-    if (SDL_GetTicks() - pd->opened_at < GRACE_MS) {
+    if (now_ms() - pd->opened_at < GRACE_MS) {
         pd->held[b->button] = 1;
         pd->stuck = 1;
         input_log("joystick %d: \"%s\" apretado apenas se conectó: no cuenta hasta que se suelte", i + 1,
                   button_name(b->button));
         return;
     }
+    if (mirror_check(i, b->button))
+        return;
     input_log("joystick %d: botón %s", i + 1, button_name(b->button));
     join(i);
     PlayerInput *p = pd->player >= 0 ? &in->player[pd->player] : NULL;
@@ -412,7 +520,7 @@ static void on_axis(InputState *in, const SDL_ControllerAxisEvent *a)
     }
     if (a->axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT) {
         int pressed = a->value > 16000;
-        if (pressed && !pd->ltrigger && SDL_GetTicks() - pd->opened_at >= GRACE_MS) {
+        if (pressed && !pd->ltrigger && now_ms() - pd->opened_at >= GRACE_MS && !mirror_check(i, CODE_STICK + 3)) {
             join(i);
             if (pd->player >= 0)
                 in->player[pd->player].potion_mana = 1;
@@ -424,13 +532,13 @@ static void on_axis(InputState *in, const SDL_ControllerAxisEvent *a)
         return;
     if (!(pd->armed & ARM_STICK))
         return; /* el stick todavía no volvió al centro */
-    float v = a->value / 32767.0f;
+    float v = centered(pd, a->axis, a->value / 32767.0f);
     int dir = v < -MENU_STICK ? -1 : v > MENU_STICK ? 1 : 0;
     int *last = a->axis == SDL_CONTROLLER_AXIS_LEFTX ? &pd->stick_x : &pd->stick_dir;
     if (dir == *last)
         return;
     *last = dir;
-    if (!dir)
+    if (!dir || mirror_check(i, CODE_STICK + (a->axis == SDL_CONTROLLER_AXIS_LEFTX ? 0 : 1)))
         return;
     join(i);
     PlayerInput *p = pd->player >= 0 ? &in->player[pd->player] : NULL;
@@ -457,6 +565,128 @@ int input_any(const InputState *in)
     }
     return 0;
 }
+
+/* ---- D2_FAKE_PAD (pruebas): joysticks virtuales de SDL con los problemas de las portátiles ----
+   Uno por ';', con "clave=valor" separados por ',':
+     lx=, ly=   donde descansa el stick (-1..1; una palanca de ADC sin calibrar, como las Anbernic H700: ly=0.35)
+     noise=     cuánto tiembla al azar en cada tick
+     float=1    sin palanca: el eje Y salta al azar por todo el recorrido (un ADC suelto)
+     mirror=1   el mismo control visto dos veces (dos joysticks iguales que hacen lo mismo)
+     push=T1-T2 entre esos ticks, el stick abajo de verdad
+     a=T        el botón A en el tick T (down=T: la cruceta abajo)
+     stuck=1    la cruceta abajo apretada desde que se conecta
+     at=T       se conecta en el tick T
+   Los tiempos (lo apretado al conectar, el eco) van con un reloj de 40 ms por tick. */
+#if SDL_VERSION_ATLEAST(2, 24, 0)
+#define FAKE_MAX 4
+typedef struct {
+    float lx, ly, noise, fly;
+    int   floating, mirror, push0, push1, a_at, down_at, stuck, at, n;
+    SDL_Joystick *js[2];
+} FakePad;
+static FakePad  s_fake[FAKE_MAX];
+static int      s_nfake = -1;
+static uint32_t s_fake_rnd = 1;
+
+static float fake_rand(void)
+{
+    s_fake_rnd = s_fake_rnd * 1103515245u + 12345u;
+    return (float)((s_fake_rnd >> 8) & 0xffff) / 32768.0f - 1.0f;
+}
+
+static void fake_parse(void)
+{
+    s_nfake = 0;
+    const char *p = getenv("D2_FAKE_PAD");
+    while (p && *p && s_nfake < FAKE_MAX) {
+        FakePad *f = &s_fake[s_nfake++];
+        memset(f, 0, sizeof *f);
+        f->push0 = f->push1 = f->a_at = f->down_at = -1;
+        while (*p && *p != ';') {
+            char key[16] = "", val[32] = "";
+            int n = 0;
+            if (sscanf(p, "%15[^=;,]=%31[^;,]%n", key, val, &n) < 2 || n <= 0) {
+                p++;
+                continue;
+            }
+            p += n;
+            if (!strcmp(key, "lx")) f->lx = (float)atof(val);
+            else if (!strcmp(key, "ly")) f->ly = (float)atof(val);
+            else if (!strcmp(key, "noise")) f->noise = (float)atof(val);
+            else if (!strcmp(key, "float")) f->floating = atoi(val);
+            else if (!strcmp(key, "mirror")) f->mirror = atoi(val);
+            else if (!strcmp(key, "push")) sscanf(val, "%d-%d", &f->push0, &f->push1);
+            else if (!strcmp(key, "a")) f->a_at = atoi(val);
+            else if (!strcmp(key, "down")) f->down_at = atoi(val);
+            else if (!strcmp(key, "stuck")) f->stuck = atoi(val);
+            else if (!strcmp(key, "at")) f->at = atoi(val);
+            if (*p == ',')
+                p++;
+        }
+        if (*p == ';')
+            p++;
+    }
+}
+
+static Sint16 fake_axis(float v)
+{
+    v = v < -1.0f ? -1.0f : v > 1.0f ? 1.0f : v;
+    return (Sint16)(v * 32767.0f);
+}
+
+int input_fake_pads(int tick)
+{
+    if (s_nfake < 0)
+        fake_parse();
+    if (!s_nfake)
+        return 0;
+    s_fake_clock = 1000u + (Uint32)tick * 40u;
+    for (int i = 0; i < s_nfake; i++) {
+        FakePad *f = &s_fake[i];
+        if (tick < f->at)
+            continue;
+        for (int k = f->n; k < (f->mirror ? 2 : 1); k++) { /* (el eco: el mismo modelo, mismo GUID) */
+            SDL_VirtualJoystickDesc d;
+            SDL_zero(d);
+            d.version = SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
+            d.type = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
+            d.naxes = SDL_CONTROLLER_AXIS_MAX;
+            d.nbuttons = SDL_CONTROLLER_BUTTON_MAX;
+            d.vendor_id = 0x1d2a;
+            d.product_id = (Uint16)(0x4000 + i);
+            d.name = "D2 falso (como un RG40XX)";
+            int idx = SDL_JoystickAttachVirtualEx(&d);
+            f->js[k] = idx >= 0 ? SDL_JoystickOpen(idx) : NULL;
+            if (!f->js[k])
+                fprintf(stderr, "D2_FAKE_PAD: no pude crear el joystick virtual: %s\n", SDL_GetError());
+            f->n = k + 1;
+        }
+        float lx = f->lx + f->noise * fake_rand(), ly = f->ly + f->noise * fake_rand();
+        if (f->floating) { /* (un ADC suelto: salta a cualquier lado cada dos ticks) */
+            if (tick % 2 == 0)
+                f->fly = fake_rand();
+            ly = f->fly;
+        }
+        if (tick >= f->push0 && tick <= f->push1)
+            ly = 1.0f;
+        for (int k = 0; k < f->n; k++) {
+            if (!f->js[k])
+                continue;
+            SDL_JoystickSetVirtualAxis(f->js[k], SDL_CONTROLLER_AXIS_LEFTX, fake_axis(lx));
+            SDL_JoystickSetVirtualAxis(f->js[k], SDL_CONTROLLER_AXIS_LEFTY, fake_axis(ly));
+            SDL_JoystickSetVirtualButton(f->js[k], SDL_CONTROLLER_BUTTON_A, tick == f->a_at);
+            SDL_JoystickSetVirtualButton(f->js[k], SDL_CONTROLLER_BUTTON_DPAD_DOWN, f->stuck || tick == f->down_at);
+        }
+    }
+    return 1;
+}
+#else
+int input_fake_pads(int tick)
+{
+    (void)tick;
+    return 0;
+}
+#endif
 
 static void normalize(PlayerInput *p)
 {
@@ -550,29 +780,65 @@ void input_poll(InputState *in)
     if (k[SDL_SCANCODE_DOWN])  p2->move_y += 1.0f;
 
     /* Joysticks: el stick (caminar) y correr se miran en cada tick */
+    mirror_settle();
     for (int i = 0; i < MAX_PADS; i++) {
         Pad *pd = &s_pads[i];
         if (!pd->pad)
             continue;
-        int active = pad_active(pd->pad);
-        if (SDL_GetTicks() - pd->opened_at < GRACE_MS && (active & pd->armed)) {
+        int active = pad_active(pd);
+        Uint32 now = now_ms();
+        if (now - pd->opened_at < GRACE_MS && (active & pd->armed)) {
             pd->armed &= ~active; /* apareció apenas se conectó: como si ya estuviera apretado */
             pd->stuck = 1;
         }
-        int newly = ~active & ~pd->armed & ARM_ALL;
+        int newly = ~active & ~pd->armed & ARM_ALL & ~ARM_STICK;
+        /* El stick cuenta recién quieto CALM_MS (variando menos de STEADY) a menos de CENTER_MAX del medio, y ese
+           lugar pasa a ser su medio (las palancas de ADC de las portátiles, como las Anbernic H700, no dan 0). Uno
+           que flota (un modelo sin palanca) nunca queda quieto: no cuenta. Después, el medio sigue de a poco lo que
+           dé quieto (se corren con el tiempo). */
+        float lx = axis(pd->pad, SDL_CONTROLLER_AXIS_LEFTX), ly = axis(pd->pad, SDL_CONTROLLER_AXIS_LEFTY);
+        if (!(pd->armed & ARM_STICK)) {
+            if (!pd->calm_since || fabsf(lx - pd->sx) > STEADY || fabsf(ly - pd->sy) > STEADY || fabsf(lx) > CENTER_MAX ||
+                fabsf(ly) > CENTER_MAX) {
+                pd->sx = lx;
+                pd->sy = ly;
+                pd->calm_since = now ? now : 1;
+            } else if (now - pd->calm_since >= CALM_MS) {
+                pd->cx = pd->sx;
+                pd->cy = pd->sy;
+                pd->armed |= ARM_STICK;
+                active = pad_active(pd);
+                input_log("joystick %d: el stick quedó quieto en (%.2f, %.2f): ese es su medio, ya cuenta", i + 1, pd->cx, pd->cy);
+            }
+        } else if (!(active & ARM_STICK) && fabsf(lx) <= CENTER_MAX && fabsf(ly) <= CENTER_MAX) {
+            pd->cx += (lx - pd->cx) * 0.02f;
+            pd->cy += (ly - pd->cy) * 0.02f;
+        }
         for (int bit = 1; bit <= ARM_RB; bit <<= 1)
             if (newly & bit)
                 input_log("joystick %d: %s se soltó: ya cuenta", i + 1, arm_name(bit));
         pd->armed |= newly;
         int use = active & pd->armed;
-        if (use)
+        if ((use & ARM_STICK) && !pd->mirror) { /* (un eco que mueve el stick igual que su par) */
+            for (int k = 0; k < MAX_PADS; k++) {
+                const Pad *o = &s_pads[k];
+                if (k == i || !o->pad || strcmp(o->guid, pd->guid) != 0 || !(o->armed & ARM_STICK))
+                    continue;
+                if (fabsf(axis(o->pad, SDL_CONTROLLER_AXIS_LEFTX) - axis(pd->pad, SDL_CONTROLLER_AXIS_LEFTX)) < 0.02f &&
+                    fabsf(axis(o->pad, SDL_CONTROLLER_AXIS_LEFTY) - axis(pd->pad, SDL_CONTROLLER_AXIS_LEFTY)) < 0.02f) {
+                    pd->last_ms[CODE_STICK + 2] = now;
+                    mirror_check(k, CODE_STICK + 2);
+                }
+            }
+        }
+        if (use && !pd->mirror)
             join(i);
-        if (pd->player < 0)
+        if (pd->player < 0 || pd->mirror)
             continue;
         PlayerInput *p = &in->player[pd->player];
         if (use & ARM_STICK) {
-            p->move_x += axis(pd->pad, SDL_CONTROLLER_AXIS_LEFTX);
-            p->move_y += axis(pd->pad, SDL_CONTROLLER_AXIS_LEFTY);
+            p->move_x += stick(pd, SDL_CONTROLLER_AXIS_LEFTX);
+            p->move_y += stick(pd, SDL_CONTROLLER_AXIS_LEFTY);
         }
         if (use & ARM_RT) /* R2 */
             p->sprint = 1;
