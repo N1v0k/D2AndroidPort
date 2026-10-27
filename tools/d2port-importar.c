@@ -207,10 +207,15 @@ static int load_list(const char *file)
 
 /* ---- Dónde está cada cosa ---- */
 
+/* La carpeta del juego: con .build.info (el del Battle.net) o con data/.build.config (la edición de Steam,
+   un almacenamiento CASC "estático" que CascLib también abre) */
 static int is_game_dir(const char *dir)
 {
     char p[1024];
     join(p, sizeof p, dir, ".build.info");
+    if (exists(p))
+        return 1;
+    join(p, sizeof p, dir, "data/.build.config");
     return exists(p);
 }
 
@@ -577,6 +582,9 @@ int main(int argc, char **argv)
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
 #endif
+#ifdef __ANDROID__
+    setvbuf(stdout, NULL, _IOLBF, 0); /* (en Android lo corre la app y lee lo que dice renglón por renglón) */
+#endif
     char lang[8] = "", game[1024] = "", dest[1024] = "", pkg[1024];
     int pause = 1, movies = 1;
     for (int i = 1; i < argc; i++) {
@@ -620,7 +628,8 @@ int main(int argc, char **argv)
         printf(T("Diablo II: Resurrected encontrado en: %s\n", "Found Diablo II: Resurrected in: %s\n"), game);
     while (!is_game_dir(game)) {
         if (game[0])
-            printf(T("No está el juego en \"%s\" (falta .build.info).\n", "The game is not in \"%s\" (no .build.info).\n"), game);
+            printf(T("No está el juego en \"%s\" (falta .build.info o data/.build.config).\n",
+                     "The game is not in \"%s\" (no .build.info or data/.build.config).\n"), game);
         ask(T("Carpeta de Diablo II: Resurrected (podés arrastrarla acá): ",
               "Diablo II: Resurrected folder (you can drag it here): "),
             game, sizeof game);

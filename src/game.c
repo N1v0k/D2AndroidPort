@@ -39,12 +39,13 @@
 #include <malloc.h> /* malloc_trim: devolverle al sistema lo que liberó una zona */
 #endif
 
-/* Caminar a 5 subtiles por segundo equivale a la WalkVelocity 6 de
-   charstats.txt; correr se escala igual (RunVelocity 9 = 1,5 veces). */
-#define SPEED_PER_VELOCITY (5.0f / 6.0f)
-#define WALK_BONUS         1.10f /* más ágil que el original: caminando un 10% más rápido */
-#define RUN_BONUS          1.20f /* y corriendo un 20% */
-#define RUN_ANIM_PACE      0.75f /* las piernas al correr, un 25% más lentas (si no, parece un error) */
+/* WalkVelocity y RunVelocity de charstats.txt -> subtiles por segundo, como el original (UNIT_VEL_PER_SEC, missiles.h:
+   caminar 9,4 y correr 14,1). Los BONUS y el paso de las piernas quedan en 1: la velocidad y las piernas, las del
+   original (con 5/6 por unidad el personaje iba casi a la mitad, y se apuraba un 10-20 % y se frenaban las piernas). */
+#define SPEED_PER_VELOCITY UNIT_VEL_PER_SEC
+#define WALK_BONUS         1.0f
+#define RUN_BONUS          1.0f
+#define RUN_ANIM_PACE      1.0f
 #define PLAYER_RADIUS      0.3f
 #define PI_F               3.14159265f
 
@@ -524,6 +525,11 @@ enum { SHOP_ARMOR, SHOP_WEAPONS, SHOP_MISC, SHOP_SELL, SHOP_TABS };
 #define ORB_SIZE     80
 #define SKILL_SIZE   48
 #define BELT_STEP    31
+#define HUD_OX       ((SCREEN_W - SCREEN_W_BASE) / 2) /* con un jugador la barra es de 800: en pantalla ancha, al medio */
+/* Con un solo jugador en esta máquina, los paneles (inventario, árbol, tienda, arcón) van en esos 800 del medio, como
+   en 800 x 600: en pantalla ancha los costados quedan para ver el mundo y para los controles táctiles */
+#define UI_X0        HUD_OX
+#define UI_X1        (HUD_OX + SCREEN_W_BASE)
 #define STRIP_FROM   103 /* con dos jugadores, lo que se usa de la barra del medio */
 #define STRIP_TO     381
 
@@ -568,6 +574,9 @@ static Player    s_pl[MAX_PLAYERS];
    pantalla partida). Sin red son los primeros de la partida; en red, los que le tocan */
 static int  s_local[MAX_LOCAL] = { 0, 1 };
 static int  s_num_local = 1;
+/* La última fila de la pantalla donde se ve el mundo: en 800 x 600 la barra de control tapa las 48 de abajo; en
+   pantalla ancha (un jugador) la barra va al medio y a sus costados se ve el mundo hasta abajo */
+#define WORLD_BOTTOM (s_num_local == 1 && HUD_OX > 0 ? SCREEN_H - 1 : SCREEN_H - 49)
 /* Lo que define dónde van los paneles de cada jugador, igual en todas las máquinas de una partida en red: cuántos
    juegan en su máquina (1 o 2), su lugar en ella y, con dos, si el primero está a la derecha del otro (sus paneles
    van a la derecha: lay_update) */
@@ -672,8 +681,8 @@ static const char *const k_wp_objects[] = { "WaypointOutsideAct1", "WaypointInsi
 #define TALK_LINE_TICKS (TICK_RATE * 5 / 2)
 
 /* Pausa: el menú de Start (volver al juego, volumen, guardar y salir) */
-enum { PAUSE_RESUME, PAUSE_SFX, PAUSE_MUSIC, PAUSE_RUN, PAUSE_POS, PAUSE_PERF, PAUSE_COLOR16, PAUSE_CONTROLS, PAUSE_GUIDE,
-       PAUSE_QUIT, PAUSE_COUNT };
+enum { PAUSE_RESUME, PAUSE_SFX, PAUSE_MUSIC, PAUSE_RUN, PAUSE_POS, PAUSE_PERF, PAUSE_COLOR16, PAUSE_WIDE, PAUSE_CONTROLS,
+       PAUSE_GUIDE, PAUSE_QUIT, PAUSE_COUNT };
 static int s_paused, s_pause_sel;
 /* El registro de misiones de la pausa: de qué jugador, qué acto y qué misión */
 static int      s_pause_qp, s_pause_qact, s_pause_qsel;
@@ -696,10 +705,33 @@ static void level_palette(void)
     if (pal_load_d2(pal) == 0)
         s_pal_cur = want;
 }
-static int s_always_run; /* opción: corre siempre (el gatillo hace caminar) */
+/* opción: corre siempre (el gatillo hace caminar). En Android, de entrada sí (como el original con R), con otra clave en
+   opciones.txt: las versiones de antes guardaban "correr 0" sin que nadie lo eligiera */
+#ifdef __ANDROID__
+#define RUN_KEY "correr_a"
+static int s_always_run = 1;
+#else
+#define RUN_KEY "correr"
+static int s_always_run;
+#endif
 static int s_show_pos;   /* opción: la zona y la posición en las esquinas (para avisar errores) */
 static int s_show_perf;  /* opción: cuadros por segundo y lo que tarda cada parte */
 static int s_color16 = -1; /* opción: textura de 16 bits (-1 = lo que diga D2_RGB565) */
+static int s_wide = -1;    /* opción: pantalla ancha (-1 = la de siempre: D2_WIDE, en Android sí) */
+
+/* ¿El juego llena el ancho de la pantalla? (el alto sigue en 600: se ve más a los costados) */
+static int wide_on(void)
+{
+    if (s_wide >= 0)
+        return s_wide;
+    if (getenv("D2_WIDE"))
+        return atoi(getenv("D2_WIDE")) != 0;
+#ifdef __ANDROID__
+    return 1;
+#else
+    return 0;
+#endif
+}
 static float s_perf[6];    /* fps, lógica, la peor lógica, dibujo, subida y presentación (ms) */
 
 void game_set_perf(float fps, float logic_ms, float worst_ms, float draw_ms, float upload_ms, float present_ms)
@@ -6356,7 +6388,7 @@ static void shop_rect_cb(const void *ctx, int i, int *x, int *y, int *w, int *h)
    mitad (y mientras vende se ve el inventario en su lugar) */
 static int shop_px(const Player *p)
 {
-    return lay_alone(p) ? 0 : panel_x(p);
+    return lay_alone(p) ? UI_X0 : panel_x(p);
 }
 
 /* Vendiendo, el cursor recorre las casillas de la mochila */
@@ -8804,7 +8836,7 @@ static void load_options(void)
     while (fgets(line, sizeof line, f)) {
         sscanf(line, "efectos %d", &sfx);
         sscanf(line, "musica %d", &music);
-        if (sscanf(line, "correr %d", &s_always_run) == 1)
+        if (sscanf(line, RUN_KEY " %d", &s_always_run) == 1)
             s_always_run = s_always_run != 0;
         if (sscanf(line, "posicion %d", &s_show_pos) == 1)
             s_show_pos = s_show_pos != 0;
@@ -8812,6 +8844,8 @@ static void load_options(void)
             s_show_perf = s_show_perf != 0;
         if (sscanf(line, "color16 %d", &s_color16) == 1)
             s_color16 = s_color16 != 0;
+        if (sscanf(line, "ancho %d", &s_wide) == 1)
+            s_wide = s_wide != 0;
         sscanf(line, "idioma %7s", s_lang_pref);
     }
     fclose(f);
@@ -8827,13 +8861,27 @@ static void save_options(void)
         return;
     int sfx, music;
     audio_get_volume(&sfx, &music);
-    fprintf(f, "efectos %d\nmusica %d\ncorrer %d\nposicion %d\nrendimiento %d\n", sfx, music, s_always_run, s_show_pos,
+    fprintf(f, "efectos %d\nmusica %d\n" RUN_KEY " %d\nposicion %d\nrendimiento %d\n", sfx, music, s_always_run, s_show_pos,
             s_show_perf);
     if (s_color16 >= 0)
         fprintf(f, "color16 %d\n", s_color16);
+    if (s_wide >= 0)
+        fprintf(f, "ancho %d\n", s_wide);
     if (s_lang_pref[0])
         fprintf(f, "idioma %s\n", s_lang_pref);
     fclose(f);
+}
+
+/* Correr siempre: la opción de la pausa, también desde el botón RUN de los controles táctiles */
+int game_always_run(void)
+{
+    return s_always_run;
+}
+
+void game_toggle_always_run(void)
+{
+    s_always_run = !s_always_run;
+    save_options();
 }
 
 void game_set_language(const char *code)
@@ -13362,6 +13410,12 @@ static int pause_tick(const InputState *in)
             save_options();
             return 1;
         }
+        if (s_pause_sel == PAUSE_WIDE && (change || in->confirm)) {
+            s_wide = !wide_on();
+            audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
+            save_options();
+            return 1;
+        }
         if (s_pause_sel == PAUSE_RUN && (change || in->confirm)) {
             s_always_run = !s_always_run;
             audio_play_name("cursor_button_click", AUDIO_NOPOS, AUDIO_NOPOS);
@@ -13453,7 +13507,12 @@ int game_tick(const InputState *in)
             pi = in->player[i];
             pi.always_run = s_always_run;
         }
+#ifdef D2_STICK_AIM /* (Android: lo que ataca o lanza va hacia donde empuja el stick, units_set_aim) */
+        if (pi.move_x * pi.move_x + pi.move_y * pi.move_y > 0.09f)
+            units_set_aim(s_pl[i].x, s_pl[i].y, pi.move_x, pi.move_y);
+#endif
         player_tick(&s_pl[i], pi.move_x, pi.move_y, pi.sprint, &pi);
+        units_clear_aim();
     }
 
     /* Los monstruos actúan y después se aplica el daño que hicieron */
@@ -14314,7 +14373,7 @@ static void draw_wall_tile(const Dt1Tile *t, int sx, int sy)
    un rombo, así que primero se acotan las filas y después las columnas. */
 /* Lo que se ve: el rectángulo del recorte (con la pantalla partida, el de
    cada mitad), así cada mitad recorre solo sus tiles */
-static int s_vis_x0, s_vis_y0, s_vis_x1 = SCREEN_W - 1, s_vis_y1 = SCREEN_H - 1;
+static int s_vis_x0, s_vis_y0, s_vis_x1 = SCREEN_W_BASE - 1, s_vis_y1 = SCREEN_H - 1;
 
 /* Filas del mapa con algún tile que puede caer en ese rectángulo: el tile
    (tx, ty) está en y = (tx + ty) * TILE_H / 2 + oy, con tx entre 0 y el ancho */
@@ -14837,8 +14896,8 @@ static void draw_banners(void)
         const Player *p = &s_pl[s_local[0]];
         int shop = p->dialog_npc >= 0 && p->shop_open;
         int right = shop || p->inv_open || p->wp_open, left = shop || stash_side(p);
-        int cx = left ? SCREEN_W / 2 : right ? (SCREEN_W - PANEL_W) / 2 : SCREEN_W / 2;
-        int w = left && right ? SCREEN_W - 2 * PANEL_W - 8 : right ? SCREEN_W - PANEL_W - 20 : SCREEN_W - 40;
+        int cx = left ? SCREEN_W / 2 : right ? (UI_X0 + UI_X1 - PANEL_W) / 2 : SCREEN_W / 2;
+        int w = left && right ? SCREEN_W_BASE - 2 * PANEL_W - 8 : right ? SCREEN_W_BASE - PANEL_W - 20 : SCREEN_W - 40;
         draw_player_banners(p, cx, y, w);
         return;
     }
@@ -15079,15 +15138,15 @@ static void lay_update(void)
 
 static int panel_x(const Player *p)
 {
-    return lay_right(p) ? SCREEN_W - PANEL_W : 0;
+    return lay_right(p) ? (lay_alone(p) ? UI_X1 : SCREEN_W) - PANEL_W : 0;
 }
 
-/* Mitad de la pantalla de ese jugador (con uno solo, toda) */
+/* Mitad de la pantalla de ese jugador (con uno solo, toda: los 800 del medio, donde van sus paneles) */
 static void half_range(const Player *p, int *x0, int *x1)
 {
     int right = lay_right(p), alone = lay_alone(p);
-    *x0 = alone || !right ? 0 : SCREEN_W / 2;
-    *x1 = alone || right ? SCREEN_W : SCREEN_W / 2;
+    *x0 = alone ? UI_X0 : !right ? 0 : SCREEN_W / 2;
+    *x1 = alone ? UI_X1 : right ? SCREEN_W : SCREEN_W / 2;
 }
 
 /* El arcón (el cofre del pueblo) con un solo jugador va en su propio panel a
@@ -15103,7 +15162,7 @@ static int stash_side(const Player *p)
 
 static int stash_px(const Player *p)
 {
-    return stash_side(p) ? 0 : panel_x(p);
+    return stash_side(p) ? UI_X0 : panel_x(p);
 }
 
 /* Cartel arriba del panel: nombre y botones */
@@ -15526,7 +15585,7 @@ static const int k_slot_rect[SLOT_COUNT][4] = {
 static int belt_x(const Player *p)
 {
     if (lay_alone(p))
-        return 422;
+        return HUD_OX + 422;
     int right = s_lay_slot[player_index(p)] == 1; /* (la barra de abajo no cambia de lado) */
     int strip = right ? SCREEN_W - 117 - (STRIP_TO - STRIP_FROM) : 117;
     return strip - STRIP_FROM + 257;
@@ -16159,7 +16218,7 @@ static void preload_ui(void)
 static void generic_box(const Player *p, int *bx, int *by)
 {
     int px = panel_x(p);
-    *bx = px == 0 ? PANEL_W + 6 : px - 66;
+    *bx = px < SCREEN_W / 2 ? px + PANEL_W + 6 : px - 66;
     *by = PANEL_Y + 14;
 }
 
@@ -16779,6 +16838,64 @@ static void draw_button(const Player *p, int b, int x, int y, int size)
     font_draw(x + 3, y + size - 11, k_button_names[b], 2, COL(k_button_ramp[b], 15));
 }
 
+/* Para los controles táctiles (touch.c): el ícono del botón b del jugador 1 de esta máquina en ARGB, oscuro si no
+   alcanza el maná o el arma no sirve, con la demora oscureciendo de arriba hacia abajo como en draw_button */
+static Uint32 s_render_ms;
+
+int game_button_icon(int b, uint32_t *argb, int size)
+{
+    int k = game_local_player(0);
+    if (b < 0 || b >= NUM_BUTTONS || k < 0 || k >= s_num_players || size <= 0 || !s_render_ms ||
+        SDL_GetTicks() - s_render_ms > 500)
+        return 0;
+    const Player *p = &s_pl[k];
+    int what = p->buttons[b], set, frame, dim = 0, cd = 0, full = 0;
+    if (what == BTN_ATTACK) {
+        set = ICONS_GENERIC;
+        frame = ICON_ATTACK;
+    } else if (what == BTN_THROW) {
+        set = ICONS_GENERIC;
+        frame = ICON_THROW;
+        dim = !items_can_throw(p->equip[SLOT_WEAPON].type);
+    } else if (what >= 0) {
+        const SkillDef *s = skills_get(p->cls, what);
+        set = p->cls;
+        frame = s->icon;
+        dim = !(s->aura || (p->mana >= skill_mana(s, p->skill_lvl[what]) && weapon_allows(p, s)));
+        cd = p->skill_cd[what];
+        full = s->delay;
+        if (s->gdelay > 0 && p->global_cd > cd)
+            cd = p->global_cd, full = s->gdelay;
+    } else {
+        return 0;
+    }
+    const Sprite *sp = skill_icons(set);
+    if (!sp || frame < 0 || frame >= sp->frames_per_dir * sp->directions)
+        return 0;
+    const SpriteFrame *f = &sp->frames[frame];
+    if (f->width <= 0 || f->height <= 0)
+        return 0;
+    int shade = cd > 0 && full > 0 ? size * cd / full : 0;
+    for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++) {
+            uint8_t c = f->pixels[(y * f->height / size) * f->width + x * f->width / size];
+            uint32_t v = c ? (g_fb.pal[c] & 0xffffffu) : 0;
+            if (c && (dim || y < shade))
+                v = (v >> 1) & 0x7f7f7fu;
+            argb[y * size + x] = c ? 0xff000000u | v : 0;
+        }
+    return 1;
+}
+
+int game_panel_open(void)
+{
+    int k = game_local_player(0);
+    if (k < 0 || k >= s_num_players || !s_render_ms || SDL_GetTicks() - s_render_ms > 500)
+        return 0;
+    const Player *p = &s_pl[k];
+    return s_paused || p->inv_open || p->wp_open || p->dialog_npc >= 0 || p->chat_open || p->reading;
+}
+
 /* Barra de estamina (amarilla; roja y titilando si se agotó) y la de
    experiencia arriba, como en el original */
 static void draw_stamina_exp(const Player *p, int sx, int sy, int ex, int ey)
@@ -16877,32 +16994,33 @@ static void draw_value(int cx, int y, int value, int max)
    derecha; A y B en los huecos, X e Y encima de ellos. */
 static void draw_hud_single(const Player *p)
 {
-    fb_fill_rect(0, SCREEN_H - 48, SCREEN_W, 48, COL(R_GRAY, 0));
-    ui_frame(CTRL_PANEL, 0, 0, PANEL_TOP);
-    ui_frame(CTRL_PANEL, 1, 165, MIDDLE_TOP);
-    ui_frame(CTRL_PANEL, 2, 293, MIDDLE_TOP);
-    ui_frame(CTRL_PANEL, 3, 421, MIDDLE_TOP);
-    ui_frame(CTRL_PANEL, 4, 549, MIDDLE_TOP);
-    ui_frame(CTRL_PANEL, 5, 683, PANEL_TOP);
+    const int ox = HUD_OX;
+    fb_fill_rect(ox, SCREEN_H - 48, SCREEN_W_BASE, 48, COL(R_GRAY, 0)); /* (debajo de la barra; a los costados, el mundo) */
+    ui_frame(CTRL_PANEL, 0, ox + 0, PANEL_TOP);
+    ui_frame(CTRL_PANEL, 1, ox + 165, MIDDLE_TOP);
+    ui_frame(CTRL_PANEL, 2, ox + 293, MIDDLE_TOP);
+    ui_frame(CTRL_PANEL, 3, ox + 421, MIDDLE_TOP);
+    ui_frame(CTRL_PANEL, 4, ox + 549, MIDDLE_TOP);
+    ui_frame(CTRL_PANEL, 5, ox + 683, PANEL_TOP);
 
-    draw_orb(p->poison_ticks > 0 ? 2 : 0, 29, PANEL_TOP + 11, (float)p->hp / p->hp_max, 0);
-    ui_frame("panel/overlap", 0, 28, PANEL_TOP + 11);
-    draw_orb(1, 689, PANEL_TOP + 11, p->mana_max > 0 ? (float)p->mana / p->mana_max : 0.0f, 0);
-    ui_frame("panel/overlap", 1, 690, PANEL_TOP + 7);
+    draw_orb(p->poison_ticks > 0 ? 2 : 0, ox + 29, PANEL_TOP + 11, (float)p->hp / p->hp_max, 0);
+    ui_frame("panel/overlap", 0, ox + 28, PANEL_TOP + 11);
+    draw_orb(1, ox + 689, PANEL_TOP + 11, p->mana_max > 0 ? (float)p->mana / p->mana_max : 0.0f, 0);
+    ui_frame("panel/overlap", 1, ox + 690, PANEL_TOP + 7);
 
-    draw_stamina_exp(p, 273, PANEL_TOP + 77, 256, PANEL_TOP + 65);
-    ui_frame("panel/runbutton", p->running ? 2 : 0, 255, PANEL_TOP + 74);
-    ui_frame("panel/menubutton", 0, 392, PANEL_TOP + 64);
-    draw_belt_slots(p, 422, PANEL_TOP + 64);
-    draw_skill_up(p, 563, PANEL_TOP + 66);
+    draw_stamina_exp(p, ox + 273, PANEL_TOP + 77, ox + 256, PANEL_TOP + 65);
+    ui_frame("panel/runbutton", p->running ? 2 : 0, ox + 255, PANEL_TOP + 74);
+    ui_frame("panel/menubutton", 0, ox + 392, PANEL_TOP + 64);
+    draw_belt_slots(p, ox + 422, PANEL_TOP + 64);
+    draw_skill_up(p, ox + 563, PANEL_TOP + 66);
     if (p->stat_points > 0)
-        ui_frame("panel/level", (s_ticks / 10) % 2, 206, PANEL_TOP + 66);
+        ui_frame("panel/level", (s_ticks / 10) % 2, ox + 206, PANEL_TOP + 66);
 
-    draw_button(p, 0, 117, PANEL_TOP + 56, SKILL_SIZE);
-    draw_button(p, 2, 117, PANEL_TOP + 4, SKILL_SIZE);
-    draw_button(p, 1, 635, PANEL_TOP + 56, SKILL_SIZE);
-    draw_button(p, 3, 635, PANEL_TOP + 4, SKILL_SIZE);
-    draw_pet_bar(p, 117, PANEL_TOP + 2 - PET_ROW, 0); /* arriba de X y A */
+    draw_button(p, 0, ox + 117, PANEL_TOP + 56, SKILL_SIZE);
+    draw_button(p, 2, ox + 117, PANEL_TOP + 4, SKILL_SIZE);
+    draw_button(p, 1, ox + 635, PANEL_TOP + 56, SKILL_SIZE);
+    draw_button(p, 3, ox + 635, PANEL_TOP + 4, SKILL_SIZE);
+    draw_pet_bar(p, ox + 117, PANEL_TOP + 2 - PET_ROW, 0); /* arriba de X y A */
 }
 
 /* Dos jugadores: cada mitad lleva su estatua con un orbe partido (vida a la
@@ -17409,8 +17527,8 @@ static void draw_orb_numbers(void)
 {
     if (s_num_local == 1) {
         const Player *p = &s_pl[s_local[0]];
-        draw_value(69, PANEL_TOP - 16, p->hp, p->hp_max);
-        draw_value(729, PANEL_TOP - 16, p->mana, p->mana_max);
+        draw_value(HUD_OX + 69, PANEL_TOP - 16, p->hp, p->hp_max);
+        draw_value(HUD_OX + 729, PANEL_TOP - 16, p->mana, p->mana_max);
         return;
     }
     for (int right = 0; right < 2; right++) {
@@ -17879,7 +17997,7 @@ static void draw_darkness_body(float cam_x, float cam_y, const float *sx, const 
         lr[n] = orad[k] * LIGHT_PX_PER_UNIT;
         n++;
     }
-    fb_light_mask(lx, ly, lr, n, SCREEN_H - 49);
+    fb_light_mask(lx, ly, lr, n, WORLD_BOTTOM);
 }
 
 static void draw_darkness(float cam_x, float cam_y, const float *sx, const float *sy, int owner)
@@ -18128,8 +18246,8 @@ static void draw_pause(void)
     static const char *const k_labels[PAUSE_COUNT] = {
         [PAUSE_RESUME] = "VOLVER AL JUEGO", [PAUSE_SFX] = "EFECTOS",         [PAUSE_MUSIC] = "MÚSICA",
         [PAUSE_RUN] = "CORRER SIEMPRE",     [PAUSE_POS] = "VER POSICIÓN",    [PAUSE_PERF] = "RENDIMIENTO",
-        [PAUSE_COLOR16] = "COLOR 16 BITS",  [PAUSE_CONTROLS] = "CONTROLES",  [PAUSE_GUIDE] = "GUÍA DEL CUBO",
-        [PAUSE_QUIT] = "GUARDAR Y SALIR",
+        [PAUSE_COLOR16] = "COLOR 16 BITS",  [PAUSE_WIDE] = "PANTALLA ANCHA", [PAUSE_CONTROLS] = "CONTROLES",
+        [PAUSE_GUIDE] = "GUÍA DEL CUBO",    [PAUSE_QUIT] = "GUARDAR Y SALIR",
     };
     char values[PAUSE_COUNT][16] = { { 0 } };
     snprintf(values[PAUSE_SFX], sizeof values[0], "< %d >", sfx);
@@ -18138,10 +18256,11 @@ static void draw_pause(void)
     snprintf(values[PAUSE_POS], sizeof values[0], "< %s >", s_show_pos ? tr("SÍ") : tr("NO"));
     snprintf(values[PAUSE_PERF], sizeof values[0], "< %s >", s_show_perf ? tr("SÍ") : tr("NO"));
     snprintf(values[PAUSE_COLOR16], sizeof values[0], "< %s >", (s_color16 < 0 ? video_is_565() : s_color16) ? tr("SÍ") : tr("NO"));
+    snprintf(values[PAUSE_WIDE], sizeof values[0], "< %s >", wide_on() ? tr("SÍ") : tr("NO"));
     fb_shade_rect(0, 0, SCREEN_W, SCREEN_H, 6);
 
     const Player *qp = &s_pl[s_local[s_pause_qp < s_num_local ? s_pause_qp : 0]];
-    int qx = 28, qy = 84, act = s_pause_qact, sel = s_pause_qsel;
+    int qx = UI_X0 + 28, qy = 84, act = s_pause_qact, sel = s_pause_qsel;
     if (act <= 0) /* recién abierta (antes del primer tick) */
         quest_log_pick(qp, &act, &sel);
     char title[64];
@@ -18152,7 +18271,7 @@ static void draw_pause(void)
     font_draw_centered(qx + PANEL_W / 2, qy - 26, title, 2, COL(R_GOLD, 15));
     draw_quest_log(qp, qx, qy, act, sel, s_pause_qanim, "LB / RB: otra misión", s_num_local > 1 ? "X: el otro jugador" : NULL);
 
-    int ox = qx + PANEL_W + 24, ow = SCREEN_W - 28 - ox, oy = qy;
+    int ox = qx + PANEL_W + 24, ow = UI_X1 - 28 - ox, oy = qy;
     ui_dark_box(ox, oy, ow, PANEL_H);
     font_draw_centered(ox + ow / 2, oy + 12, "PAUSA", 6, COL(R_GOLD, 15));
     char diff[48], tz[192];
@@ -18165,7 +18284,7 @@ static void draw_pause(void)
         font_draw_centered(ox + ow / 2, oy + 61, tz, 1, s_eco ? COL(R_RED, 14) : g_text_shift[11][COL(R_GRAY, 15)]);
     const char *quit_label = eco_running() ? "TERMINAR EL ECO" : k_labels[PAUSE_QUIT];
     for (int i = 0; i < PAUSE_COUNT; i++) {
-        int y = oy + 76 + i * 33, chosen = i == s_pause_sel;
+        int y = oy + 76 + i * 30, chosen = i == s_pause_sel;
         uint8_t c = chosen ? COL(R_GOLD, 15) : COL(R_GRAY, 13);
         /* (en los idiomas de palabras largas, si no entra antes del valor, más chico) */
         int room = ow - 18 - 52 - (values[i][0] ? font_width(values[i], 3) + 10 : 0);
@@ -18294,6 +18413,10 @@ static void render_frame(float alpha)
 
 void game_render(float alpha)
 {
+    /* Pantalla ancha: el cuadro del ancho de la ventana (las pantallas de la pausa que la llenan, la ayuda de los
+       controles y la guía del cubo, no: están hechas para 800) */
+    video_set_width(wide_on() && !(s_paused && (s_controls_open || s_guide_open)) ? video_fill_width() : SCREEN_W_BASE);
+    s_render_ms = SDL_GetTicks();
     double t0 = wall_ms();
     render_frame(alpha);
     s_part_ms[3] += wall_ms() - t0;

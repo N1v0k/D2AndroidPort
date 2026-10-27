@@ -1,0 +1,2 @@
+# The launcher icons are ours (the top .gitignore leaves out *.png: screenshots of the game)
+!*.png

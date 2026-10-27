@@ -17,9 +17,8 @@
 #define MAX_MISSILES 768
 #define PI_F         3.14159265f
 
-/* Velocidad de missiles.txt -> subtiles por tick (la misma escala que la
-   de los personajes: velocidad * 5/6 subtiles por segundo) */
-#define SPEED_SCALE (5.0f / 6.0f / TICK_RATE)
+/* Velocidad de missiles.txt -> subtiles por tick (la del original: MISSILE_VEL_PER_SEC, missiles.h) */
+#define SPEED_SCALE (MISSILE_VEL_PER_SEC / TICK_RATE)
 /* Accel y MaxVel están en las unidades del camino del original (PATH): Vel
    pasa a (Vel << 8) al 75%, o sea 192 por unidad de Vel, y MaxVel a
    MaxVel << 8 (sin el 75%) */

@@ -13,4 +13,11 @@ FILE *compat_tmpfile(void);                             /* para leer y escribir,
    consola (doble clic), lo que escribe va a d2port.log, como en la Pi */
 void compat_start(void);
 
+/* Volver a arrancar el juego (otro idioma): en Android lo hace la actividad (0 = quedó pedido); en el resto,
+   -1 y el juego se vuelve a ejecutar solo */
+int compat_restart(void);
+
+/* Android: si faltan los archivos del juego, un cartel con dónde copiarlos (-1); 0 si están (o no es Android) */
+int compat_check_data(void);
+
 #endif

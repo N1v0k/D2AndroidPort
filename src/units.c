@@ -32,13 +32,13 @@
 #define PI_F        3.14159265f
 #define UNIT_RADIUS 0.45f /* tamaño de un NPC, animal o monstruo, en subtiles */
 
-/* Velocidad de monstats.txt -> subtiles por segundo (misma escala que los jugadores) */
-#define SPEED_PER_VELOCITY (5.0f / 6.0f)
-/* Como los jugadores (WALK_BONUS y RUN_BONUS de game.c), más ágiles que en el
-   original: caminando un 10% y corriendo un 20% más rápido, y la animación al
-   mismo paso (el original la ata a la velocidad: UNITS_UpdateRunWalkAnimRateAndVelocity) */
-#define MON_WALK_BONUS 1.10f
-#define MON_RUN_BONUS  1.20f
+/* Velocidad de monstats.txt -> subtiles por segundo (misma escala que los jugadores: la del original,
+   UNIT_VEL_PER_SEC en missiles.h) */
+#define SPEED_PER_VELOCITY UNIT_VEL_PER_SEC
+/* Como los jugadores (WALK_BONUS y RUN_BONUS de game.c): en 1, la velocidad del original, y la animación al mismo
+   paso (el original la ata a la velocidad: UNITS_UpdateRunWalkAnimRateAndVelocity) */
+#define MON_WALK_BONUS 1.0f
+#define MON_RUN_BONUS  1.0f
 /* Las invocaciones corren un 40% más rápido de lo que caminan */
 #define PET_RUN_PACE (1.4f * MON_RUN_BONUS / MON_WALK_BONUS)
 
@@ -3601,7 +3601,7 @@ static int nearest_player_seen(const Unit *u, const UnitTarget *pl, int n, float
             continue;
         float sx, sy;
         iso_to_screen(pl[i].x - u->x, pl[i].y - u->y, &sx, &sy);
-        if (fabsf(sx) > SCREEN_W * 0.5f * scale || fabsf(sy) > SCREEN_H * 0.5f * scale)
+        if (fabsf(sx) > SIM_W * 0.5f * scale || fabsf(sy) > SIM_H * 0.5f * scale)
             continue;
         float dx = pl[i].x - u->x, dy = pl[i].y - u->y, d = sqrtf(dx * dx + dy * dy) - pl[i].body;
         if (d < best_d) {
@@ -6196,10 +6196,48 @@ int units_find(const char *name, float *x, float *y)
     return -1;
 }
 
+/* Apuntar con el stick (los controles de Android, como el control de D2R): mientras un jugador usa sus botones,
+   lo que busca un enemigo desde donde está él prefiere el que queda hacia donde empuja el stick (un cono de ±40°
+   en pantalla); si no hay ninguno en el cono, el más cercano de siempre. Lo arma game.c con lo que viaja en los
+   controles (move_x, move_y), así da igual en todas las máquinas. */
+static int   s_aim_on;
+static float s_aim_x, s_aim_y, s_aim_sx, s_aim_sy;
+#define AIM_CONE_COS 0.766f /* cos 40° */
+
+void units_set_aim(float x, float y, float sx, float sy)
+{
+    float l = sqrtf(sx * sx + sy * sy);
+    s_aim_on = l > 0.0f;
+    if (!s_aim_on)
+        return;
+    s_aim_x = x;
+    s_aim_y = y;
+    s_aim_sx = sx / l;
+    s_aim_sy = sy / l;
+}
+
+void units_clear_aim(void)
+{
+    s_aim_on = 0;
+}
+
+/* ¿Vale el cono para una búsqueda desde (x, y)? Y si vale, ¿el monstruo está adentro? (el desplazamiento del
+   mundo pasado a pantalla, como face_unit) */
+static int aim_applies(float x, float y)
+{
+    return s_aim_on && x == s_aim_x && y == s_aim_y;
+}
+
+static int aim_inside(float x, float y, const Unit *u)
+{
+    float dx = u->x - x, dy = u->y - y, px = dx - dy, py = (dx + dy) * 0.5f, l = sqrtf(px * px + py * py);
+    return l < 0.0001f || px * s_aim_sx + py * s_aim_sy >= AIM_CONE_COS * l;
+}
+
 int units_find_enemy(float x, float y, float range)
 {
-    int best = -1, c[GRID_CANDS];
-    float best_d = range * range, h = fabsf(range) + UNIT_RADIUS_MAX - UNIT_RADIUS + GRID_SLACK;
+    int best = -1, best_aim = -1, c[GRID_CANDS], aim = aim_applies(x, y);
+    float best_d = range * range, best_ad = range * range, h = fabsf(range) + UNIT_RADIUS_MAX - UNIT_RADIUS + GRID_SLACK;
     int nc = grid_box(x - h, y - h, x + h, y + h, c);
     for (int k = 0; k < (nc >= 0 ? nc : s_num_units); k++) {
         int i = nc >= 0 ? c[k] : k;
@@ -6212,8 +6250,12 @@ int units_find_enemy(float x, float y, float range)
             best_d = d;
             best = i;
         }
+        if (aim && d < best_ad && aim_inside(x, y, u)) {
+            best_ad = d;
+            best_aim = i;
+        }
     }
-    return best;
+    return best_aim >= 0 ? best_aim : best;
 }
 
 int units_find_enemy_path(const int (*cells)[2], int n, int msize, const int *skip, int nskip)
@@ -6263,8 +6305,8 @@ int units_foot(int i)
 
 int units_find_melee(float x, float y, float range)
 {
-    int best = -1;
-    float best_d = 1e30f;
+    int best = -1, best_aim = -1, aim = aim_applies(x, y);
+    float best_d = 1e30f, best_ad = 1e30f;
     for (int i = 0; i < s_num_units; i++) {
         const Unit *u = &s_units[i];
         if (!u->enemy || u->state >= ST_DYING || u->hidden || !u->killable)
@@ -6274,8 +6316,12 @@ int units_find_melee(float x, float y, float range)
             best_d = d;
             best = i;
         }
+        if (aim && d < range + u->melee_bonus && d < best_ad && aim_inside(x, y, u)) {
+            best_ad = d;
+            best_aim = i;
+        }
     }
-    return best;
+    return best_aim >= 0 ? best_aim : best;
 }
 
 int units_find_reviver(float x, float y, float range)

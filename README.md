@@ -1,3 +1,13 @@
+# D2AndroidPort
+
+An Android (arm64) build of [d2port](https://github.com/rodrireddev/d2port), with an on-phone importer for your own
+Diablo II: Resurrected files (Battle.net or Steam), touch controls laid out like
+[D2Android](https://github.com/N1v0k/D2Android), widescreen, and the original game's walking, running, monster and
+missile speeds. Built without the Google SDK/NDK downloads: see [android/README.md](android/README.md).
+Based on d2port at `1dca36c`; everything below is d2port's own README.
+
+---
+
 # Diablo II for Raspberry Pi (Batocera) fan-made
 
 [![d2port: split screen on a Raspberry Pi](https://img.youtube.com/vi/zcsaPHeL3lw/hqdefault.jpg)](https://youtube.com/shorts/zcsaPHeL3lw)

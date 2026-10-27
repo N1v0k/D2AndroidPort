@@ -55,6 +55,7 @@ typedef struct {
     int escape;  /* tecla Esc */
     int quit;    /* cerrar la ventana o Select + Start */
     int any_press; /* se apretó una tecla, un botón del joystick o del mouse (saltear una cinemática) */
+    int suspend;   /* Android: la app pasa a segundo plano o se cierra (guardar); lo baja quien lo atiende */
 } InputState;
 
 void input_poll(InputState *in);

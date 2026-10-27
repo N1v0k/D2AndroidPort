@@ -4,12 +4,21 @@
 #include <stdint.h>
 
 /* Resolución de Lord of Destruction. Todo se dibuja en un framebuffer de
-   8 bits con paleta, igual que el juego original: es barato para la Pi 3B. */
-#define SCREEN_W 800
-#define SCREEN_H 600
+   8 bits con paleta, igual que el juego original: es barato para la Pi 3B.
+   Pantalla ancha: el cuadro del juego puede ser más ancho (el alto sigue en 600, se ve más a los costados), hasta
+   SCREEN_W_MAX; los menús siguen en 800 x 600. SCREEN_W es el ancho del cuadro de ahora (video_set_width). */
+#define SCREEN_W_BASE 800
+#define SCREEN_W_MAX  1600
+#define SCREEN_H      600
+extern int g_screen_w;
+#define SCREEN_W g_screen_w
+/* Lo que un jugador "ve" para la simulación (los monstruos que lo tienen en pantalla, el Eco): siempre 800 x 600,
+   así la pantalla ancha no cambia el juego (ni la partida en red) */
+#define SIM_W 800
+#define SIM_H 600
 
 typedef struct {
-    uint8_t  px[SCREEN_W * SCREEN_H];
+    uint8_t  px[SCREEN_W_MAX * SCREEN_H]; /* (filas de SCREEN_W) */
     uint32_t pal[256]; /* ARGB8888 */
 } Framebuffer;
 
@@ -49,6 +58,11 @@ int  video_is_565(void);
 int  video_save_bmp(const char *path);
 void video_grab_argb(uint32_t *dst); /* el cuadro de ahora en ARGB (para grabar un video) */
 void video_toggle_fullscreen(void);  /* F11 o Alt+Enter */
+/* El ancho del cuadro que se dibuja ahora (entre SCREEN_W_BASE y SCREEN_W_MAX, múltiplo de 8): antes de dibujarlo */
+void video_set_width(int w);
+int  video_fill_width(void);         /* el ancho que llena la ventana con el alto de 600 */
+void video_lock_width(int on);       /* grabando un video: siempre 800 */
+void video_device_reset(void);       /* SDL_RENDER_DEVICE_RESET: la textura del cuadro, de nuevo */
 
 /* Cinemáticas: una textura YUV 4:2:0 de w x h que se dibuja en toda la
    ventana sin deformarse (video_movie_frame con y en NULL redibuja el
@@ -101,6 +115,7 @@ void fb_frame_begin(void);
 typedef struct {
     uint8_t *px; /* de a pedazos: el píxel del mundo (wx, wy) va en (wx mod ancho, wy mod alto) */
     int      valid, wx, wy;
+    int      w;  /* el ancho de la pantalla con el que se armó (si cambia, se arma de nuevo) */
 } FbLayer;
 void fb_layer_update(FbLayer *l, int wx, int wy, int redraw, void (*draw)(void *ctx), void *ctx);
 /* Banco de pruebas: convierte el cuadro (con su oscuridad) como para la GPU; ms */

@@ -1176,6 +1176,7 @@ static void draw_lobby(void)
 
 void menu_render(void)
 {
+    video_set_width(SCREEN_W_BASE); /* (los menús son de 800 x 600; el juego elige su ancho en game_render) */
     clip_reset();
     fb_clear(0);
     switch (s_state) {

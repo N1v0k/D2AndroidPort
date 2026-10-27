@@ -13,6 +13,7 @@
 #include "map.h"
 #include "menu.h"
 #include "net.h"
+#include "touch.h"
 #include "units.h"
 #include "video.h"
 
@@ -463,6 +464,7 @@ static void video_rec_open(void)
     if (!out)
         return;
     char cmd[1200];
+    video_lock_width(1); /* (el video, de un solo tamaño: 800 x 600) */
     snprintf(cmd, sizeof cmd,
              "%s -y -loglevel error -f rawvideo -pixel_format bgra -video_size %dx%d -framerate %d -i - "
              "-c:v libx264 -preset slow -crf %d -pix_fmt yuv420p -movflags +faststart \"%s\"",
@@ -978,6 +980,11 @@ static int run_window(const Options *o)
         acc += dt;
 
         input_poll(&in);
+        if (in.suspend) { /* (Android: pasa a segundo plano o se cierra: que lo jugado quede guardado) */
+            in.suspend = 0;
+            if (state == ST_GAME)
+                game_save();
+        }
         while (acc >= tick_s && !in.quit) {
             if (state == ST_MENU) {
                 MenuResult r = menu_tick(&in);
@@ -1157,11 +1164,23 @@ static int run_window(const Options *o)
 
 int main(int argc, char **argv)
 {
-    compat_start(); /* (Windows: la carpeta del .exe y el registro) */
+    compat_start(); /* (Windows: la carpeta del .exe y el registro; Android: la carpeta de la app) */
     Options o;
     if (parse_args(argc, argv, &o) != 0)
         return 2;
     crash_handler_install();
+#ifdef __ANDROID__
+    /* El teléfono: pantalla completa y acostado; el botón de volver es Esc (la pausa); los dedos van a los
+       controles táctiles (touch.c), no al mouse; el acelerómetro no es un joystick */
+    o.fullscreen = 1;
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+    SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+    SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
+    SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
+    if (compat_check_data() != 0)
+        return 1;
+#endif
 
     Uint32 flags = o.headless ? (getenv("D2_FAKE_PAD") ? SDL_INIT_GAMECONTROLLER : 0) /* (los joysticks virtuales de las pruebas) */
                               : (SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER);
@@ -1173,6 +1192,8 @@ int main(int argc, char **argv)
         SDL_Quit();
         return 1;
     }
+    if (!o.headless)
+        touch_init(); /* (Android, o D2_TOUCH=1: los controles táctiles, un joystick virtual) */
     /* Sonido: en la ventana, la placa de sonido (D2_NOSOUND lo apaga); sin
        ventana solo si se graba con D2_AUDIO_DUMP */
     audio_init(o.headless ? (getenv("D2_AUDIO_DUMP") ? AUDIO_MANUAL : AUDIO_OFF)
@@ -1233,8 +1254,11 @@ int main(int argc, char **argv)
     jobs_wait(3000); /* que nadie esté decodificando lo que se libera */
     audio_shutdown();
     input_shutdown();
+    touch_shutdown();
     video_shutdown();
     SDL_Quit();
+    if (s_restart && compat_restart() == 0) /* (Android: lo arranca de nuevo la actividad) */
+        s_restart = 0;
     if (s_restart) { /* otra vez, sin las cinemáticas del principio */
         fflush(NULL);
 #ifdef _WIN32

@@ -467,6 +467,7 @@
 { "VER POSICIÓN", "顯示位置" },
 { "RENDIMIENTO", "效能" },
 { "COLOR 16 BITS", "16位元色彩" },
+{ "PANTALLA ANCHA", "寬螢幕" },
 { "GUÍA DEL CUBO", "方塊指南" },
 { "GUARDAR Y SALIR", "儲存並離開" },
 { "SÍ", "是" },

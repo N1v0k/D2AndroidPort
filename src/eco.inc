@@ -413,7 +413,7 @@ static int eco_on_screen(float x, float y)
     for (int i = 0; i < s_num_players; i++) {
         float sx, sy;
         iso_to_screen(x - s_pl[i].x, y - s_pl[i].y, &sx, &sy);
-        if (fabsf(sx) < SCREEN_W / 2 + 40 && fabsf(sy) < SCREEN_H / 2 + 40)
+        if (fabsf(sx) < SIM_W / 2 + 40 && fabsf(sy) < SIM_H / 2 + 40)
             return 1;
     }
     return 0;
@@ -1127,7 +1127,7 @@ static void eco_draw(void)
 {
     if (!s_eco || s_er.phase == EP_OFF)
         return;
-    int w = 220, h = 62, x = SCREEN_W - w - 8, y = 8;
+    int w = 220, h = 62, x = UI_X1 - w - 8, y = 8; /* (en pantalla ancha, en los 800 del medio) */
     ui_dark_box(x, y, w, h);
     font_draw_centered(x + w / 2, y + 5, "ECO DEL ODIO", 1, COL(R_RED, 14));
     char t[96];

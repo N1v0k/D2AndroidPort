@@ -1,6 +1,7 @@
 #include "input.h"
 #include "video.h"
 #include "lang.h"
+#include "touch.h"
 
 #include <SDL.h>
 #include <math.h>
@@ -40,6 +41,7 @@ typedef struct {
     float sx, sy;       /* dónde empezó a estar quieto (hasta que cuenta) */
     Uint32 calm_since;  /* desde cuándo está quieto */
     char  guid[64];
+    int   touch;        /* el joystick virtual de los controles táctiles (touch.c): su stick ya está en el medio */
     int   mirror;       /* repite lo que hace otro joystick igual: es el mismo control visto dos veces */
     int   solo;         /* apretó algo que el otro no (dos veces seguidas: era otro control de verdad) */
     int   pend_code;    /* (el último que apretó siendo eco, para ver si el otro lo repite) */
@@ -244,6 +246,7 @@ static void open_pad(int device_index)
     pd->pad = pad;
     pd->player = -1;
     pd->opened_at = now_ms();
+    pd->touch = touch_is_pad(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(pad)));
     snprintf(pd->guid, sizeof pd->guid, "%s", guid);
     SDL_Log("joystick %d: %s", i + 1, SDL_GameControllerName(pad));
     char *map = SDL_GameControllerMapping(pad);
@@ -373,6 +376,7 @@ static void on_key(InputState *in, const SDL_KeyboardEvent *k)
         return;
     switch (k->keysym.sym) {
     case SDLK_ESCAPE:   in->escape = 1; break;
+    case SDLK_AC_BACK:  in->escape = 1; break; /* (Android: el botón o el gesto de volver) */
     case SDLK_SPACE:    in->confirm = 1; in->player[0].action = in->player[0].button[0] = 1; break;
     case SDLK_RETURN:
     case SDLK_KP_ENTER: in->confirm = 1; in->player[1].action = in->player[1].button[0] = 1; break;
@@ -420,6 +424,7 @@ static void on_button(InputState *in, const SDL_ControllerButtonEvent *b, int do
         }
         return;
     }
+    touch_pad_used(b->which); /* (un control de verdad: se esconden los táctiles) */
     if (pd->held[b->button])
         return; /* sigue trabado desde que se conectó */
     if (now_ms() - pd->opened_at < GRACE_MS) {
@@ -514,6 +519,8 @@ static void on_axis(InputState *in, const SDL_ControllerAxisEvent *a)
     int on = a->value > 16000 || a->value < -16000;
     if (on != pd->axis_on[a->axis]) {
         pd->axis_on[a->axis] = on;
+        if (on)
+            touch_pad_used(a->which);
         input_log("joystick %d: eje %s %s (%.2f)", i + 1,
                   SDL_GameControllerGetStringForAxis((SDL_GameControllerAxis)a->axis), on ? "apretado" : "suelto",
                   a->value / 32767.0f);
@@ -701,8 +708,13 @@ void input_poll(InputState *in)
 {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
+        if (touch_event(in, &e))
+            continue;
         switch (e.type) {
         case SDL_QUIT:                    in->quit = 1; break;
+        case SDL_APP_WILLENTERBACKGROUND: /* (Android: se va a otra app; el sistema puede cerrar el juego) */
+        case SDL_APP_TERMINATING:         in->suspend = 1; break;
+        case SDL_RENDER_DEVICE_RESET:     video_device_reset(); break;
         case SDL_CONTROLLERDEVICEADDED:   open_pad(e.cdevice.which); break;
         case SDL_CONTROLLERDEVICEREMOVED: close_pad(e.cdevice.which); break;
         case SDL_KEYDOWN:                 on_key(in, &e.key); break;
@@ -728,6 +740,8 @@ void input_poll(InputState *in)
             break;
         }
     }
+
+    touch_update(in); /* (los dedos: el joystick virtual y el mouse) */
 
     for (int i = 0; i < MAX_PLAYERS; i++) {
         in->player[i].move_x = in->player[i].move_y = 0.0f;
@@ -797,7 +811,12 @@ void input_poll(InputState *in)
            que flota (un modelo sin palanca) nunca queda quieto: no cuenta. Después, el medio sigue de a poco lo que
            dé quieto (se corren con el tiempo). */
         float lx = axis(pd->pad, SDL_CONTROLLER_AXIS_LEFTX), ly = axis(pd->pad, SDL_CONTROLLER_AXIS_LEFTY);
-        if (!(pd->armed & ARM_STICK)) {
+        if (pd->touch) { /* (los dedos: el medio es el medio de verdad, sin esperar ni correrlo) */
+            pd->cx = pd->cy = 0.0f;
+            if (!(pd->armed & ARM_STICK))
+                active = pad_active(pd);
+            pd->armed |= ARM_STICK;
+        } else if (!(pd->armed & ARM_STICK)) {
             if (!pd->calm_since || fabsf(lx - pd->sx) > STEADY || fabsf(ly - pd->sy) > STEADY || fabsf(lx) > CENTER_MAX ||
                 fabsf(ly) > CENTER_MAX) {
                 pd->sx = lx;

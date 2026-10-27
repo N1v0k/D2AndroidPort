@@ -48,6 +48,7 @@ add_executable(d2port
   src/main.c
   src/video.c
   src/input.c
+  src/touch.c
   src/font.c
   src/ui.c
   src/charanim.c

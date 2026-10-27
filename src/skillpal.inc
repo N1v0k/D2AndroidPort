@@ -883,14 +883,23 @@ static void charge_tick(Player *p)
     float step = cl->run_speed * RUN_BONUS / TICK_RATE * (100 + s->param[1] + p->bonus[STAT_MOVE] + p->au_speed) / 100.0f;
     if (step > d - reach + 0.05f)
         step = d - reach + 0.05f;
-    float nx = p->x + dx / d * step, ny = p->y + dy / d * step;
-    int moved = 0;
-    if (!player_blocked(nx, p->y, p->x, p->y)) {
-        p->x = nx;
-        moved = 1;
-    }
-    if (!player_blocked(p->x, ny, p->x, p->y)) {
-        p->y = ny;
+    /* De a medio subtile como mucho: a la velocidad del original la carga avanza más de uno por tick y si no
+       atravesaba las paredes finas */
+    int parts = (int)ceilf(step / 0.5f), moved = 0;
+    parts = parts < 1 ? 1 : parts;
+    for (int k = 0; k < parts; k++) {
+        float nx = p->x + dx / d * step / parts, ny = p->y + dy / d * step / parts;
+        int now = 0;
+        if (!player_blocked(nx, p->y, p->x, p->y)) {
+            p->x = nx;
+            now = 1;
+        }
+        if (!player_blocked(p->x, ny, p->x, p->y)) {
+            p->y = ny;
+            now = 1;
+        }
+        if (!now)
+            break;
         moved = 1;
     }
     if (!moved) { /* una pared o un monstruo en el camino: se termina */

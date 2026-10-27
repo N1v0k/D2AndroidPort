@@ -467,6 +467,7 @@
 { "VER POSICIÓN", "位置を表示" },
 { "RENDIMIENTO", "パフォーマンス" },
 { "COLOR 16 BITS", "16ビットカラー" },
+{ "PANTALLA ANCHA", "ワイド画面" },
 { "GUÍA DEL CUBO", "キューブのガイド" },
 { "GUARDAR Y SALIR", "セーブして終了" },
 { "SÍ", "はい" },

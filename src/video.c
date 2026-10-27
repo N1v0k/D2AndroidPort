@@ -2,6 +2,7 @@
 
 #include "fmt/formats.h"
 #include "fmt/fs.h"
+#include "touch.h"
 
 #include <SDL.h>
 #include <math.h>
@@ -10,10 +11,13 @@
 #include <string.h>
 
 Framebuffer g_fb;
+int         g_screen_w = SCREEN_W_BASE;
 
 static SDL_Window   *s_win;
 static SDL_Renderer *s_ren;
 static SDL_Texture  *s_tex;
+static int           s_tex_w;     /* el ancho con el que se hizo la textura */
+static int           s_width_lock; /* grabando un video: el cuadro siempre de 800 */
 static int           s_vsync;
 static int           s_565; /* D2_RGB565: textura de 16 bits (la mitad para subir a la GPU) */
 static int           s_hide_cursor;  /* pantalla completa: sin puntero del mouse */
@@ -43,6 +47,43 @@ static int16_t s_clip_x1[SCREEN_H];
 static uint8_t *s_px = g_fb.px;
 
 static int neon_check(void);
+
+/* La textura del cuadro, del ancho de ahora */
+static SDL_Texture *make_texture(int is565)
+{
+    SDL_Texture *t = SDL_CreateTexture(s_ren, is565 ? SDL_PIXELFORMAT_RGB565 : SDL_PIXELFORMAT_ARGB8888,
+                                       SDL_TEXTUREACCESS_STREAMING, SCREEN_W, SCREEN_H);
+    if (t)
+        s_tex_w = SCREEN_W;
+    return t;
+}
+
+void video_set_width(int w)
+{
+    w = s_width_lock || w < SCREEN_W_BASE ? SCREEN_W_BASE : w > SCREEN_W_MAX ? SCREEN_W_MAX : w & ~7;
+    if (w == g_screen_w)
+        return;
+    g_screen_w = w;
+    clip_reset();
+}
+
+void video_lock_width(int on)
+{
+    s_width_lock = on != 0;
+    if (on)
+        video_set_width(SCREEN_W_BASE);
+}
+
+/* Con el alto de 600, el ancho (múltiplo de 8) que llena la ventana; sin ventana (o más angosta que 4:3), 800 */
+int video_fill_width(void)
+{
+    int ww, wh;
+    if (!s_ren || SDL_GetRendererOutputSize(s_ren, &ww, &wh) != 0 || ww <= 0 || wh <= 0)
+        return SCREEN_W_BASE;
+    int w = (int)(((long long)ww * SCREEN_H + wh / 2) / wh);
+    w = (w + 4) & ~7;
+    return w < SCREEN_W_BASE ? SCREEN_W_BASE : w > SCREEN_W_MAX ? SCREEN_W_MAX : w;
+}
 
 int video_init(int headless, int fullscreen, int scale)
 {
@@ -103,11 +144,10 @@ int video_init(int headless, int fullscreen, int scale)
        sube en 16 bits (la mitad de bytes, con algo menos de precisión en los
        colores oscuros) */
     s_565 = getenv("D2_RGB565") && getenv("D2_RGB565")[0] == '1';
-    s_tex = SDL_CreateTexture(s_ren, s_565 ? SDL_PIXELFORMAT_RGB565 : SDL_PIXELFORMAT_ARGB8888,
-                              SDL_TEXTUREACCESS_STREAMING, SCREEN_W, SCREEN_H);
+    s_tex = make_texture(s_565);
     if (!s_tex && s_565) {
         s_565 = 0;
-        s_tex = SDL_CreateTexture(s_ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_W, SCREEN_H);
+        s_tex = make_texture(0);
     }
     if (s_565)
         printf("textura de 16 bits (RGB565)\n");
@@ -280,8 +320,7 @@ void video_set_565(int on)
     on = on != 0;
     if (!s_ren || on == s_565)
         return;
-    SDL_Texture *t = SDL_CreateTexture(s_ren, on ? SDL_PIXELFORMAT_RGB565 : SDL_PIXELFORMAT_ARGB8888,
-                                       SDL_TEXTUREACCESS_STREAMING, SCREEN_W, SCREEN_H);
+    SDL_Texture *t = make_texture(on);
     if (!t)
         return;
     if (s_tex)
@@ -293,6 +332,11 @@ void video_set_565(int on)
 
 void video_present(void)
 {
+    if (s_tex && s_tex_w != SCREEN_W) { /* otro ancho (el juego en pantalla ancha, los menús en 800) */
+        SDL_DestroyTexture(s_tex);
+        s_tex = make_texture(s_565);
+        SDL_RenderSetLogicalSize(s_ren, SCREEN_W, SCREEN_H);
+    }
     if (!s_tex)
         return;
     void *pixels;
@@ -309,11 +353,23 @@ void video_present(void)
     fb_frame_begin();
     SDL_RenderClear(s_ren);
     SDL_RenderCopy(s_ren, s_tex, NULL, NULL);
+    touch_draw(s_ren); /* (Android: los controles táctiles, en las franjas de los costados) */
     SDL_RenderPresent(s_ren);
     if (s_hide_cursor && s_presents < 300) { /* los primeros segundos, por las dudas */
         s_presents++;
         hide_cursor();
     }
+}
+
+/* La GPU perdió lo que tenía (Android, al volver de otra app): la textura del cuadro se hace de nuevo */
+void video_device_reset(void)
+{
+    if (!s_ren)
+        return;
+    if (s_tex)
+        SDL_DestroyTexture(s_tex);
+    s_tex = make_texture(s_565);
+    SDL_Log("video: la GPU se reinició, textura nueva (%s)", s_tex ? "bien" : SDL_GetError());
 }
 
 /* ---- Cinemáticas (cinema.c) ----
@@ -394,7 +450,7 @@ double video_convert_bench(void)
 {
     static uint32_t *buf;
     if (!buf)
-        buf = malloc((size_t)SCREEN_W * SCREEN_H * sizeof *buf);
+        buf = malloc((size_t)SCREEN_W_MAX * SCREEN_H * sizeof *buf);
     if (!buf)
         return 0.0;
     Uint64 t0 = SDL_GetPerformanceCounter();
@@ -568,7 +624,7 @@ int pal_load_d2(const char *act)
 /* ---- Recorte ---- */
 
 /* El rectángulo que ocupa el recorte (para no recorrer lo que queda afuera) */
-static int s_clip_bx0, s_clip_by0, s_clip_bx1 = SCREEN_W - 1, s_clip_by1 = SCREEN_H - 1;
+static int s_clip_bx0, s_clip_by0, s_clip_bx1 = SCREEN_W_BASE - 1, s_clip_by1 = SCREEN_H - 1;
 
 static void clip_update_bounds(void)
 {
@@ -843,7 +899,7 @@ typedef struct {
 } DarkJob;
 static DarkJob s_dark[DARK_JOBS];
 static int     s_full_id;
-static uint8_t s_umask[SCREEN_H][SCREEN_W / 8]; /* lo dibujado después de la oscuridad */
+static uint8_t s_umask[SCREEN_H][SCREEN_W_MAX / 8]; /* lo dibujado después de la oscuridad */
 static int     s_umask_used;
 static uint8_t s_level_of[DARK_STEPS];
 static uint8_t s_level_r[DARK_JOBS][DARK_STEPS];
@@ -1219,7 +1275,7 @@ static void dark_resolve_slow(int y, int a, int b)
         done = (m[x >> 3] >> (x & 7)) & 1;
     if (done)
         return;
-    uint8_t tmp[SCREEN_W];
+    uint8_t tmp[SCREEN_W_MAX];
     for (int q = 0; q < s_ndark; q++) {
         const DarkJob *j = &s_dark[q];
         if (y > j->max_y)
@@ -1304,7 +1360,7 @@ static void convert_row(int y, void *dst, int is16)
     for (int i = 1; i < nq; i++)
         apart |= jq[i]->x0[y] <= jq[i - 1]->x1[y];
     if (apart) { /* pedidos que se pisan (no debería pasar): la fila oscurecida aparte */
-        uint8_t tmp[SCREEN_W];
+        uint8_t tmp[SCREEN_W_MAX];
         memcpy(tmp, src, SCREEN_W);
         for (int i = 0; i < nq; i++)
             dark_apply_row(jq[i], y, tmp, neon_check(), 0, SCREEN_W - 1);
@@ -1616,7 +1672,7 @@ void fb_blit_scaled(const uint8_t *px, int w, int h, int x, int y, int dw, int d
     const uint8_t *lut = level >= 0 && level < LIGHT_LEVELS - 1 ? g_light[level] : NULL;
     /* De qué columna sale cada una, calculado una vez (dividir en cada píxel
        era lo caro de los botones del HUD en la Pi) */
-    int cols[SCREEN_W];
+    int cols[SCREEN_W_MAX];
     int ncol = dw < SCREEN_W ? dw : SCREEN_W;
     for (int i = 0; i < ncol; i++)
         cols[i] = i * w / dw;
@@ -1815,9 +1871,13 @@ static void layer_row(const FbLayer *l, uint8_t *buf, int y, int x0, int x1, int
 void fb_layer_update(FbLayer *l, int wx, int wy, int redraw, void (*draw)(void *ctx), void *ctx)
 {
     if (!l->px)
-        l->px = malloc((size_t)SCREEN_W * SCREEN_H);
+        l->px = malloc((size_t)SCREEN_W_MAX * SCREEN_H);
     if (!s_layer_tmp)
-        s_layer_tmp = malloc((size_t)SCREEN_W * SCREEN_H);
+        s_layer_tmp = malloc((size_t)SCREEN_W_MAX * SCREEN_H);
+    if (l->w != SCREEN_W) { /* (otro ancho de pantalla: la capa se arma de nuevo) */
+        l->w = SCREEN_W;
+        l->valid = 0;
+    }
     if (!l->px || !s_layer_tmp) { /* sin memoria: directo en la pantalla, como siempre */
         fb_fill_clip(0);
         draw(ctx);

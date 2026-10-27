@@ -702,7 +702,7 @@ static void sorc_tick(Player *p)
             f->owner = me;
             f->life = range > 4 ? range : 4;
         }
-        float reach = 12.0f * (5.0f / 6.0f / TICK_RATE) * (float)(range > 4 ? range : 4); /* lo que avanza una llama */
+        float reach = 12.0f * (MISSILE_VEL_PER_SEC / TICK_RATE) * (float)(range > 4 ? range : 4); /* lo que avanza una llama */
         int ids[16], n = units_enemies_near(p->x + ax * reach / 2.0f, p->y + ay * reach / 2.0f, reach / 2.0f + 0.8f, ids, 16);
         for (int k = 0; k < n; k++) {
             int full = roll(lo, hi), d = full / TICK_RATE + ((int)(rnd() % TICK_RATE) < full % TICK_RATE);

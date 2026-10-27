@@ -467,6 +467,7 @@
 { "VER POSICIÓN", "위치 표시" },
 { "RENDIMIENTO", "성능" },
 { "COLOR 16 BITS", "16비트 색상" },
+{ "PANTALLA ANCHA", "와이드 화면" },
 { "GUÍA DEL CUBO", "함 안내서" },
 { "GUARDAR Y SALIR", "저장 및 종료" },
 { "SÍ", "예" },

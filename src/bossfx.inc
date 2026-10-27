@@ -35,16 +35,16 @@ enum { BFX_NONE, BFX_RAVEN, BFX_ANDY, BFX_CAIRN, BFX_DEN };
 #define BFX_CAIRN_OPEN 160  /* a los 6,4 s se abre el portal */
 #define BFX_CAIRN_SKY  17.0f /* Param3: hasta dónde caen los rayos grandes */
 #define BFX_CAIRN_DARK 15   /* cuánto se oscurece (de los 31 niveles de luz) */
-#define BFX_GROUND_SPEED (20.0f * 5.0f / 6.0f / TICK_RATE) /* Vel de cairnstonesground */
+#define BFX_GROUND_SPEED (20.0f * MISSILE_VEL_PER_SEC / TICK_RATE) /* Vel de cairnstonesground */
 #define BFX_DEN_TIME   60   /* los haces de la Guarida aparecen en 2,4 s (y duran su Range: 300) */
 #define BFX_DEN_EVERY  5
 #define BFX_RAYS       6
 #define BFX_RAVEN_TIME 375 /* Range de brdeathcontrol */
 #define BFX_ANDY_TIME  350 /* Range de andycontrol0 */
-#define BFX_RAY_SPEED  (8.0f * 5.0f / 6.0f / TICK_RATE) /* Vel de andyfirewallmaker */
+#define BFX_RAY_SPEED  (8.0f * MISSILE_VEL_PER_SEC / TICK_RATE) /* Vel de andyfirewallmaker */
 #define BFX_RAY_TICKS  50                                /* su Range */
 #define BFX_BOLTS      16 /* los rayos de Blood Raven que van hacia el cuerpo */
-#define BFX_BOLT_SPEED (32.0f * 5.0f / 6.0f / TICK_RATE) /* Vel de brdeathlightningbolt */
+#define BFX_BOLT_SPEED (32.0f * MISSILE_VEL_PER_SEC / TICK_RATE) /* Vel de brdeathlightningbolt */
 
 typedef struct {
     int   kind, age;
@@ -433,7 +433,7 @@ static void bossfx_shade(float cam_x, float cam_y, float alpha, int owner)
         return;
     int dark = bossfx_dark(owner);
     if (dark > 0) /* (el mundo: la barra de abajo se dibuja encima) */
-        fb_shade_rect(0, 0, SCREEN_W, SCREEN_H - 49, LIGHT_LEVELS - 1 - dark);
+        fb_shade_rect(0, 0, SCREEN_W, WORLD_BOTTOM == SCREEN_H - 1 ? SCREEN_H : SCREEN_H - 49, LIGHT_LEVELS - 1 - dark);
     int ox = SCREEN_W / 2 - (int)lroundf(cam_x), oy = SCREEN_H / 2 - (int)lroundf(cam_y);
     for (int i = 0; i < missiles_capacity(); i++) {
         const Missile *mi = missiles_get(i);

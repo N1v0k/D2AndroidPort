@@ -1,0 +1,2 @@
+/* <cassert> without libc++ (CascLib only needs assert) */
+#include <assert.h>

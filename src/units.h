@@ -171,6 +171,10 @@ const char *units_objects_str(int row, const char *col);
 
 /* Combate */
 int         units_find_enemy(float x, float y, float range); /* el monstruo vivo más cercano, o -1 */
+/* Apuntar con el stick: mientras está puesto, las búsquedas desde (x, y) prefieren el enemigo hacia (sx, sy) en
+   pantalla (units.c); game.c lo pone con los controles de cada jugador y lo saca después */
+void        units_set_aim(float x, float y, float sx, float sy);
+void        units_clear_aim(void);
 /* El primero que toca un proyectil de tamaño msize en los subtiles que
    recorrió (cells, en orden; missiles_touches), sin los de skip; -1 si nadie */
 int         units_find_enemy_path(const int (*cells)[2], int n, int msize, const int *skip, int nskip);

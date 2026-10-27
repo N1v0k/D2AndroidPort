@@ -7,6 +7,13 @@
    las explosiones. Este módulo los mueve y los dibuja; quién recibe el
    golpe y cuánto daño hace lo resuelve game.c. */
 
+/* Las velocidades del original (D2Common, el camino): un camino con velocidad v avanza v / 4096 subtiles por cuadro, a
+   25 cuadros por segundo. Los personajes y los monstruos van a Velocity << 8 (charstats.txt, monstats.txt): 25/16
+   subtiles por segundo por unidad (caminar, 6: 9,4 subtiles por segundo; correr, 9: 14,1). Los proyectiles, a
+   Vel << 8 al 75 % (missiles.txt): 75/64 por unidad. (Antes eran 5/6 para todo: casi la mitad de rápido.) */
+#define UNIT_VEL_PER_SEC    (25.0f / 16.0f)
+#define MISSILE_VEL_PER_SEC (75.0f / 64.0f)
+
 enum { ELEM_NONE, ELEM_FIRE, ELEM_COLD, ELEM_LTNG, ELEM_POIS, ELEM_MAG };
 
 /* Comportamientos especiales */

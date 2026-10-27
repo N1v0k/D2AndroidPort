@@ -37,6 +37,14 @@ void game_net_started(void);
 void game_net_end(void);
 int  game_local_player(int k); /* el jugador de la partida que maneja el joystick k de esta máquina (-1 = ninguno) */
 int  game_num_local(void);
+/* Los controles táctiles: el ícono de lo que tira el botón b (0 A ... 3 Y) del jugador 1 de esta máquina, en ARGB
+   (size x size, transparente afuera); 0 si no hay (sin partida, botón vacío, íconos sin leer) */
+int  game_button_icon(int b, uint32_t *argb, int size);
+/* Los controles táctiles: ¿el jugador 1 de esta máquina tiene un panel o un diálogo abierto (o la pausa)? Así los
+   botones se ven más tenues y no tapan lo que hay debajo */
+int  game_panel_open(void);
+int  game_always_run(void);        /* la opción "correr siempre" (el botón RUN de los controles táctiles) */
+void game_toggle_always_run(void);
 void game_perf_line(char *out, size_t cap); /* D2_TICK_PERF: zonas armadas, unidades y jugadores */
 char *game_slot_text(int slot, size_t *len); /* el texto de una partida guardada (hay que liberarlo), NULL = no hay */
 void game_render(float alpha);
